@@ -40,24 +40,54 @@
 
 ---
 
-## 1. 코드에서 확인한 사실 (2026-09-14)
+## 1. 코드에서 확인한 사실 (2026-09-14, 원본 소스 확인 후)
 
-직접 확인한 내용만 적는다. 추정은 3절에 둔다.
+원본 소스가 `main`에 들어와 병합했다. 아래는 **코드를 읽고 실제로 실행해
+확인한 사실**이다. 추정은 4절 가정 표에 둔다.
 
-- 작업 폴더 `/home/user/TEAMKICK`은 git 저장소이며 원격은
-  `https://github.com/qkrwodus96-jpg/TEAMKICK`.
-- **저장소에 애플리케이션 소스가 없다.** 추적 파일은 `README.md`(10바이트) 1개,
-  커밋은 초기 커밋 1개(`2207d24`)뿐. 미커밋 변경 없음.
-- `AGENTS.md`, `CLAUDE.md`, 기존 요구사항 문서, `package.json`,
-  잠금 파일, 앱 진입점, 서버·DB·인증·업로드 구성, `.openai/hosting.json`
-  **모두 존재하지 않음.**
-- 접근 가능한 저장소는 `qkrwodus96-jpg/TEAMKICK` 하나뿐이며 위와 같이 비어 있다.
-- 결론: **현재 폴더는 TEAMKICK 원본이 아니다.** 빈 신규 저장소다.
+### 확인된 기술 스택
 
-따라서 아래 2절의 요구사항 전체는 현재 **구현 상태 미확인(UNVERIFIED)**이며,
-어떤 항목도 "미구현"으로 단정하지 않는다.
+| 항목 | 확인된 내용 |
+|---|---|
+| 프레임워크 | vinext 1.0.0-beta.5 (Vite 8 기반 Next 16 호환), React 19.2 |
+| 실행 | Cloudflare Workers (wrangler 4.92, @cloudflare/vite-plugin) |
+| DB | **Cloudflare D1**, Drizzle ORM + migration (`drizzle/0000_bitter_cardiac.sql`) |
+| UI | shadcn/Radix, Tailwind 4, 녹색 테마, PWA(manifest·sw.js·오프라인 안내) |
+| 인증 | **ChatGPT Sites 로그인 전용** (`oai-authenticated-user-*` 헤더) |
+| 진입점 | `app/teamkick.tsx`(화면·달력·요약), `app/screens.tsx`(팀·매칭·입력) |
+| 도메인 | `lib/model.ts` — 역할·상태 전이·출석·통계 전부 서버에서 검증 |
+| 저장 | `lib/store.ts` — `entities` 문서 테이블 + `state_revision` + `write_guards` CHECK |
+| API | `POST /api/app` 단일 엔드포인트, 요청 ID 7일 보관(중복 방지), 분당 40건 제한 |
 
----
+### 실행으로 확인한 사실
+
+- `pnpm install --frozen-lockfile` 성공, `node --test tests/core.test.mjs` **10/10 통과**,
+  `tsc --noEmit` 통과. `pnpm lint`는 `no-explicit-any` **77건 오류(시작 시점부터 존재)**.
+- 개발 서버 실행 후 실제 브라우저로 팀 등록 신청 → 운영자 승인 → 주장 권한 →
+  팀원 관리 → 내 선수 정보 수정 흐름이 **실제로 동작**함을 확인했다.
+- 일반 팀원 계정에서는 팀원 초대·관리·공지 작성 버튼이 노출되지 않고,
+  본인 프로필 수정으로 역할이 바뀌지 않음을 확인했다.
+
+### 요구사항 대비 현재 구현 상태
+
+| 요구사항 | 현재 코드 상태 | 근거 |
+|---|---|---|
+| A 5개 탭·모바일 | 구현됨. 모바일 레이아웃 결함 1건 수정 | 실행 확인 |
+| B 운영자·팀 권한 | 구현됨(운영자 일회용 코드 SHA-256 검증, 첫 가입자 자동 운영자 아님) | `model.ts` `setupOwner` |
+| B 일반 회원 직접 가입 | **없음. ChatGPT 로그인만 존재** | `app/chatgpt-auth.ts` |
+| C 팀원 관리·내 선수 정보 | 구현됨. 제보 증상은 재현되지 않음(`HANDOFF.md` 참고) | 실행 확인 |
+| D 일정 | 구현됨(달력·목록·자정 넘는 경기·상태 3종) | `model.ts` |
+| D 구장명 검색·주소 자동 입력 | **없음.** 구장명·주소는 수기 입력, 지도는 네이버 검색 링크만 | `screens.tsx` |
+| E 투표·출석 | 구현됨(4상태·마감·초안·확정·멱등·출석률 분모) | 테스트 통과 |
+| E 브라우저 없이 자동 처리 | **없음.** 예약 작업·스케줄러 미연결 | `ARCHITECTURE.md` |
+| F 팀 매칭 | 구현됨(공통 경기 ID·동시 수락 1건·시간 충돌·재동의) | 테스트 통과 |
+| G 용병 모집 | **전혀 없음.** 관련 코드 0건 | 전체 검색 |
+| H 결과·기록·통계 | 구현됨(제안·확인·이견·검증식·기간 집계) | `model.ts`, 테스트 |
+| I 앱 내 공지·알림 | 구현됨(주장만 발송, 팀별 분리) | `model.ts` |
+| I 실제 휴대폰 푸시 | **없음.** `public/sw.js`에 push·notificationclick 핸들러 없음 | 코드 확인 |
+| J 이미지 업로드 | **없음.** R2 미설정(`hosting.json`의 r2: null), 업로드 코드 없음 | 설정·코드 확인 |
+| K 운영자 화면 | 구현됨(승인·반려·정지·복구, 감사 이력) | `model.ts` |
+| K 광고 영역 | **없음.** 관련 코드 0건 | 전체 검색 |
 
 ## 2. 확정 요구사항
 

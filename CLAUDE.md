@@ -20,40 +20,43 @@ TEAMKICK(모바일 표기: 팀킥) 저장소의 상시 개발 기준이다.
 
 ## 2. 현재 저장소 상태 (2026-09-14 확인)
 
-**이 저장소에는 TEAMKICK 애플리케이션 소스가 없다.**
-`README.md` 1개 파일(10바이트)과 초기 커밋 1개가 전부다.
-따라서 T01 이후 모든 코드 작업은 BLOCKED이며,
-원본 소스가 저장소에 들어오기 전까지 코드 작업을 시작하지 않는다.
+원본 소스가 `main`에 들어와 병합했다. **118개 파일, 실제 동작하는 앱이다.**
 
-- 배포 성공이나 프로젝트 ID를 기능 구현의 근거로 쓰지 않는다.
-- 확보되지 않은 원본을 대신하는 새 더미 앱을 만들지 않는다.
-- 원본이 들어오면 `TASKS.md` T00부터 다시 검증한다.
+- 스택: vinext(Vite 기반 Next 호환) + React 19 + TypeScript,
+  Cloudflare Workers에서 서빙, **Cloudflare D1** 저장, Drizzle migration,
+  shadcn/Radix UI, PWA(manifest·오프라인 안내).
+- 인증: **ChatGPT Sites 로그인 전용.** 서버가 `oai-authenticated-user-*`
+  헤더로 신원을 읽는다. 자체 회원가입은 없다.
+- 상태 저장: `entities` 단일 문서 테이블 + `state_revision` 버전 +
+  `write_guards` CHECK 제약으로 낙관적 동시성 제어.
+- 모든 명령은 `POST /api/app` 하나로 들어가고 `lib/model.ts`가 권한을 검증한다.
 
-## 3. 실행·검증 명령
+기존 문서는 역할이 다르니 함께 유지한다:
+`PRD.md`(원본 요구사항), `ARCHITECTURE.md`(구조), `TASKS.md`(작업),
+`PROJECT_CONTEXT.md`(확정 요구사항과 현재 코드의 차이).
 
-원본 소스가 없어 **아직 확인된 실행 명령이 없다.**
-아래는 이 컨테이너에서 실제로 확인한 사용 가능 도구다.
+## 3. 실행·검증 명령 (실제 실행해 확인함)
 
-| 도구 | 확인된 버전 |
-|---|---|
-| node | v22.22.2 |
-| npm | 10.9.7 |
-| pnpm | 10.33.0 |
-| yarn | 1.22.22 |
-| python3 | 3.11.15 |
-| psql (client) | 16.13 |
-| docker | 29.3.1 |
-| flutter / dart | 없음 |
+```bash
+pnpm install --frozen-lockfile          # 의존성 설치 (exit 0 확인)
+pnpm dev                                # 개발 서버 → http://localhost:5173
+node --test tests/core.test.mjs         # 도메인·저장·API 테스트 10/10 통과
+node node_modules/typescript/bin/tsc --noEmit   # 타입 검사 통과
+pnpm lint                               # 기존 no-explicit-any 오류 77건 있음(시작 시점부터)
+pnpm db:generate                        # 스키마 변경 시 migration 생성
+```
 
-원본 소스를 받은 뒤 다음을 이 자리에 **실제 실행 결과와 함께** 기록한다.
+**로컬 첫 실행 시 주의**: 로컬 D1에는 테이블이 없어 `/api/app`이 503이 된다.
+`drizzle/0000_bitter_cardiac.sql`을 로컬 D1 파일에 적용해야 한다
+(`.wrangler/state/v3/d1/miniflare-D1DatabaseObject/*.sqlite`).
 
-- 설치 명령
-- 개발 서버 실행 명령
-- 빌드 명령
-- 테스트·린트·타입체크 명령
-- DB 마이그레이션 명령
+로컬 개발 서버는 mock 로그인을 붙인다. `/signin-with-chatgpt`를 한 번 호출해
+`__sites_local_auth=1` 쿠키를 받으면 고정 사용자(`local_seedy`)로 로그인된다.
+**로컬 mock 사용자는 1명뿐이라 다중 사용자 권한 검증은 브라우저가 아니라
+`tests/core.test.mjs`에서 한다.**
 
-추측한 명령을 이 표에 적지 않는다. 실행해 본 것만 적는다.
+운영자 초기 설정 코드의 원문은 저장소에 없다(`lib/owner-config.ts`에 SHA-256만
+있음). 코드가 필요한 검증은 사용자에게 요청한다.
 
 ## 4. 개발 규칙
 

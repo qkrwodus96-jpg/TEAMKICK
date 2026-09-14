@@ -1,0 +1,15 @@
+/node_modules
+/.pnp
+.pnp.*
+/.next/
+/out/
+/coverage
+.env*
+/dist/
+/.wrangler/
+/.sites-runtime/
+/.agents/
+/.codex/
+/outputs/
+/work/
+*.tsbuildinfo

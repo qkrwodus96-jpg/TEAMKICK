@@ -1,0 +1,1 @@
+export const OWNER_SETUP_HASH = "fb361368118dcdccea6be6b347046e8e78785efe42ab97d4f8574a1ceac94de5";

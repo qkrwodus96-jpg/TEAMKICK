@@ -244,3 +244,18 @@ test('용병 확정을 취소하면 자리가 다시 열리고 용병은 팀 선
   assert.equal(sideOf(s,gameId,a).guestStatus,'closed');
   assert.throws(()=>applyGuest(s,a,gameId,G3),/마감|신청할 수 없는/);
 });
+
+test('주장은 팀원의 선수 정보를 수정할 수 있고 그 명령으로 역할은 바뀌지 않는다',()=>{
+  const {s,a}=fixture(),m=addPlayer(s,a);
+  assert.equal(m.position,'MF');assert.equal(m.role,'member');
+  command(s,A,{type:'editMember',teamId:a,memberId:m.id,name:'선수',number:7,position:'FW',role:'captain'});
+  assert.equal(m.position,'FW');assert.equal(m.number,7);
+  assert.equal(m.role,'member','선수 정보 수정으로 역할이 올라가면 안 된다');
+  assert.throws(()=>command(s,member,{type:'editMember',teamId:a,memberId:m.id,name:'선수',number:1,position:'GK'}),/권한/);
+  const other={id:'other',name:'다른 팀원'},om=addPlayer(s,a,other);
+  assert.throws(()=>command(s,other,{type:'editMember',teamId:a,memberId:om.id,name:'다른 팀원',number:2,position:'DF'}),/권한/);
+  assert.throws(()=>command(s,B,{type:'editMember',teamId:a,memberId:m.id,name:'선수',number:3,position:'DF'}),/권한/);
+  command(s,A,{type:'removeMember',teamId:a,memberId:om.id});
+  assert.throws(()=>command(s,A,{type:'editMember',teamId:a,memberId:om.id,name:'다른 팀원',number:2,position:'DF'}),/활동 중인 팀원/);
+  assert.throws(()=>command(s,A,{type:'editMember',teamId:a,memberId:m.id,name:'선수',number:200,position:'FW'}),/숫자 범위/);
+});

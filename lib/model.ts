@@ -1,7 +1,7 @@
 export type Row={id:string;[key:string]:any};
-export type State={users:Row[];teams:Row[];members:Row[];games:Row[];sides:Row[];requests:Row[];notices:Row[];notifications:Row[];invites:Row[];audit:Row[];receipts:Row[];settings:Row[]};
-export const collections=["users","teams","members","games","sides","requests","notices","notifications","invites","audit","receipts","settings"] as const;
-export const blank=():State=>({users:[],teams:[],members:[],games:[],sides:[],requests:[],notices:[],notifications:[],invites:[],audit:[],receipts:[],settings:[]});
+export type State={users:Row[];teams:Row[];members:Row[];games:Row[];sides:Row[];requests:Row[];guests:Row[];notices:Row[];notifications:Row[];invites:Row[];audit:Row[];receipts:Row[];settings:Row[]};
+export const collections=["users","teams","members","games","sides","requests","guests","notices","notifications","invites","audit","receipts","settings"] as const;
+export const blank=():State=>({users:[],teams:[],members:[],games:[],sides:[],requests:[],guests:[],notices:[],notifications:[],invites:[],audit:[],receipts:[],settings:[]});
 export type Actor={id:string;name:string;ownerSetup?:boolean};
 export class AppError extends Error{constructor(message:string,public status=400){super(message)}}
 export const ensure=(value:any,message:string,status=400)=>{if(!value)throw new AppError(message,status)};
@@ -13,6 +13,8 @@ export const isOwner=(s:State,u:string)=>s.settings.find(x=>x.id==="owner")?.use
 export const isManager=(s:State,t:string,u:string)=>["captain","manager"].includes(membership(s,t,u)?.role);
 export const isCaptain=(s:State,t:string,u:string)=>membership(s,t,u)?.role==="captain";
 export const sideOf=(s:State,g:string,t:string)=>s.sides.find(x=>x.gameId===g&&x.teamId===t);
+export const guestStatusOf=(z:Row)=>z?.guestStatus??"none";
+export const approvedGuests=(s:State,g:string,t:string)=>s.guests.filter(x=>x.gameId===g&&x.teamId===t&&x.status==="approved").length;
 export function requireTeam(s:State,t:string,u:string,level="member",write=true){const team=teamOf(s,t);ensure(team,"팀을 찾을 수 없어요.",404);const m=membership(s,t,u);ensure(m&&((level==="member")||(level==="manager"&&["captain","manager"].includes(m.role))||(level==="captain"&&m.role==="captain")),"이 팀에서 해당 작업을 할 권한이 없어요.",403);ensure(!write||team!.status==="active","현재 이용 가능한 팀이 아니에요.",403);return m!}
 export const textValue=(v:any,max=200,required=true)=>{const x=String(v??"").trim();ensure(x.length<=max&&(!required||x.length>0),"입력 내용의 길이를 확인해주세요.");return x};
 export const integer=(v:any,min=0,max=99)=>{const n=Number(v);ensure(Number.isInteger(n)&&n>=min&&n<=max,"숫자 범위를 확인해주세요.");return n};
@@ -21,7 +23,7 @@ export function currentVote(side:Row,memberId:string,cutoff=Infinity){const hist
 export function eligibleMembers(s:State,side:Row,g:Row){const when=Math.min(Date.now(),Date.parse(g.start));return s.members.filter(m=>m.teamId===side.teamId&&(m.periods??[]).some((p:any)=>Date.parse(p.start)<=when&&(!p.end||Date.parse(p.end)>when)))}
 export function rosterFor(s:State,side:Row,g:Row){return side.roster??eligibleMembers(s,side,g).map(m=>({id:m.id,name:m.name,number:m.number,position:m.position}))}
 export function attendanceDraft(s:State,side:Row,g:Row){return Object.fromEntries(rosterFor(s,side,g).map((m:any)=>[m.id,currentVote(side,m.id,Date.parse(g.start))==="yes"]))}
-export function newSide(g:Row,t:string):Row{return {id:g.id+":"+t,gameId:g.id,teamId:t,deadline:g.start,meeting:"",note:"",needed:11,votes:{},attendance:{},attendanceFinal:false,records:{},recordsFinal:false}}
+export function newSide(g:Row,t:string):Row{return {id:g.id+":"+t,gameId:g.id,teamId:t,deadline:g.start,meeting:"",note:"",needed:11,votes:{},attendance:{},attendanceFinal:false,records:{},recordsFinal:false,guestNeeded:0,guestStatus:"none"}}
 function notice(s:State,t:string,title:string,body:string,gameId?:string){for(const m of s.members.filter(x=>x.teamId===t&&x.status==="active"))s.notifications.push({id:id(),userId:m.userId,teamId:t,title,body,gameId,read:false,at:iso()})}
 function userNotice(s:State,u:string,title:string,body:string,t?:string){s.notifications.push({id:id(),userId:u,teamId:t,title,body,read:false,at:iso()})}
 function checkConflict(s:State,t:string,start:string,end:string,except:string){ensure(!s.games.some(g=>g.id!==except&&g.status!=="cancelled"&&containsTeam(g,t)&&Date.parse(g.start)<Date.parse(end)&&Date.parse(g.end)>Date.parse(start)),"같은 시간에 등록된 경기가 있어요. 기존 일정을 확인해주세요.",409)}
@@ -104,7 +106,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   if(type==="vote"){ensure(g!.status==="scheduled"&&now<Math.min(Date.parse(side!.deadline),Date.parse(g!.start)),"참여 투표가 마감되었어요.",409);ensure(["yes","no","maybe"].includes(c.value),"응답을 선택해주세요.");(side!.votes[m.id]??=[]).push({value:c.value,at:stamp});}
   if(type==="sideSettings"){side!.note=textValue(c.note,500,false);side!.meeting=textValue(c.meeting,50,false);side!.needed=integer(c.needed??side!.needed,1,50);if(c.deadline){ensure(now<Date.parse(c.deadline)&&Date.parse(c.deadline)<=Date.parse(g!.start),"투표 마감 시간을 확인해주세요.");side!.deadline=iso(Date.parse(c.deadline));}}
   if(type==="completeGame"){ensure(now>=Date.parse(g!.end),"경기가 끝난 후 완료 처리할 수 있어요.");g!.status="completed";}
-  if(type==="cancelGame"){if(g!.status==="completed")ensure(textValue(c.reason,300),"정정 사유를 입력해주세요.");g!.status="cancelled";g!.reason=textValue(c.reason,300);g!.listing="cancelled";g!.change=null;for(const r of s.requests.filter(x=>x.gameId===g!.id&&x.status==="pending"))r.status="closed";for(const tid of [g!.home,g!.away].filter(Boolean))notice(s,tid,"경기 취소",g!.reason,g!.id);}
+  if(type==="cancelGame"){if(g!.status==="completed")ensure(textValue(c.reason,300),"정정 사유를 입력해주세요.");g!.status="cancelled";g!.reason=textValue(c.reason,300);g!.listing="cancelled";g!.change=null;for(const r of s.requests.filter(x=>x.gameId===g!.id&&x.status==="pending"))r.status="closed";for(const z of s.sides.filter(x=>x.gameId===g!.id))if(guestStatusOf(z)==="open")z.guestStatus="closed";for(const r of s.guests.filter(x=>x.gameId===g!.id&&x.status==="pending"))r.status="closed";for(const tid of [g!.home,g!.away].filter(Boolean))notice(s,tid,"경기 취소",g!.reason,g!.id);}
   if(type==="setOpponent"){ensure(!g!.away&&g!.listing!=="open"&&!g!.result?.status,"외부 상대팀을 입력할 수 없는 경기예요.");g!.external=textValue(c.external,60);}
   if(type==="openListing"){ensure(g!.home===t&&!g!.away&&!g!.external&&Date.parse(g!.start)>now&&g!.status==="scheduled","상대팀 모집을 열 수 없는 경기예요.");g!.listing="open";}
   if(type==="closeListing"){ensure(g!.home===t&&!g!.away,"확정된 매칭은 경기 취소로 처리해주세요.");g!.listing="closed";for(const r of s.requests.filter(x=>x.gameId===g!.id&&x.status==="pending"))r.status="closed";}
@@ -137,6 +139,48 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   }
   if(type==="confirmChange"){const change=g!.change;ensure(g!.status==="scheduled"&&now<Date.parse(g!.start)&&change&&now<Date.parse(change.start),"이미 시작한 경기의 변경 제안은 수락할 수 없어요.",409);ensure(change&&change.by!==t&&change.version===g!.revision&&c.proposalId===change.proposalId,"확인 가능한 최신 변경 제안이 없어요.",409);if(c.agree!==false){for(const tid of [g!.home,g!.away].filter(Boolean))checkConflict(s,tid,change.start,change.end,g!.id);Object.assign(g!,change);g!.revision++;for(const z of s.sides.filter(x=>x.gameId===g!.id)){z.voteArchive=[...(z.voteArchive??[]),z.votes];z.votes={};z.deadline=g!.start;z.roster=null;z.attendanceFinal=false;}for(const tid of [g!.home,g!.away].filter(Boolean))notice(s,tid,"경기 일정 변경","변경된 일정에 다시 참여 투표해주세요.",g!.id);}g!.change=null;}
  }
+ else if(["openGuests","closeGuests","applyGuest","withdrawGuest","approveGuest","rejectGuest","cancelGuest"].includes(type)){
+  const g=s.games.find(x=>x.id===c.gameId);ensure(g&&containsTeam(g,t),"경기를 찾을 수 없어요.",404);
+  const side=sideOf(s,g!.id,t);ensure(side,"경기 팀 정보를 찾을 수 없어요.",404);
+  const upcoming=()=>g!.status==="scheduled"&&Date.parse(g!.start)>now,count=()=>approvedGuests(s,g!.id,t),limit=()=>integer(side!.guestNeeded??0,0,30);
+  const closePending=()=>{for(const x of s.guests.filter(x=>x.gameId===g!.id&&x.teamId===t&&x.status==="pending"))x.status="closed"};
+  const find=()=>{const r=s.guests.find(x=>x.id===c.guestId&&x.teamId===t&&x.gameId===g!.id);ensure(r,"용병 신청을 찾을 수 없어요.",404);return r!};
+  if(type==="applyGuest"){
+   ensure(teamOf(s,t)?.status==="active","지금은 용병을 신청할 수 없는 팀이에요.",403);
+   ensure(guestStatusOf(side!)==="open"&&upcoming()&&count()<limit(),"용병 모집이 마감되었어요.",409);
+   ensure(!s.members.some(x=>x.teamId===t&&x.userId===a.id&&["active","pending"].includes(x.status)),"이미 이 팀에 소속되어 있어 용병으로 신청할 수 없어요.",409);
+   const old=s.guests.find(x=>x.gameId===g!.id&&x.teamId===t&&x.userId===a.id);
+   ensure(!old||!["pending","approved"].includes(old.status),"이미 신청한 경기예요.",409);
+   const value={gameId:g!.id,teamId:t,userId:a.id,name:textValue(c.name||a.name,30),position:textValue(c.position||"MF",12),number:integer(c.number??0,0,99),message:textValue(c.message,300,false),status:"pending",at:stamp};
+   const row=old?Object.assign(old,value):{id:id(),...value};if(!old)s.guests.push(row);
+   for(const m of s.members.filter(x=>x.teamId===t&&["captain","manager"].includes(x.role)&&x.status==="active"))userNotice(s,m.userId,"새 용병 신청",value.name+"님이 용병으로 신청했어요.",t);
+   output={guestId:row.id};
+  }
+  else if(type==="withdrawGuest"){const r=find();ensure(r.userId===a.id,"자신의 신청만 철회할 수 있어요.",403);ensure(r.status==="pending","이미 처리된 신청이에요.",409);r.status="withdrawn";}
+  else {
+   requireTeam(s,t,a.id,"manager");
+   if(type==="openGuests"){
+    ensure(upcoming(),"시작 전 예정 경기에만 용병을 모집할 수 있어요.");const needed=integer(c.needed,1,30);
+    ensure(needed>=count(),"이미 승인한 용병보다 적은 인원으로 줄일 수 없어요.");side!.guestNeeded=needed;
+    if(count()>=needed){side!.guestStatus="closed";closePending();}
+    else {side!.guestStatus="open";notice(s,t,"용병 모집 시작",g!.venue+" · "+needed+"명 모집",g!.id);}
+   }
+   if(type==="closeGuests"){ensure(guestStatusOf(side!)==="open","이미 마감된 모집이에요.",409);side!.guestStatus="closed";closePending();}
+   if(type==="rejectGuest"){const r=find();ensure(r.status==="pending","대기 중인 신청이 아니에요.",409);r.status="rejected";userNotice(s,r.userId,"용병 신청 결과",teamOf(s,t)!.name+" 경기의 용병 신청이 거절되었어요.");}
+   if(type==="approveGuest"){
+    const r=find();ensure(r.status==="pending","이미 처리된 신청이에요.",409);ensure(upcoming(),"지난 경기의 용병은 승인할 수 없어요.",409);
+    ensure(guestStatusOf(side!)==="open","용병 모집이 마감되었어요.",409);ensure(count()<limit(),"용병 모집 인원이 모두 찼어요.",409);
+    r.status="approved";r.decidedAt=stamp;
+    if(count()>=limit()){side!.guestStatus="closed";closePending();}
+    userNotice(s,r.userId,"용병 신청 승인",teamOf(s,t)!.name+" 경기에 용병으로 확정되었어요.");
+   }
+   if(type==="cancelGuest"){
+    const r=find();ensure(r.status==="approved","승인된 용병만 취소할 수 있어요.",409);r.status="cancelled";r.decidedAt=stamp;
+    if(guestStatusOf(side!)==="closed"&&upcoming()&&count()<limit())side!.guestStatus="open";
+    userNotice(s,r.userId,"용병 확정 취소",teamOf(s,t)!.name+" 경기의 용병 확정이 취소되었어요.");
+   }
+  }
+ }
  else if(type==="createNotice"){requireTeam(s,t,a.id,"captain");s.notices.push({id:id(),teamId:t,title:textValue(c.title,100),body:textValue(c.body,1500),pinned:c.pinned===true,at:stamp});notice(s,t,"새 팀 공지",c.title);}
  else if(type==="deleteNotice"){requireTeam(s,t,a.id,"captain");s.notices=s.notices.filter(x=>x.id!==c.noticeId||x.teamId!==t);}
  else if(type==="invite"){requireTeam(s,t,a.id,"captain");const token=crypto.randomUUID()+crypto.randomUUID();s.invites.push({id:token,teamId:t,expires:iso(now+7*24*3600e3),active:true});output={invite:token};}
@@ -152,9 +196,13 @@ export function visibleState(s:State,userId:string,selected?:string){
  const ownTeams=s.teams.filter(t=>t.applicant===userId);const publicTeams=s.teams.filter(t=>t.status==="active"||owner||active.some(m=>m.teamId===t.id)||t.applicant===userId).map(t=>{const full=owner||active.some(m=>m.teamId===t.id)||t.applicant===userId;return full?t:{id:t.id,name:t.name,region:t.region,description:t.description,format:t.format,days:t.days,level:t.level,status:t.status,color:t.color}});
  const games=s.games.filter(g=>tid&&containsTeam(g,tid));const listings=activeAccess?s.games.filter(g=>g.listing==="open"&&g.status==="scheduled"&&Date.parse(g.start)>Date.now()&&teamOf(s,g.home)?.status==="active"):[];
  const members=tid?s.members.filter(m=>m.teamId===tid&&(m.status==="active"||m.status==="left"||m.status==="removed"||team.role==="captain")):[];
+ const myGuestRows=s.guests.filter(x=>x.userId===userId);const guestGame=(gid:string)=>s.games.find(y=>y.id===gid);
  return {teams:publicTeams,members,mine:my,ownTeams,teamId:tid??"",role:team?.role??"",isOwner:owner,setupNeeded:!s.settings.some(x=>x.id==="owner"),games,sides:s.sides.filter(x=>x.teamId===tid).map(z=>({...z,roster:rosterFor(s,z,s.games.find(g=>g.id===z.gameId)!),draft:attendanceDraft(s,z,s.games.find(g=>g.id===z.gameId)!)})),listings,
  requests:s.requests.filter(r=>r.teamId===tid||(tid&&isCaptain(s,tid,userId)&&s.games.some(g=>g.id===r.gameId&&g.home===tid))),
  notices:s.notices.filter(x=>x.teamId===tid),notifications:s.notifications.filter(n=>n.userId===userId&&(!n.teamId||active.some(m=>m.teamId===n.teamId)||my.some(m=>m.teamId===n.teamId))),
+ guests:tid?s.guests.filter(x=>x.teamId===tid):[],
+ myGuests:myGuestRows.map(x=>{const gm=guestGame(x.gameId);return {...x,teamName:teamOf(s,x.teamId)?.name??"",start:gm?.start??"",venue:gm?.venue??"",gameStatus:gm?.status??""}}),
+ guestListings:s.sides.filter(z=>{const gm=guestGame(z.gameId);return guestStatusOf(z)==="open"&&!!gm&&gm.status==="scheduled"&&Date.parse(gm.start)>Date.now()&&teamOf(s,z.teamId)?.status==="active"}).map(z=>{const gm=guestGame(z.gameId)!;return {id:z.id,gameId:gm.id,teamId:z.teamId,teamName:teamOf(s,z.teamId)?.name??"",start:gm.start,end:gm.end,venue:gm.venue,address:gm.address,region:gm.region,format:gm.format,cost:gm.cost,secured:gm.secured,needed:z.guestNeeded??0,approved:approvedGuests(s,gm.id,z.teamId),applied:myGuestRows.find(x=>x.gameId===gm.id&&x.teamId===z.teamId&&["pending","approved"].includes(x.status))?.status??""}}),
  invites:s.invites.filter(x=>x.teamId===tid&&team?.role==="captain"),audit:owner?s.audit.slice(-100).reverse():[]};
 }
 export function summaries(v:any,from:string,to:string){

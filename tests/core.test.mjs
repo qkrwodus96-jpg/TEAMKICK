@@ -17,7 +17,7 @@ compile('lib/store.ts','store.mjs',s=>s.replace('import {env} from "cloudflare:w
 compile('lib/owner-config.ts','owner-config.mjs');
 compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {getChatGPTUser} from "@/app/chatgpt-auth";','const getChatGPTUser=async()=>globalThis.__teamkickTestIdentity;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
-const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,iso}=await import(path.join(runtime,'model.mjs'));
+const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,iso}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
 const api=await import(path.join(runtime,'api.mjs'));
 const NOW=Date.now(),DAY=864e5;
@@ -44,6 +44,12 @@ function matchFixture(){
   command(f.s,A,{type:'acceptMatch',teamId:f.a,gameId,requestId:f.s.requests[0].id});
   return {...f,gameId};
 }
+function guestFixture(){
+  const f=fixture(),gameId=game(f.s,f.a,{start:NOW+3*DAY});
+  command(f.s,A,{type:'openGuests',teamId:f.a,gameId,needed:2});
+  return {...f,gameId};
+}
+function applyGuest(s,teamId,gameId,actor){return command(s,actor,{type:'applyGuest',teamId,gameId,name:actor.name,position:'FW',number:10}).guestId}
 function localDatabase(){
   const db=new DatabaseSync(':memory:');
   for(const name of fs.readdirSync('drizzle').filter(x=>x.endsWith('.sql')).sort())db.exec(fs.readFileSync(path.join('drizzle',name),'utf8'));
@@ -166,4 +172,75 @@ test('API는 서버 로그인 신원을 사용하고 중복 저장 요청을 다
   const final=await repository.load();assert.equal(final.state.games.length,1);assert.equal(final.state.audit.at(-1).actor,A.id);
   globalThis.__teamkickTestIdentity=null;assert.equal((await api.POST(req())).status,401);
   db.close();
+});
+
+const G1={id:'guest-1',name:'용병1'},G2={id:'guest-2',name:'용병2'},G3={id:'용병3-id',name:'용병3'};
+
+test('용병 모집은 정원에 도달하면 서버가 마감하고 초과 승인·추가 신청을 막는다',()=>{
+  const {s,a,gameId}=guestFixture();
+  const ids=[G1,G2,G3].map(u=>applyGuest(s,a,gameId,u));
+  assert.equal(approvedGuests(s,gameId,a),0);
+  assert.equal(sideOf(s,gameId,a).guestStatus,'open');
+  command(s,A,{type:'approveGuest',teamId:a,gameId,guestId:ids[0]});
+  assert.equal(sideOf(s,gameId,a).guestStatus,'open');
+  command(s,A,{type:'approveGuest',teamId:a,gameId,guestId:ids[1]});
+  assert.equal(sideOf(s,gameId,a).guestStatus,'closed');
+  assert.equal(approvedGuests(s,gameId,a),2);
+  assert.equal(s.guests.find(x=>x.id===ids[2]).status,'closed');
+  assert.throws(()=>command(s,A,{type:'approveGuest',teamId:a,gameId,guestId:ids[2]}),/처리된 신청|마감/);
+  assert.throws(()=>applyGuest(s,a,gameId,{id:'guest-4',name:'용병4'}),/마감/);
+  assert.equal(visibleState(s,'stranger').guestListings.length,0);
+});
+
+test('용병 승인은 팀 가입과 구분되고 팀 내부 정보를 노출하지 않는다',()=>{
+  const {s,a,gameId}=guestFixture();
+  const guestId=applyGuest(s,a,gameId,G1);
+  command(s,A,{type:'approveGuest',teamId:a,gameId,guestId});
+  assert.equal(s.members.filter(m=>m.userId===G1.id).length,0);
+  const view=visibleState(s,G1.id);
+  assert.equal(view.teamId,'');assert.equal(view.role,'');
+  assert.equal(view.members.length,0);assert.equal(view.games.length,0);
+  assert.equal(view.notices.length,0);assert.equal(view.sides.length,0);
+  assert.equal(view.myGuests.find(x=>x.id===guestId).status,'approved');
+  const open=visibleState(s,'stranger').guestListings;
+  assert.equal(open.length,1);assert.equal(open[0].needed,2);assert.equal(open[0].approved,1);
+  for(const leak of ['votes','attendance','records','note','meeting','roster','draft'])assert.equal(leak in open[0],false);
+  addPlayer(s,a);
+  assert.throws(()=>command(s,member,{type:'applyGuest',teamId:a,gameId,name:'선수'}),/소속/);
+  assert.throws(()=>command(s,member,{type:'approveGuest',teamId:a,gameId,guestId}),/권한/);
+  assert.throws(()=>command(s,B,{type:'approveGuest',teamId:a,gameId,guestId}),/권한/);
+});
+
+test('마지막 한 자리를 동시에 승인해도 용병 정원을 넘지 않는다',async()=>{
+  const db=localDatabase(),{s,a}=fixture(),gameId=game(s,a,{start:NOW+3*DAY});
+  command(s,A,{type:'openGuests',teamId:a,gameId,needed:1});
+  const one=applyGuest(s,a,gameId,G1),two=applyGuest(s,a,gameId,G2);
+  await repository.commit(blank(),s,0);
+  const x=await repository.load(),y=await repository.load();
+  const ax=structuredClone(x.state),ay=structuredClone(y.state);
+  command(ax,A,{type:'approveGuest',teamId:a,gameId,guestId:one});
+  command(ay,A,{type:'approveGuest',teamId:a,gameId,guestId:two});
+  const outcomes=await Promise.allSettled([repository.commit(x.state,ax,x.version),repository.commit(y.state,ay,y.version)]);
+  assert.equal(outcomes.filter(o=>o.status==='fulfilled').length,1);
+  const final=await repository.load();
+  assert.equal(approvedGuests(final.state,gameId,a),1);
+  assert.equal(sideOf(final.state,gameId,a).guestStatus,'closed');
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM write_guards').get().n,0);db.close();
+});
+
+test('용병 확정을 취소하면 자리가 다시 열리고 용병은 팀 선수 통계에 들어가지 않는다',()=>{
+  const {s,a,gameId}=guestFixture();
+  const one=applyGuest(s,a,gameId,G1),two=applyGuest(s,a,gameId,G2);
+  command(s,A,{type:'approveGuest',teamId:a,gameId,guestId:one});
+  command(s,A,{type:'approveGuest',teamId:a,gameId,guestId:two});
+  assert.equal(sideOf(s,gameId,a).guestStatus,'closed');
+  command(s,A,{type:'cancelGuest',teamId:a,gameId,guestId:two});
+  assert.equal(sideOf(s,gameId,a).guestStatus,'open');
+  assert.equal(approvedGuests(s,gameId,a),1);
+  const stats=summaries(visibleState(s,A.id,a),iso(NOW-40*DAY),iso(NOW+40*DAY));
+  assert.equal(stats.players.some(x=>x.name===G1.name),false);
+  assert.equal(stats.players.length,1);
+  command(s,A,{type:'cancelGame',teamId:a,gameId,reason:'우천 취소'});
+  assert.equal(sideOf(s,gameId,a).guestStatus,'closed');
+  assert.throws(()=>applyGuest(s,a,gameId,G3),/마감|신청할 수 없는/);
 });

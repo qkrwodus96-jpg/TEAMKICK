@@ -57,7 +57,9 @@ const hashToken=async(token:string)=>toHex(await crypto.subtle.digest("SHA-256",
 // 남용 제한. 같은 접속 주소에서 짧은 시간에 반복되는 요청을 막는다.
 // 접속 주소 원문은 저장하지 않고 해시만 두며, 제한 시간이 지나면 지운다.
 // 값은 실사용을 보고 조정할 수 있게 한곳에 모아 둔다.
-const LIMITS={signup:{max:10,minutes:60},login:{max:20,minutes:15},forgot:{max:5,minutes:60},verify:{max:5,minutes:60}};
+// 국내 통신사는 여러 사용자가 같은 주소를 쓴다(CGNAT). 같은 장소에서 팀원이
+// 한꺼번에 가입하는 상황도 있어 가입은 넉넉히 둔다. 실패한 시도도 함께 센다.
+export const LIMITS={signup:{max:30,minutes:60},login:{max:20,minutes:15},forgot:{max:5,minutes:60},verify:{max:5,minutes:60}};
 export type LimitName=keyof typeof LIMITS;
 // Cloudflare 가 넣어주는 접속 주소. 클라이언트가 보낸 헤더는 믿지 않는다.
 export const clientKey=(req:Request)=>req.headers.get("cf-connecting-ip")??"";

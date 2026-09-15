@@ -26,7 +26,10 @@ export function AuthPanel({onDemo,mailReady=true,resetToken=""}:{onDemo:()=>void
    const action=signup?"signup":forgot?"forgot":reset?"reset":"login";
    const res=await fetch("/api/auth",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action,email:form.email,password:form.password,name:form.name,token,agree:form.agree==="y",adult:form.adult==="y"})});
    const out=await res.json().catch(()=>({})) as {error?:string};
-   if(!res.ok)throw new Error(out.error||"처리하지 못했어요. 잠시 후 다시 시도해주세요.");
+   // 서버가 아니라 앞단에서 막히면 본문이 JSON 이 아닐 수 있다. 그때도 이유를 알려준다.
+   if(!res.ok)throw new Error(out.error||(res.status===429
+    ?"요청이 너무 잦아요. 잠시 후 다시 시도해주세요."
+    :"처리하지 못했어요. 잠시 후 다시 시도해주세요. (응답 "+res.status+")"));
    if(forgot){setSent(true);setBusy(false);return}
    window.location.replace("/");
   }catch(err){setFailure(err instanceof Error?err.message:"처리하지 못했어요. 잠시 후 다시 시도해주세요.");setBusy(false)}

@@ -14,7 +14,7 @@ function compile(file,name,replace=s=>s){
 }
 compile('lib/model.ts','model.mjs');
 compile('lib/store.ts','store.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
-compile('lib/owner-config.ts','owner-config.mjs');
+compile('lib/owner-config.ts','owner-config.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;'));
 compile('lib/legal.ts','legal.mjs');
 compile('lib/kakao.ts','kakao.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/schema.ts','schema.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
@@ -29,6 +29,7 @@ const mail=await import(path.join(runtime,'mail.mjs'));
 const legal=await import(path.join(runtime,'legal.mjs'));
 const schema=await import(path.join(runtime,'schema.mjs'));
 const kakao=await import(path.join(runtime,'kakao.mjs'));
+const ownerConfig=await import(path.join(runtime,'owner-config.mjs'));
 const api=await import(path.join(runtime,'api.mjs'));
 const NOW=Date.now(),DAY=864e5;
 const owner={id:'owner',name:'운영자',ownerSetup:true},A={id:'a',name:'A 주장'},B={id:'b',name:'B 주장'},C={id:'c',name:'C 주장'},member={id:'player',name:'선수'};
@@ -816,4 +817,25 @@ test('카카오 토큰 요청은 설정된 client secret 을 함께 보낸다',a
     globalThis.fetch=realFetch;
     for(const k of Object.keys(env))delete env[k];Object.assign(env,keep);
   }
+});
+
+// 저장소가 공개라 짧은 코드는 해시를 거꾸로 맞혀볼 수 있다.
+// 환경변수로 코드를 직접 넣으면 저장소에 아무 흔적도 남지 않는다.
+test('운영자 초기 설정 코드는 환경변수가 있으면 그것만 인정한다',async()=>{
+  const env=globalThis.__teamkickTestEnv,keep={...env};
+  try{
+    for(const k of Object.keys(env))delete env[k];
+    assert.equal(ownerConfig.ownerCodeFromEnv(),false);
+    assert.equal(await ownerConfig.checkOwnerCode(""),false,'빈 값은 언제나 거부한다');
+    assert.equal(await ownerConfig.checkOwnerCode("아무거나"),false);
+
+    env.OWNER_SETUP_CODE='팀킥-운영자-코드';
+    assert.equal(ownerConfig.ownerCodeFromEnv(),true);
+    assert.equal(await ownerConfig.checkOwnerCode('팀킥-운영자-코드'),true);
+    assert.equal(await ownerConfig.checkOwnerCode('팀킥-운영자-코'),false,'일부만 맞으면 안 된다');
+    assert.equal(await ownerConfig.checkOwnerCode('팀킥-운영자-코드 '),false,'뒤에 공백이 붙어도 안 된다');
+    assert.equal(await ownerConfig.checkOwnerCode(''),false);
+    // 환경변수가 있으면 예전 해시 경로는 쓰지 않는다.
+    assert.equal(await ownerConfig.checkOwnerCode(ownerConfig.OWNER_SETUP_HASH),false);
+  }finally{for(const k of Object.keys(env))delete env[k];Object.assign(env,keep)}
 });

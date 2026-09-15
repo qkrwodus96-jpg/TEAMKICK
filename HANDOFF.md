@@ -3,6 +3,7 @@
 최종 갱신: 2026-09-15
 작업 폴더: `/home/user/TEAMKICK`
 브랜치: `claude/teamkick-setup-baseline-lwntca`
+Pull Request: https://github.com/qkrwodus96-jpg/TEAMKICK/pull/1 (열림, 충돌 없음)
 현재 커밋: T14 이메일 실재 확인
 미커밋 변경: 없음
 현재 작업 ID: T14 완료 / 다음은 T08 기기 푸시 또는 T11 출시 준비

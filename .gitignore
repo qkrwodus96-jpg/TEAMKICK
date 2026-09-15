@@ -2,9 +2,13 @@
 /.pnp
 .pnp.*
 /.next/
+/.vinext/
+next-env.d.ts
 /out/
 /coverage
 .env*
+.dev.vars
+.dev.vars.*
 /dist/
 /.wrangler/
 /.sites-runtime/

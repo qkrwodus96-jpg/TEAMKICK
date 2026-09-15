@@ -1,3 +1,6 @@
+// [미사용] 2026-09-15 자체 회원가입(lib/auth.ts)으로 전환하면서 앱에서 더 이상 호출하지 않는다.
+// Sites 스타터가 제공한 파일이라 삭제하지 않고 남겨둔다. 다시 쓰려면 두 신원 체계가
+// 섞이지 않도록 계정 연결 방식을 먼저 정해야 한다.
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 

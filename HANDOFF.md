@@ -705,7 +705,8 @@ mailReady: true   storageReady: true   placeSearchReady: true
 
 | 이름 | 쓰이는 곳 | 없으면 | 넣는 곳 |
 |---|---|---|---|
-| `KAKAO_REST_KEY` | 구장명 검색(`lib/places.ts`) | 검색만 숨김, 수기 입력은 동작 | 배포: Site 설정 / 로컬: `.dev.vars` |
+| `KAKAO_REST_KEY` | 구장명 검색, 카카오 로그인 | 검색·카카오 로그인 모두 막힘 | 배포: Site 설정 / 로컬: `.dev.vars` |
+| `KAKAO_CLIENT_SECRET` | 카카오 로그인 토큰 발급 | **토큰 발급이 401 로 실패**(기본 활성화) | 같음 |
 | `BREVO_API_KEY` | 비밀번호 재설정 메일(`lib/mail.ts`) | 비밀번호 찾기 숨김, 토큰도 안 만듦 | 같음 |
 | `MAIL_FROM` | 보내는 사람 표시 | 위와 같음(키만으론 동작 안 함) | 같음 |
 

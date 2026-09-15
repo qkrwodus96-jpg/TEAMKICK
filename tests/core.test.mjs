@@ -18,7 +18,7 @@ compile('lib/owner-config.ts','owner-config.mjs');
 compile('lib/legal.ts','legal.mjs');
 compile('lib/schema.ts','schema.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/mail.ts','mail.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./legal"','"./legal.mjs"'));
-compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('import {sendMail,mailReady} from "./mail";','const sendMail=async(to,subject,text)=>{(globalThis.__teamkickTestMail??=[]).push({to,subject,text})};const mailReady=()=>globalThis.__teamkickTestMailReady!==false;').replace('"./model"','"./model.mjs"'));
+compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('import {sendMail,mailReady} from "./mail";','const sendMail=async(to,subject,text)=>{if(globalThis.__teamkickTestMailFail)throw new AppError("메일을 보내지 못했어요. 잠시 후 다시 시도해주세요.",503);(globalThis.__teamkickTestMail??=[]).push({to,subject,text})};const mailReady=()=>globalThis.__teamkickTestMailReady!==false;').replace('"./model"','"./model.mjs"'));
 compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
 const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,iso}=await import(path.join(runtime,'model.mjs'));
@@ -694,4 +694,20 @@ test('보내는 도메인과 키 상태를 메일을 보내지 않고 확인한�
     globalThis.fetch=realFetch;
     for(const k of Object.keys(env))delete env[k];Object.assign(env,keep);
   }
+});
+
+// 보내지 못한 토큰이 남으면 재발송 간격 제한에 걸려 다시 보낼 수 없게 된다.
+test('확인 메일 발송이 실패하면 토큰을 남기지 않아 곧바로 다시 보낼 수 있다',async()=>{
+  const db=localDatabase();globalThis.__teamkickTestMail=[];
+  const origin='https://teamkick.test';
+  const {user}=await auth.signUp({email:'fail@t.com',name:'실패',password:'teamkick-1234',agree:true,adult:true},origin);
+  assert.equal(globalThis.__teamkickTestMail.length,1);
+  db.exec('DELETE FROM email_verifications'); // 가입 때 만든 토큰을 치우고 실패 상황을 만든다
+  const realSend=globalThis.__teamkickTestMailFail;
+  globalThis.__teamkickTestMailFail=true;
+  await assert.rejects(()=>auth.resendVerification(user.userId,origin),/보내지 못했어요/);
+  globalThis.__teamkickTestMailFail=realSend;
+  assert.equal(db.prepare('SELECT count(*) AS n FROM email_verifications').get().n,0,'실패한 토큰은 남지 않는다');
+  assert.equal(await auth.resendVerification(user.userId,origin),true,'간격 제한에 걸리지 않고 바로 다시 보낸다');
+  db.close();
 });

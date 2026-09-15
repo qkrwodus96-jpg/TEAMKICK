@@ -67,7 +67,9 @@ api.resend.com 모두 프록시가 CONNECT 를 거부한다(403). 그래서 외�
 "키가 잘못됐다"는 근거로 쓰지 않는다.
 
 비밀번호 재설정 메일은 `BREVO_API_KEY`(또는 `RESEND_API_KEY`)와 `MAIL_FROM`이
-있어야 동작한다.
+있어야 동작한다. `MAIL_FROM`에는 **`naver.com`·`gmail.com` 같은 무료 웹메일 주소를
+쓰지 않는다** — 네이버는 외부 서비스의 `naver.com` 발신을 막고, 무료 도메인은
+SPF/DKIM 인증을 붙일 수 없다. 회신은 코드가 `lib/legal.ts`의 문의처로 돌려준다.
 구장 검색은 `KAKAO_REST_KEY` 환경변수가 있어야 동작한다. 로컬에서는 `.dev.vars`에
 넣고(이 파일은 git에 올리지 않는다), 없으면 검색만 막히고 수기 입력은 그대로 된다.
 

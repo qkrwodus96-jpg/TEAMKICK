@@ -1,5 +1,6 @@
 import {env} from "cloudflare:workers";
 import {AppError,ensure} from "./model";
+import {CONTACT} from "./legal";
 
 // 메일 발송. 키가 들어 있는 쪽을 골라 쓴다.
 // - Brevo: 보내는 주소만 확인하면 되어 도메인이 없어도 시작할 수 있다(무료 하루 300건)
@@ -24,14 +25,16 @@ export async function sendMail(to:string,subject:string,text:string){
  ensure(mailReady(),"메일 발송이 아직 설정되지 않았어요. 관리자에게 문의해주세요.",503);
  const sender=parseFrom(from());
  const brevo=provider()==="brevo";
+ // 보내는 주소는 발송 서비스가 확인한 주소여야 하고 문의처와 다를 수 있다.
+ // 회신은 언제나 문의처로 오게 둔다.
  const res=await fetch(brevo?"https://api.brevo.com/v3/smtp/email":"https://api.resend.com/emails",{
   method:"POST",
   headers:brevo
    ?{"api-key":setting("BREVO_API_KEY"),"Content-Type":"application/json","Accept":"application/json"}
    :{Authorization:"Bearer "+setting("RESEND_API_KEY"),"Content-Type":"application/json"},
   body:JSON.stringify(brevo
-   ?{sender,to:[{email:to}],subject,textContent:text,htmlContent:"<pre>"+escape(text)+"</pre>"}
-   :{from:sender.name+" <"+sender.email+">",to:[to],subject,text}),
+   ?{sender,to:[{email:to}],replyTo:{email:CONTACT,name:sender.name},subject,textContent:text,htmlContent:"<pre>"+escape(text)+"</pre>"}
+   :{from:sender.name+" <"+sender.email+">",to:[to],reply_to:CONTACT,subject,text}),
  });
  if(!res.ok){
   // 본문에 수신자 주소가 들어갈 수 있어 상태 코드만 남긴다.

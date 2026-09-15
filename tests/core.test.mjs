@@ -15,7 +15,8 @@ function compile(file,name,replace=s=>s){
 compile('lib/model.ts','model.mjs');
 compile('lib/store.ts','store.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/owner-config.ts','owner-config.mjs');
-compile('lib/mail.ts','mail.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
+compile('lib/legal.ts','legal.mjs');
+compile('lib/mail.ts','mail.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./legal"','"./legal.mjs"'));
 compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('import {sendMail,mailReady} from "./mail";','const sendMail=async(to,subject,text)=>{(globalThis.__teamkickTestMail??=[]).push({to,subject,text})};const mailReady=()=>globalThis.__teamkickTestMailReady!==false;').replace('"./model"','"./model.mjs"'));
 compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
@@ -23,6 +24,7 @@ const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraf
 const repository=await import(path.join(runtime,'store.mjs'));
 const auth=await import(path.join(runtime,'auth.mjs'));
 const mail=await import(path.join(runtime,'mail.mjs'));
+const legal=await import(path.join(runtime,'legal.mjs'));
 const api=await import(path.join(runtime,'api.mjs'));
 const NOW=Date.now(),DAY=864e5;
 const owner={id:'owner',name:'운영자',ownerSetup:true},A={id:'a',name:'A 주장'},B={id:'b',name:'B 주장'},C={id:'c',name:'C 주장'},member={id:'player',name:'선수'};
@@ -502,4 +504,34 @@ test('보내는 주소 형식과 메일 설정 여부를 바르게 읽는다',()
   delete env.BREVO_API_KEY;env.RESEND_API_KEY='y';
   assert.equal(mail.mailReady(),true,'다른 서비스 키로도 동작한다');
   for(const k of Object.keys(env))delete env[k];Object.assign(env,keep);
+});
+
+test('메일 요청 본문에 보내는 주소·받는 주소·회신 주소를 채워 보낸다',async()=>{
+  const env=globalThis.__teamkickTestEnv;const keep={...env};
+  const realFetch=globalThis.fetch;const calls=[];
+  globalThis.fetch=async(url,init)=>{calls.push({url,init});return {ok:true,status:200}};
+  try{
+    for(const k of Object.keys(env))delete env[k];
+    env.BREVO_API_KEY='brevo-test-key';env.MAIL_FROM='팀킥 <no-reply@teamkick.test>';
+    await mail.sendMail('member@teamkick.test','비밀번호 재설정','본문 <링크>');
+    assert.equal(calls.length,1,'한 번만 호출한다');
+    assert.equal(calls[0].url,'https://api.brevo.com/v3/smtp/email','Brevo 키가 있으면 Brevo로 보낸다');
+    assert.equal(calls[0].init.headers['api-key'],'brevo-test-key');
+    const body=JSON.parse(calls[0].init.body);
+    assert.deepEqual(body.sender,{name:'팀킥',email:'no-reply@teamkick.test'},'보내는 주소는 MAIL_FROM에서 온다');
+    assert.deepEqual(body.to,[{email:'member@teamkick.test'}]);
+    assert.equal(body.replyTo?.email,legal.CONTACT,'회신은 문의처로 받는다');
+    assert.ok(body.htmlContent.includes('&lt;링크&gt;'),'본문을 HTML에 그대로 넣지 않는다');
+    // 다른 서비스 키로 바꾸면 그쪽 형식으로 보낸다.
+    calls.length=0;delete env.BREVO_API_KEY;env.RESEND_API_KEY='resend-test-key';
+    await mail.sendMail('member@teamkick.test','비밀번호 재설정','본문');
+    assert.equal(calls[0].url,'https://api.resend.com/emails');
+    assert.equal(JSON.parse(calls[0].init.body).reply_to,legal.CONTACT,'회신 주소는 서비스가 달라도 붙는다');
+    // 발송 서비스가 거절하면 사용자에게는 다시 시도하라고만 알린다.
+    globalThis.fetch=async()=>({ok:false,status:429});
+    await assert.rejects(()=>mail.sendMail('member@teamkick.test','제목','본문'),/잠시 후 다시/);
+  }finally{
+    globalThis.fetch=realFetch;
+    for(const k of Object.keys(env))delete env[k];Object.assign(env,keep);
+  }
 });

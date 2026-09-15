@@ -5,7 +5,7 @@
 브랜치: `claude/teamkick-setup-baseline-lwntca`
 Pull Request: https://github.com/qkrwodus96-jpg/TEAMKICK/pull/1 (**병합 완료** 2026-09-15)
 `main` 이 최신이다. 이후 작업은 `main` 에서 새로 시작한다.
-현재 커밋: 활동 지역 목록화 + 구장 선택 UX
+현재 커밋: 62c251c (배포 완료)
 미커밋 변경: 없음
 현재 작업 ID: 활동 지역·구장 선택 완료 / 다음은 T08 기기 푸시 또는 T11 출시 준비
 
@@ -738,6 +738,15 @@ mailReady: true   storageReady: true   placeSearchReady: true
 - 같은 화면에 `VAPID_*` 3개가 들어 있으나 **이 저장소에는 이를 읽는 코드가 없다.**
   기기 푸시(T08)는 미구현이므로 지금은 아무 동작도 하지 않는다.
 
+### 배포 상태 (2026-09-15, 사용자 확인)
+
+- `main` `62c251c` 배포 완료. `/api/health` 의 `build` 는 `2026-09-15-region-venue`.
+- `OWNER_SETUP_CODE` 환경변수 적용 완료(`ownerSetupCode` 가 `env`).
+  **코드 원문은 사용자만 안다. 저장소·문서에 남기지 않는다.**
+- 운영자 등록 → 활동 지역 목록 → 구장 검색까지 배포본에서 확인했다(**사용자 확인**).
+  개발 환경은 외부 접속이 막혀 있어 내가 직접 확인한 것이 아니다.
+- **카카오 구장 검색이 실제 응답을 주는지는 아직 기록하지 못했다.** 다음 세션에서 확인할 것.
+
 ### 도메인 — `teamkick.co.kr` (2026-09-15, 가비아 등록 / Brevo 인증 완료)
 
 - Brevo 상태 **Authenticated + Branded**, 브랜드 서브도메인 `mail`.
@@ -757,6 +766,36 @@ mailReady: true   storageReady: true   placeSearchReady: true
 - 구입 후: Brevo → Domains → Add a domain → 표시되는 TXT/CNAME(DKIM·brevo-code·DMARC)을
   도메인 구입처 DNS 에 추가 → Verify. — **미검증**(공식 문서 기준, 실행 확인 못 함)
 - 도메인 가용성 조회는 이 환경에서 불가(외부 조회 차단).
+
+#### 웹 주소 연결 — 진행 중 (2026-09-15)
+
+- ChatGPT Sites 설정 → 맞춤 도메인에 `teamkick.co.kr`(apex) 를 등록했다.
+  Sites 가 요구한 레코드는 **A 2개(`@`) + TXT 2개**
+  (`_openai-site-verification`, `_cf-custom-hostname`).
+  값은 공개 DNS 라 문서에 옮기지 않는다.
+- apex 에 A 레코드를 주므로 `www` 없이 `teamkick.co.kr` 를 그대로 쓸 수 있다.
+- 사용자가 가비아에 4줄을 넣었다(2026-09-15). **연결 확인은 아직이다.**
+  가비아 총 11줄 = Brevo 7 + Sites 4.
+- 화면의 `DNS 제공업체에 레코드를 추가했습니다` 버튼은 **신고 버튼**이고
+  레코드를 대신 넣어주지 않는다. "24시간"은 최대 대기 시간이다.
+- 가비아에서 호스트 이름은 **도메인을 뺀 앞부분만** 넣어야 한다
+  (`_openai-site-verification`, `_cf-custom-hostname`). 전체 도메인을 넣으면
+  `..teamkick.co.kr.teamkick.co.kr` 이 되어 영원히 확인되지 않는다.
+- `@` 의 기존 A 레코드(가비아 파킹)는 지워야 하지만,
+  **TXT·CNAME 은 하나도 지우면 안 된다** — 메일 발송이 죽는다.
+
+#### 주소가 바뀌면 함께 해야 하는 것
+
+- 코드에는 주소가 하드코딩되어 있지 않다. 카카오 redirect(`lib/kakao.ts:19`)도
+  메일 링크(`lib/auth.ts:197,276`)도 **요청이 들어온 origin 을 그대로 따라간다.**
+  따라서 앱 코드는 고칠 것이 없다.
+- 다만 **카카오 개발자 콘솔에 새 주소를 등록해야** 한다. 안 하면 새 주소에서
+  카카오 로그인만 실패한다.
+  - 플랫폼 → Web → 사이트 도메인: `https://teamkick.co.kr`
+  - 카카오 로그인 → Redirect URI: `https://teamkick.co.kr/api/kakao`
+  - 기존 `chatgpt.site` 주소는 **지우지 말고 함께 둔다**(확인 전 백업).
+- 연결 후 확인할 것: `/api/health` 응답, 카카오 로그인, 가입 확인 메일 수신과
+  메일 속 링크 주소.
 
 ---
 

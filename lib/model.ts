@@ -2,6 +2,12 @@ export type Row={id:string;[key:string]:any};
 export type State={users:Row[];teams:Row[];members:Row[];games:Row[];sides:Row[];requests:Row[];guests:Row[];notices:Row[];notifications:Row[];invites:Row[];audit:Row[];receipts:Row[];settings:Row[]};
 export const collections=["users","teams","members","games","sides","requests","guests","notices","notifications","invites","audit","receipts","settings"] as const;
 export const blank=():State=>({users:[],teams:[],members:[],games:[],sides:[],requests:[],guests:[],notices:[],notifications:[],invites:[],audit:[],receipts:[],settings:[]});
+// 배포 후 migration 이 적용되지 않으면 테이블이나 열이 없어 SQLite 오류가 난다.
+// 그대로 두면 사용자에게 원인 모를 실패로 보이므로 구분해서 안내한다.
+// 스키마 내용은 응답에 담지 않고 서버 로그에만 남긴다.
+export const setupIncomplete=(e:unknown)=>/no such table|no such column/i.test(String(e));
+export const SETUP_MESSAGE="데이터베이스 준비가 아직 끝나지 않았어요. 관리자에게 문의해주세요.";
+
 export type Actor={id:string;name:string;ownerSetup?:boolean;ownerReset?:boolean;verified?:boolean};
 export class AppError extends Error{constructor(message:string,public status=400){super(message)}}
 export const ensure=(value:any,message:string,status=400)=>{if(!value)throw new AppError(message,status)};

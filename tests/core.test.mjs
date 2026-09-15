@@ -599,3 +599,14 @@ test('확인 메일 재발송은 간격을 두고, 이미 확인한 계정에는
   assert.equal(await auth.resendVerification(user.userId,origin,Date.now()+60*60000),false,'이미 확인한 계정에는 보내지 않는다');
   assert.equal(globalThis.__teamkickTestMail.length,2);
 });
+
+test('migration 이 적용되지 않았으면 준비가 끝나지 않았다고 안내한다',async()=>{
+  const db=localDatabase(),{s,a}=fixture();await repository.commit(blank(),s,0);
+  globalThis.__teamkickTestIdentity={userId:A.id,fullName:A.name};
+  db.exec('DROP TABLE entities'); // 배포 후 테이블이 없는 상태를 흉내 낸다
+  const req=new Request('https://example.test/api/app',{method:'POST',headers:{'content-type':'application/json',origin:'https://example.test'},body:JSON.stringify({type:'createNotice',teamId:a,title:'제목',body:'내용',mutationId:'setup-1'})});
+  const res=await api.POST(req);
+  assert.equal(res.status,503);
+  assert.match((await res.json()).error,/데이터베이스 준비/,'원인 모를 실패 대신 준비 미완료를 알린다');
+  globalThis.__teamkickTestIdentity=null;db.close();
+});

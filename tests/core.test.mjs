@@ -16,15 +16,17 @@ compile('lib/model.ts','model.mjs');
 compile('lib/store.ts','store.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/owner-config.ts','owner-config.mjs');
 compile('lib/legal.ts','legal.mjs');
+compile('lib/schema.ts','schema.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/mail.ts','mail.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./legal"','"./legal.mjs"'));
 compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('import {sendMail,mailReady} from "./mail";','const sendMail=async(to,subject,text)=>{(globalThis.__teamkickTestMail??=[]).push({to,subject,text})};const mailReady=()=>globalThis.__teamkickTestMailReady!==false;').replace('"./model"','"./model.mjs"'));
-compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
+compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
 const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,iso}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
 const auth=await import(path.join(runtime,'auth.mjs'));
 const mail=await import(path.join(runtime,'mail.mjs'));
 const legal=await import(path.join(runtime,'legal.mjs'));
+const schema=await import(path.join(runtime,'schema.mjs'));
 const api=await import(path.join(runtime,'api.mjs'));
 const NOW=Date.now(),DAY=864e5;
 const owner={id:'owner',name:'운영자',ownerSetup:true},A={id:'a',name:'A 주장'},B={id:'b',name:'B 주장'},C={id:'c',name:'C 주장'},member={id:'player',name:'선수'};
@@ -609,4 +611,31 @@ test('migration 이 적용되지 않았으면 준비가 끝나지 않았다고 �
   assert.equal(res.status,503);
   assert.match((await res.json()).error,/데이터베이스 준비/,'원인 모를 실패 대신 준비 미완료를 알린다');
   globalThis.__teamkickTestIdentity=null;db.close();
+});
+
+// 배포 환경에 migration 도구가 없어 앱이 표를 직접 만든다(lib/schema.ts).
+// 그 문장들이 drizzle/ 의 migration 과 같은 스키마를 만드는지 실제로 비교한다.
+function describe(db){
+  const tables=db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map(r=>r.name);
+  const shape={};
+  for(const t of tables){
+    shape[t]={
+      columns:db.prepare(`PRAGMA table_info(${t})`).all().map(c=>[c.name,c.type,c.notnull,c.dflt_value,c.pk].join('|')).sort(),
+      indexes:db.prepare(`PRAGMA index_list(${t})`).all().map(i=>i.name+':'+i.unique+':'+db.prepare(`PRAGMA index_info(${i.name})`).all().map(x=>x.name).join(',')).sort(),
+      check:/CHECK/i.test(db.prepare("SELECT sql FROM sqlite_master WHERE name=?").get(t).sql??''),
+    };
+  }
+  return shape;
+}
+
+test('앱이 직접 만드는 표가 drizzle migration 과 같은 스키마를 만든다',()=>{
+  const fromMigrations=new DatabaseSync(':memory:');
+  for(const name of fs.readdirSync('drizzle').filter(x=>x.endsWith('.sql')).sort())fromMigrations.exec(fs.readFileSync(path.join('drizzle',name),'utf8'));
+  const fromApp=new DatabaseSync(':memory:');
+  const apply=()=>{for(const sql of schema.STATEMENTS){try{fromApp.exec(sql)}catch(e){if(!/duplicate column name/i.test(String(e)))throw e}}};
+  apply();
+  assert.deepEqual(describe(fromApp),describe(fromMigrations),'migration 을 새로 추가하면 lib/schema.ts 도 함께 고쳐야 한다');
+  apply(); // 여러 번 실행해도 안전해야 한다
+  assert.deepEqual(describe(fromApp),describe(fromMigrations),'다시 실행해도 스키마가 달라지지 않는다');
+  fromMigrations.close();fromApp.close();
 });

@@ -1,9 +1,11 @@
 import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword,limit,clientKey,verifyEmail,resendVerification,currentUser} from "@/lib/auth";
 import {AppError,setupIncomplete,SETUP_MESSAGE} from "@/lib/model";
+import {ensureSchema} from "@/lib/schema";
 export const dynamic="force-dynamic";
 const json=(x:unknown,status=200,cookie?:string)=>Response.json(x,{status,headers:cookie?{"Cache-Control":"no-store","Set-Cookie":cookie}:{"Cache-Control":"no-store"}});
 export async function POST(req:Request){
  try{
+  await ensureSchema();
   const origin=req.headers.get("origin");if(origin&&origin!==new URL(req.url).origin)throw new AppError("요청 출처를 확인할 수 없어요.",403);
   if(req.headers.get("sec-fetch-site")==="cross-site")throw new AppError("허용되지 않은 요청이에요.",403);
   const raw=await req.text();if(raw.length>4000)throw new AppError("입력 내용이 너무 커요.",413);

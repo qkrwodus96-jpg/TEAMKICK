@@ -5,11 +5,13 @@ import {mailReady} from "@/lib/mail";
 import {load,commit} from "@/lib/store";
 import {applyCommand,visibleState,AppError,iso,id,setupIncomplete,SETUP_MESSAGE} from "@/lib/model";
 import {OWNER_SETUP_HASH} from "@/lib/owner-config";
+import {ensureSchema} from "@/lib/schema";
 export const dynamic="force-dynamic";
 const json=(x:any,status=200,cookie?:string)=>Response.json(x,{status,headers:cookie?{"Cache-Control":"no-store","Set-Cookie":cookie}:{"Cache-Control":"no-store"}});
-export async function GET(req:Request){try{const user=await currentUser(req);if(!user)return json({user:null,mailReady:mailReady()});const {state}=await load();const teamId=new URL(req.url).searchParams.get("team")??undefined;const token=new URL(req.url).searchParams.get("invite");const invite=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());return json({storageReady:storageReady(),placeSearchReady:placeSearchReady(),mailReady:mailReady(),needsVerification:mailReady()&&!user.verified,invitedTeam:invite?.teamId??null,user:{id:user.userId,name:state.users.find(x=>x.id===user.userId)?.name??user.fullName??"팀원"},...visibleState(state,user.userId,teamId)});}catch(e){console.error("TeamKick load",e);return json({error:e instanceof AppError?e.message:setupIncomplete(e)?SETUP_MESSAGE:"데이터를 불러오지 못했어요. 다시 시도해주세요."},e instanceof AppError?e.status:503)}}
+export async function GET(req:Request){try{await ensureSchema();const user=await currentUser(req);if(!user)return json({user:null,mailReady:mailReady()});const {state}=await load();const teamId=new URL(req.url).searchParams.get("team")??undefined;const token=new URL(req.url).searchParams.get("invite");const invite=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());return json({storageReady:storageReady(),placeSearchReady:placeSearchReady(),mailReady:mailReady(),needsVerification:mailReady()&&!user.verified,invitedTeam:invite?.teamId??null,user:{id:user.userId,name:state.users.find(x=>x.id===user.userId)?.name??user.fullName??"팀원"},...visibleState(state,user.userId,teamId)});}catch(e){console.error("TeamKick load",e);return json({error:e instanceof AppError?e.message:setupIncomplete(e)?SETUP_MESSAGE:"데이터를 불러오지 못했어요. 다시 시도해주세요."},e instanceof AppError?e.status:503)}}
 export async function POST(req:Request){
  try{
+  await ensureSchema();
   const user=await currentUser(req);if(!user)throw new AppError("먼저 로그인해주세요.",401);
   const origin=req.headers.get("origin");if(origin&&origin!==new URL(req.url).origin)throw new AppError("요청 출처를 확인할 수 없어요.",403);
   if(req.headers.get("sec-fetch-site")==="cross-site")throw new AppError("허용되지 않은 요청이에요.",403);

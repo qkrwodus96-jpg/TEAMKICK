@@ -48,6 +48,51 @@ Pull Request: https://github.com/qkrwodus96-jpg/TEAMKICK/pull/1 (**병합 완료
 
 ## 이번에 완료한 작업
 
+### 가입 실패의 진짜 원인: PBKDF2 반복 상한 (2026-09-15)
+
+- **증상**: 표가 모두 생성됐는데도 가입이 "처리하지 못했어요"로 실패했다.
+- **원인**: **Cloudflare Workers 는 PBKDF2 반복을 10만 회로 제한**한다. 넘기면
+  `NotSupportedError: Pbkdf2 failed: iteration counts above 100000 are not supported`
+  가 난다. 우리 코드는 OWASP 권고를 따라 **60만 회**를 썼다.
+- **왜 지금까지 못 잡았나**: **Node 에는 이 제한이 없다.** 로컬 테스트 37개가 전부
+  통과하는데도 배포 환경에서만 실패한다. 테스트가 잡을 수 없는 종류의 차이였다.
+- **변경**: 10만 회를 **6회 이어 붙여** 작업량 60만 회를 유지한다. 각 회차의 출력을
+  다음 회차의 입력으로 넣으므로 병렬로 줄일 수 없다(작업량이 실제로 6배).
+  저장 형식은 `pbkdf2$100000x6$<소금>$<해시>` 이고, 예전 단일 회차 형식도 계속 읽는다.
+- **재발 방지**: `ROUND_ITERATIONS` 이 10만을 넘지 않는지, 전체 작업량이 60만 이상인지
+  테스트로 고정했다. 상한을 올리면 테스트가 실패한다.
+- **진단 추가**: `/api/health` 가 실제 런타임에서 해싱을 한 번 돌려보고
+  `passwordHashing` 으로 `ok` 또는 오류 문구를 돌려준다. 다음부터는 가입을 시도하지
+  않고도 이 값으로 알 수 있다.
+- **검증**: `node --test tests/core.test.mjs` **37/37 통과**. 해시 생성·검증 왕복,
+  원문 미저장, 상한 준수, 작업량 유지를 확인했다. 상한을 60만으로 되돌리면
+  테스트가 실패하는 것까지 확인했다(35/37). `tsc` 통과, `lint` 오류 77건.
+  — **로컬 검증 완료**
+- **미검증**: 실제 Workers 에서 6회 연쇄가 CPU 제한 안에 드는지는 배포 후
+  `/api/health` 의 `passwordHashing` 으로 확인해야 한다.
+
+### 배포·스키마 실환경 확인 (2026-09-15) — **외부 연동 검증 완료**
+
+`GET /api/health` 응답을 사용자가 확인해 보내주었다. 배포 환경에서 처음으로
+사실이 확인된 항목들이다.
+
+```
+build: 2026-09-15-health   database: true   setupError: null
+tables: entities, state_revision, write_guards, accounts, sessions,
+        password_resets, rate_limits, email_verifications  — 모두 true
+mailReady: true   storageReady: true   placeSearchReady: true
+```
+
+- **확인됨**: 최신 코드가 서빙 중이고, `ensureSchema()` 가 **실제 D1 에서 표 8개를
+  만들었다.** migration 도구 없이 앱이 스키마를 준비하는 방식이 동작한다.
+  R2 바인딩과 카카오·Brevo 환경변수도 들어가 있다.
+- **아직 아닌 것**: `mailReady`·`storageReady`·`placeSearchReady` 는 **설정이 있다는
+  뜻일 뿐** 실제 발송·업로드·검색 성공을 확인한 것이 아니다. 각각 실제 사용으로
+  확인해야 한다.
+- **여기까지 오는 데 걸린 것**: 코드 반영·빌드·게시가 각각 별개였고, 보고와 실제가
+  두 번 달랐다. 진단 경로를 먼저 만들었어야 했다. 앞으로 배포 관련 판단은
+  `/api/health` 응답으로만 한다.
+
 ### 진단 경로와 준비 실패 구분 (2026-09-15)
 
 - **왜**: 반영 후에도 가입이 같은 문구("처리하지 못했어요")로 실패했다. 이 문구는
@@ -486,9 +531,8 @@ Pull Request: https://github.com/qkrwodus96-jpg/TEAMKICK/pull/1 (**병합 완료
 
 지금 당장 필요한 것은 없다. 아래는 나중에 필요해지는 시점에 요청한다.
 
-0. **배포와 migration** — `main` 병합은 끝났다(PR #1). 남은 것은 **배포**와
-   **migration `0001`~`0005` 적용**이다. 이것이 끝나야 지금까지 만든 기능의
-   실제 동작을 처음으로 확인할 수 있다. 현재 가장 큰 공백이다.
+0. ~~배포와 migration~~ **해결됨** — 배포 확인, 표 8개 생성 확인(`/api/health`).
+   남은 것은 기능별 실사용 확인(가입 → 확인 메일 → 링크)이다.
    - 저장소에는 migration 을 돌리는 스크립트가 없다. 원본 앱이 `0000` 이 적용된
      상태로 동작했으므로 **배포 과정이 `drizzle/` 를 자동 적용할 가능성이 높지만
      확인하지 못했다** — **미검증**.

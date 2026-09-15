@@ -360,3 +360,41 @@ test('팀 로고와 선수 사진은 권한과 저장 경로를 함께 검증한
   command(s,A,{type:'removeMember',teamId:a,memberId:om.id});
   assert.throws(()=>command(s,A,{type:'setMemberPhoto',teamId:a,memberId:om.id,key:'members/'+a+'/'+om.id+'/x.png'}),/활동 중인 팀원/);
 });
+
+test('경기를 만들 때 투표 마감을 정할 수 있고 범위를 벗어나면 거부한다',()=>{
+  const {s,a}=fixture(),start=NOW+5*DAY;
+  const make=(extra,when=NOW)=>command(s,A,{type:'createGame',teamId:a,venue:'축구장',address:'서울',external:'외부 FC',...extra},when);
+  assert.throws(()=>make({start:iso(start),end:iso(start+7200e3),deadline:iso(start+3600e3)}),/투표 마감/,'경기 시작보다 늦게는 못 정한다');
+  assert.throws(()=>make({start:iso(start),end:iso(start+7200e3),deadline:iso(NOW-DAY)}),/투표 마감/,'지난 시각으로는 못 정한다');
+  const picked=make({start:iso(start),end:iso(start+7200e3),deadline:iso(start-2*3600e3)});
+  assert.equal(sideOf(s,picked.gameId,a).deadline,iso(start-2*3600e3),'고른 마감이 그대로 저장된다');
+  const later=NOW+9*DAY,blank2=make({start:iso(later),end:iso(later+7200e3)});
+  assert.equal(sideOf(s,blank2.gameId,a).deadline,iso(later),'비우면 경기 시작 시각으로 마감한다');
+  assert.throws(()=>command(s,A,{type:'sideSettings',teamId:a,gameId:picked.gameId,note:'',meeting:'',needed:11,deadline:iso(NOW-DAY)}),/투표 마감 시간/,'지난 시각은 조용히 무시하지 않고 거부한다');
+  command(s,A,{type:'sideSettings',teamId:a,gameId:picked.gameId,note:'',meeting:'',needed:11,deadline:iso(start-3600e3)});
+  assert.equal(sideOf(s,picked.gameId,a).deadline,iso(start-3600e3),'나중에 바꿀 수 있다');
+});
+
+test('참여 투표 알림은 미응답자에게만 가고 마감 뒤에는 보낼 수 없다',()=>{
+  const {s,a}=fixture();
+  const one={id:'p1',name:'선수1'},two={id:'p2',name:'선수2'};
+  addPlayer(s,a,one);addPlayer(s,a,two);
+  const gameId=game(s,a,{start:NOW+2*DAY});
+  command(s,one,{type:'vote',teamId:a,gameId,value:'yes'});
+  assert.throws(()=>command(s,one,{type:'remindVote',teamId:a,gameId}),/권한/,'일반 팀원은 보낼 수 없다');
+  const before=s.notifications.length;
+  const out=command(s,A,{type:'remindVote',teamId:a,gameId});
+  const sent=s.notifications.slice(before);
+  assert.equal(out.notified,sent.length);
+  assert.equal(sent.some(n=>n.userId===one.id),false,'이미 응답한 사람은 제외한다');
+  assert.equal(sent.some(n=>n.userId===two.id),true,'미응답자에게는 보낸다');
+  assert.throws(()=>command(s,A,{type:'remindVote',teamId:a,gameId}),/6시간/,'연달아 보내지 못한다');
+  const sixHours=NOW+6*3600e3+1000;
+  command(s,two,{type:'vote',teamId:a,gameId,value:'no'},sixHours);
+  command(s,A,{type:'vote',teamId:a,gameId,value:'yes'},sixHours);
+  assert.throws(()=>command(s,A,{type:'remindVote',teamId:a,gameId},sixHours),/응답하지 않은 선수가 없어요/);
+  const afterDeadline=Date.parse(sideOf(s,gameId,a).deadline)+1000;
+  assert.throws(()=>command(s,A,{type:'remindVote',teamId:a,gameId},afterDeadline),/마감/);
+  command(s,A,{type:'cancelGame',teamId:a,gameId,reason:'우천'});
+  assert.throws(()=>command(s,A,{type:'remindVote',teamId:a,gameId}),/취소된 경기/);
+});

@@ -24,13 +24,39 @@ export const STATEMENTS=[
  `ALTER TABLE accounts ADD COLUMN verified_at text`,
 ];
 
+// 배포된 코드가 어느 시점 것인지 화면으로 확인하기 위한 표시.
+// 스키마나 진단에 영향을 주는 변경을 할 때 함께 올린다.
+export const BUILD="2026-09-15-health";
+
+export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications"];
+
 let prepared=false;
 export async function ensureSchema(){
  if(prepared)return;
  if(!env.DB)throw new AppError("데이터 연결을 준비하고 있어요. 잠시 후 다시 시도해주세요.",503);
  for(const sql of STATEMENTS){
   try{await env.DB.prepare(sql).run()}
-  catch(e){if(!/duplicate column name/i.test(String(e)))throw e}
+  catch(e){
+   if(/duplicate column name/i.test(String(e)))continue; // 이미 있는 열이면 넘어간다
+   // 어느 단계에서 막혔는지 구분할 수 있어야 한다. 원문은 서버 로그에만 남긴다.
+   console.error("TeamKick schema",sql.slice(0,60),e);
+   throw new AppError("데이터베이스를 준비하지 못했어요. 관리자에게 문의해주세요.",503);
+  }
  }
  prepared=true;
+}
+
+// 진단용. 표가 실제로 있는지와 준비가 어디서 막혔는지 돌려준다.
+// 개인정보나 키는 담지 않는다.
+export async function schemaStatus(){
+ if(!env.DB)return {db:false,tables:{} as Record<string,boolean>,error:"binding-missing"};
+ let error="";
+ try{await ensureSchema()}catch(e){error=e instanceof AppError?e.message:String(e).slice(0,200)}
+ const tables:Record<string,boolean>={};
+ try{
+  const found=await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+  const names=new Set((found.results as {name:string}[]).map(x=>x.name));
+  for(const t of TABLES)tables[t]=names.has(t);
+ }catch(e){error=error||String(e).slice(0,200)}
+ return {db:true,tables,error};
 }

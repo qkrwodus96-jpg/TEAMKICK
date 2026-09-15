@@ -22,7 +22,7 @@ compile('lib/mail.ts','mail.mjs',s=>s.replace('import {env} from "cloudflare:wor
 compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('import {sendMail,mailReady} from "./mail";','const sendMail=async(to,subject,text)=>{if(globalThis.__teamkickTestMailFail)throw new AppError("메일을 보내지 못했어요. 잠시 후 다시 시도해주세요.",503);(globalThis.__teamkickTestMail??=[]).push({to,subject,text})};const mailReady=()=>globalThis.__teamkickTestMailReady!==false;').replace('"./model"','"./model.mjs"'));
 compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
-const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,iso}=await import(path.join(runtime,'model.mjs'));
+const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
 const auth=await import(path.join(runtime,'auth.mjs'));
 const mail=await import(path.join(runtime,'mail.mjs'));
@@ -838,4 +838,21 @@ test('운영자 초기 설정 코드는 환경변수가 있으면 그것만 인�
     // 환경변수가 있으면 예전 해시 경로는 쓰지 않는다.
     assert.equal(await ownerConfig.checkOwnerCode(ownerConfig.OWNER_SETUP_HASH),false);
   }finally{for(const k of Object.keys(env))delete env[k];Object.assign(env,keep)}
+});
+
+// 자유 입력이면 "서울"과 "서울시"가 따로 놀아 매칭·검색에서 같은 지역이 갈라진다.
+test('활동 지역은 목록에 있는 값만 받는다',()=>{
+  const s=blank();command(s,owner,{type:'setupOwner'});
+  assert.ok(REGIONS.includes('서울')&&REGIONS.includes('경기 남부')&&REGIONS.includes('인천'));
+  const {teamId}=command(s,A,{type:'createTeam',name:'한강 FC',region:'서울',description:'설명'});
+  assert.equal(s.teams.find(t=>t.id===teamId).region,'서울');
+  assert.throws(()=>command(s,B,{type:'createTeam',name:'다른 팀',region:'서울시 마포구',description:'설명'}),/활동 지역/);
+  assert.throws(()=>command(s,B,{type:'createTeam',name:'다른 팀',region:'',description:'설명'}),/활동 지역/);
+  // 앞뒤 공백은 다듬은 뒤 검사한다. 사용자가 실수로 띄어 써도 막지 않는다.
+  const spaced=command(s,C,{type:'createTeam',name:'공백 팀',region:' 서울 ',description:'설명'});
+  assert.equal(s.teams.find(t=>t.id===spaced.teamId).region,'서울');
+  command(s,owner,{type:'approveTeam',teamId});
+  assert.throws(()=>command(s,A,{type:'editTeam',teamId,name:'한강 FC',region:'서울 강서구',description:'설명'}),/활동 지역/);
+  command(s,A,{type:'editTeam',teamId,name:'한강 FC',region:'경기 남부',description:'설명'});
+  assert.equal(s.teams.find(t=>t.id===teamId).region,'경기 남부');
 });

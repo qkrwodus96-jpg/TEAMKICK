@@ -30,6 +30,11 @@ export const sideOf=(s:State,g:string,t:string)=>s.sides.find(x=>x.gameId===g&&x
 export const guestStatusOf=(z:Row)=>z?.guestStatus??"none";
 export const approvedGuests=(s:State,g:string,t:string)=>s.guests.filter(x=>x.gameId===g&&x.teamId===t&&x.status==="approved").length;
 export function requireTeam(s:State,t:string,u:string,level="member",write=true){const team=teamOf(s,t);ensure(team,"팀을 찾을 수 없어요.",404);const m=membership(s,t,u);ensure(m&&((level==="member")||(level==="manager"&&["captain","manager"].includes(m.role))||(level==="captain"&&m.role==="captain")),"이 팀에서 해당 작업을 할 권한이 없어요.",403);ensure(!write||team!.status==="active","현재 이용 가능한 팀이 아니에요.",403);return m!}
+// 활동 지역은 목록에서 고르게 한다. 자유 입력이면 "서울"과 "서울시"가 따로 놀아
+// 매칭·검색에서 같은 지역이 갈라진다.
+export const REGIONS=["서울","경기 남부","경기 북부","인천","강원","대전","세종","충북","충남","광주","전북","전남","대구","경북","부산","울산","경남","제주"];
+export const regionValue=(v:unknown)=>{const x=String(v??"").trim();ensure(REGIONS.includes(x),"활동 지역을 목록에서 골라주세요.");return x};
+
 export const textValue=(v:any,max=200,required=true)=>{const x=String(v??"").trim();ensure(x.length<=max&&(!required||x.length>0),"입력 내용의 길이를 확인해주세요.");return x};
 export const integer=(v:any,min=0,max=99)=>{const n=Number(v);ensure(Number.isInteger(n)&&n>=min&&n<=max,"숫자 범위를 확인해주세요.");return n};
 export const imageKey=(v:unknown,prefix:string)=>{const key=String(v??"").trim();ensure(key.length<=200,"이미지 정보를 확인해주세요.");ensure(!key||(key.startsWith(prefix)&&/^[A-Za-z0-9/_.-]+$/.test(key)&&!key.includes("..")),"이미지 정보를 확인해주세요.");return key};
@@ -52,7 +57,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  else if(type==="createTeam"){
   ensure(a.verified!==false,"이메일 확인을 먼저 해주세요. 받은 편지함에서 확인 링크를 눌러주세요.",403);
   ensure(s.teams.filter(x=>x.applicant===a.id&&x.status==="pending").length<3,"대기 중인 팀 신청을 먼저 확인해주세요.");
-  const team={id:id(),name:textValue(c.name,40),region:textValue(c.region,40),description:textValue(c.description,500,false),format:textValue(c.format||"11인제",20),days:textValue(c.days||"주말",30),level:textValue(c.level||"중",20),status:"pending",applicant:a.id,applicantName:a.name,at:stamp,reason:"",color:"green"};
+  const team={id:id(),name:textValue(c.name,40),region:regionValue(c.region),description:textValue(c.description,500,false),format:textValue(c.format||"11인제",20),days:textValue(c.days||"주말",30),level:textValue(c.level||"중",20),status:"pending",applicant:a.id,applicantName:a.name,at:stamp,reason:"",color:"green"};
   s.teams.push(team);const o=s.settings.find(x=>x.id==="owner");if(o)userNotice(s,o.userId,"새로운 팀 등록 요청",team.name+"의 등록을 확인해주세요.");output={teamId:team.id};
  }
  else if(type==="approveTeam"||type==="rejectTeam"||type==="suspendTeam"||type==="restoreTeam"){
@@ -90,10 +95,10 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  else if(type==="editProfile"){
   const m=requireTeam(s,t,a.id,"member");m.name=textValue(c.name,30);m.number=integer(c.number,0,99);m.position=textValue(c.position,12);
  }
- else if(type==="editTeam"){requireTeam(s,t,a.id,"captain");const team=teamOf(s,t)!;team.name=textValue(c.name,40);team.region=textValue(c.region,40);team.description=textValue(c.description,500,false);}
+ else if(type==="editTeam"){requireTeam(s,t,a.id,"captain");const team=teamOf(s,t)!;team.name=textValue(c.name,40);team.region=regionValue(c.region);team.description=textValue(c.description,500,false);}
  else if(type==="createGame"){
   requireTeam(s,t,a.id,"manager");const d=dates(c.start,c.end);checkConflict(s,t,d.start,d.end,"");
-  const g={id:id(),home:t,away:null,external:textValue(c.external,60,false),...d,venue:textValue(c.venue,100),address:textValue(c.address,200),lat:coord(c.lat,90),lng:coord(c.lng,180),region:textValue(c.region||teamOf(s,t)!.region,40),format:textValue(c.format||"11인제",20),secured:c.secured!==false,cost:integer(c.cost??0,0,10000000),status:"scheduled",listing:c.listing?"open":"none",revision:1,result:null,at:stamp};
+  const g={id:id(),home:t,away:null,external:textValue(c.external,60,false),...d,venue:textValue(c.venue,100),address:textValue(c.address,200),lat:coord(c.lat,90),lng:coord(c.lng,180),region:regionValue(c.region||teamOf(s,t)!.region),format:textValue(c.format||"11인제",20),secured:c.secured!==false,cost:integer(c.cost??0,0,10000000),status:"scheduled",listing:c.listing?"open":"none",revision:1,result:null,at:stamp};
   const voteCloses=c.deadline?Date.parse(String(c.deadline)):0;if(c.deadline)ensure(Number.isFinite(voteCloses)&&voteCloses>now&&voteCloses<=Date.parse(g.start),"투표 마감은 지금 이후, 경기 시작 시각까지로 정해주세요.");ensure(!g.external||!c.listing,"수기 상대팀과 모집을 동시에 설정할 수 없어요.");ensure(!c.listing||Date.parse(g.start)>now,"지난 경기로 모집할 수 없어요.");
   if(c.listing)requireTeam(s,t,a.id,"captain");s.games.push(g);const side=newSide(g,t);side.needed=integer(c.needed??11,1,50);side.note=textValue(c.note,500,false);if(voteCloses)side.deadline=iso(voteCloses);
   s.sides.push(side);notice(s,t,"새 경기 일정",g.venue+" · "+g.start,g.id);output={gameId:g.id};

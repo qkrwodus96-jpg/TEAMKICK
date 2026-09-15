@@ -5,9 +5,9 @@
 브랜치: `claude/teamkick-setup-baseline-lwntca`
 Pull Request: https://github.com/qkrwodus96-jpg/TEAMKICK/pull/1 (**병합 완료** 2026-09-15)
 `main` 이 최신이다. 이후 작업은 `main` 에서 새로 시작한다.
-현재 커밋: T14 이메일 실재 확인
+현재 커밋: 활동 지역 목록화 + 구장 선택 UX
 미커밋 변경: 없음
-현재 작업 ID: T14 완료 / 다음은 T08 기기 푸시 또는 T11 출시 준비
+현재 작업 ID: 활동 지역·구장 선택 완료 / 다음은 T08 기기 푸시 또는 T11 출시 준비
 
 ---
 
@@ -25,7 +25,7 @@ Pull Request: https://github.com/qkrwodus96-jpg/TEAMKICK/pull/1 (**병합 완료
   팀 소속·역할·승인 상태를 검증한다. 클라이언트 역할 값을 신뢰하지 않는다.
 - 동시성은 `state_revision` 버전 + `write_guards` CHECK 제약 + 최대 4회
   재시도로 처리한다. 요청 ID를 7일 보관해 재전송 중복을 막는다.
-- **최근 실행 결과**: `node --test tests/core.test.mjs` **31/31 통과**,
+- **최근 실행 결과**: `node --test tests/core.test.mjs` **45/45 통과**,
   `tsc --noEmit` 통과. (작업 시작 시점의 기준값은 10/10 이었다.)
 - `pnpm lint`는 `no-explicit-any` **77건 오류**. **시작 시점부터 있던 문제**이며
   이번 작업이 만든 것이 아니다. 기존 코드 스타일이라 손대지 않았다.
@@ -789,6 +789,31 @@ mailReady: true   storageReady: true   placeSearchReady: true
 6. **`KAKAO_REST_KEY`** — 구장명 검색을 실제로 쓰려면 카카오 개발자에서
    앱을 만들고 REST API 키를 받아 환경변수로 넣어야 한다. 무료로 쓸 수 있고
    한도는 카카오 개발자 콘솔에서 확인한다. 없어도 수기 입력은 그대로 된다.
+
+---
+
+## 2026-09-15 활동 지역 목록화 · 구장 선택 UX
+
+- **활동 지역**을 자유 입력에서 18개 목록 선택으로 바꿨다.
+  목록은 `lib/model.ts`의 `REGIONS`("서울 / 경기 남부 / 경기 북부 / 인천 /
+  강원 / 대전 / 세종 / 충북 / 충남 / 광주 / 전북 / 전남 / 대구 / 경북 /
+  부산 / 울산 / 경남 / 제주")이고, `regionValue()`가 **서버에서** 값을 검증한다.
+  `createTeam`·`editTeam`·`createGame` 세 곳에 적용했다.
+  화면(`app/screens.tsx`)은 `Picker`로 바뀌어 목록 밖 값을 보낼 수 없다.
+- **구장 검색**에서 후보를 고르면 후보 목록·검색어가 사라지고
+  "고른 구장: <이름> · <주소> [다시 검색]" 만 남는다(`VenuePicker`).
+- 검증(로컬):
+  - `node --test tests/core.test.mjs` **45/45 통과**
+    (추가 테스트 "활동 지역은 목록에 있는 값만 받는다" 포함.
+    `ensure`를 지우면 44/45로 떨어지는 것까지 확인했다.)
+  - `node node_modules/typescript/bin/tsc --noEmit` 통과.
+  - `pnpm lint` **오류 77건 유지**(시작 시점 기준값과 동일).
+  - Playwright 로 가입 → 운영자 등록 → 팀 신청 → 승인 → 경기 만들기 →
+    구장 검색까지 한 번에 확인했다. 구장 검색은 외부 API 라 응답만 흉내 냈고
+    (`/api/places` 라우트 가로채기), **화면 동작만** 확인한 것이다.
+    실제 카카오 응답 확인은 배포 환경에서 해야 한다.
+- 기존 데이터: 목록에 없는 지역("용인" 등)이 들어간 팀이 로컬에 남아 있다.
+  읽기는 그대로 되고, **수정할 때만** 목록에서 다시 고르게 된다.
 
 ---
 

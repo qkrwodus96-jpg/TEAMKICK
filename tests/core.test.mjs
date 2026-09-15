@@ -639,3 +639,14 @@ test('앱이 직접 만드는 표가 drizzle migration 과 같은 스키마를 �
   assert.deepEqual(describe(fromApp),describe(fromMigrations),'다시 실행해도 스키마가 달라지지 않는다');
   fromMigrations.close();fromApp.close();
 });
+
+test('상태 확인은 없는 표를 만들고 실제 존재 여부를 알려준다',async()=>{
+  const db=localDatabase();
+  for(const t of schema.TABLES)db.exec(`DROP TABLE IF EXISTS ${t}`);
+  assert.equal(db.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").get().n,0,'표가 없는 상태에서 시작한다');
+  const status=await schema.schemaStatus();
+  assert.equal(status.db,true);
+  assert.equal(status.error,'','준비 중 오류가 없어야 한다');
+  for(const t of schema.TABLES)assert.equal(status.tables[t],true,t+' 표가 만들어져야 한다');
+  db.close();
+});

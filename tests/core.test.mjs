@@ -15,12 +15,14 @@ function compile(file,name,replace=s=>s){
 compile('lib/model.ts','model.mjs');
 compile('lib/store.ts','store.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/owner-config.ts','owner-config.mjs');
+compile('lib/mail.ts','mail.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('import {sendMail,mailReady} from "./mail";','const sendMail=async(to,subject,text)=>{(globalThis.__teamkickTestMail??=[]).push({to,subject,text})};const mailReady=()=>globalThis.__teamkickTestMailReady!==false;').replace('"./model"','"./model.mjs"'));
 compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
 const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,iso}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
 const auth=await import(path.join(runtime,'auth.mjs'));
+const mail=await import(path.join(runtime,'mail.mjs'));
 const api=await import(path.join(runtime,'api.mjs'));
 const NOW=Date.now(),DAY=864e5;
 const owner={id:'owner',name:'운영자',ownerSetup:true},A={id:'a',name:'A 주장'},B={id:'b',name:'B 주장'},C={id:'c',name:'C 주장'},member={id:'player',name:'선수'};
@@ -483,4 +485,21 @@ test('메일 발송이 설정되지 않으면 비밀번호 찾기를 성공한 �
   assert.equal(globalThis.__teamkickTestMail.length,0);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM password_resets').get().n,0,'보내지 못하면 토큰도 남기지 않는다');
   globalThis.__teamkickTestMailReady=true;db.close();
+});
+
+test('보내는 주소 형식과 메일 설정 여부를 바르게 읽는다',()=>{
+  assert.deepEqual(mail.parseFrom('팀킥 <no-reply@teamkick.test>'),{name:'팀킥',email:'no-reply@teamkick.test'});
+  assert.deepEqual(mail.parseFrom('  no-reply@teamkick.test  '),{name:'팀킥',email:'no-reply@teamkick.test'});
+  assert.deepEqual(mail.parseFrom('<a@b.com>'),{name:'팀킥',email:'a@b.com'});
+  const env=globalThis.__teamkickTestEnv;
+  const keep={...env};
+  delete env.BREVO_API_KEY;delete env.RESEND_API_KEY;delete env.MAIL_FROM;
+  assert.equal(mail.mailReady(),false,'키도 보내는 주소도 없으면 꺼진 상태다');
+  env.BREVO_API_KEY='x';
+  assert.equal(mail.mailReady(),false,'보내는 주소가 없으면 아직 못 쓴다');
+  env.MAIL_FROM='팀킥 <a@b.com>';
+  assert.equal(mail.mailReady(),true);
+  delete env.BREVO_API_KEY;env.RESEND_API_KEY='y';
+  assert.equal(mail.mailReady(),true,'다른 서비스 키로도 동작한다');
+  for(const k of Object.keys(env))delete env[k];Object.assign(env,keep);
 });

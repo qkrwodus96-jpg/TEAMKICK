@@ -1,7 +1,7 @@
 // 앱에 보여주는 약관·개인정보처리방침 본문.
 // 변호사 검토를 받지 않은 초안이다. 공개 전에 검토와 문의처 기입이 필요하다(LEGAL.md).
 export const LEGAL_VERSION="2026-09-15";
-export const CONTACT_PLACEHOLDER="(문의처 이메일을 넣어주세요)";
+export const CONTACT="jyp7296@naver.com";
 
 export const TERMS=`팀킥 이용약관 (${LEGAL_VERSION} 초안)
 
@@ -40,7 +40,7 @@ export const TERMS=`팀킥 이용약관 (${LEGAL_VERSION} 초안)
 삭제되며, 팀에 남는 과거 경기·출석·기록은 개인정보처리방침에 따라 처리됩니다.
 
 제9조 (문의)
-${CONTACT_PLACEHOLDER}`;
+서비스 이용과 관련한 문의는 ${CONTACT} 로 보내주세요.`;
 
 export const PRIVACY=`팀킥 개인정보처리방침 (${LEGAL_VERSION} 초안)
 
@@ -68,6 +68,7 @@ export const PRIVACY=`팀킥 개인정보처리방침 (${LEGAL_VERSION} 초안)
 서비스 운영을 위해 아래에 저장·처리를 위탁합니다.
 - 호스팅과 데이터 저장: 서비스가 사용하는 클라우드 사업자
 - 구장 검색: 검색어만 지도 사업자에 전달하며 개인정보는 보내지 않습니다
+- 메일 발송: 비밀번호 재설정 안내를 보내기 위해 메일 발송 사업자에 수신 주소를 전달합니다
 
 6. 이용자의 권리
 언제든지 자신의 정보를 조회·수정할 수 있고, 설정에서 탈퇴할 수 있습니다.
@@ -81,4 +82,5 @@ export const PRIVACY=`팀킥 개인정보처리방침 (${LEGAL_VERSION} 초안)
 주고받습니다. 팀 내부 정보와 선수 사진은 승인된 팀 구성원에게만 보여줍니다.
 
 9. 문의
-${CONTACT_PLACEHOLDER}`;
+개인정보 열람·정정·삭제·처리정지 요청과 그 밖의 문의는 ${CONTACT} 로 보내주세요.
+접수 후 지체 없이 처리하고 결과를 알려드립니다.`;

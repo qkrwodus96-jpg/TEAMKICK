@@ -19,6 +19,23 @@ export function parseFrom(value:string){
  return {name,email};
 }
 
+// 보내는 주소의 도메인만 돌려준다. 발송 실패의 가장 흔한 원인이 도메인 불일치다.
+export function fromDomain(){
+ const {email}=parseFrom(from());
+ const at=email.lastIndexOf("@");
+ return at<0?"":email.slice(at+1);
+}
+
+// 키가 실제로 통하는지 확인한다. 메일을 보내지 않고 계정 조회만 한다.
+export async function mailAccount(){
+ const key=setting("BREVO_API_KEY");
+ if(!key)return setting("RESEND_API_KEY")?"resend-unchecked":"no-key";
+ try{
+  const res=await fetch("https://api.brevo.com/v3/account",{headers:{"api-key":key,"Accept":"application/json"}});
+  return res.ok?"ok":"status-"+res.status;
+ }catch(e){return String(e).slice(0,120)}
+}
+
 const escape=(v:string)=>v.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 
 export async function sendMail(to:string,subject:string,text:string){
@@ -41,6 +58,6 @@ export async function sendMail(to:string,subject:string,text:string){
   console.error("TeamKick mail",provider(),res.status);
   throw new AppError(res.status===429
    ?"메일 발송이 잠시 밀렸어요. 잠시 후 다시 시도해주세요."
-   :"메일을 보내지 못했어요. 잠시 후 다시 시도해주세요.",503);
+   :"메일을 보내지 못했어요. (발송 서비스 응답 "+res.status+") 잠시 후 다시 시도해주세요.",503);
  }
 }

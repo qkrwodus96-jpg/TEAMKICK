@@ -532,6 +532,9 @@ test('메일 요청 본문에 보내는 주소·받는 주소·회신 주소를 
     // 발송 서비스가 거절하면 사용자에게는 다시 시도하라고만 알린다.
     globalThis.fetch=async()=>({ok:false,status:429});
     await assert.rejects(()=>mail.sendMail('member@teamkick.test','제목','본문'),/잠시 후 다시/);
+    // 그 밖의 거절은 원인을 좁힐 수 있게 상태 코드를 남긴다.
+    globalThis.fetch=async()=>({ok:false,status:400});
+    await assert.rejects(()=>mail.sendMail('member@teamkick.test','제목','본문'),/400/);
   }finally{
     globalThis.fetch=realFetch;
     for(const k of Object.keys(env))delete env[k];Object.assign(env,keep);
@@ -665,4 +668,30 @@ test('비밀번호 해시는 Workers 반복 상한을 넘지 않고 작업량을
   assert.equal(await auth.verifyPassword('teamkick-1234',stored),true);
   assert.equal(await auth.verifyPassword('틀린비밀번호',stored),false);
   assert.equal(stored.includes('teamkick-1234'),false,'원문이 저장되면 안 된다');
+});
+
+// 발송이 조용히 실패하는 원인은 대개 보내는 주소의 도메인과 키다.
+// 메일을 보내지 않고 둘을 확인할 수 있어야 한다.
+test('보내는 도메인과 키 상태를 메일을 보내지 않고 확인한다',async()=>{
+  const env=globalThis.__teamkickTestEnv,keep={...env};
+  const realFetch=globalThis.fetch;
+  try{
+    for(const k of Object.keys(env))delete env[k];
+    env.MAIL_FROM='팀킥 <no-reply@teamkick.co.kr>';
+    assert.equal(mail.fromDomain(),'teamkick.co.kr');
+    env.MAIL_FROM='팀킥 <jyp7296@naver.com>';
+    assert.equal(mail.fromDomain(),'naver.com','인증하지 않은 도메인이 그대로 드러나야 한다');
+    assert.equal(await mail.mailAccount(),'no-key','키가 없으면 그렇게 알린다');
+    env.BREVO_API_KEY='brevo-test-key';
+    let seen;
+    globalThis.fetch=async(url,init)=>{seen={url,init};return {ok:true,status:200}};
+    assert.equal(await mail.mailAccount(),'ok');
+    assert.equal(seen.url,'https://api.brevo.com/v3/account','메일을 보내지 않고 계정만 조회한다');
+    assert.equal(seen.init.headers['api-key'],'brevo-test-key');
+    globalThis.fetch=async()=>({ok:false,status:401});
+    assert.equal(await mail.mailAccount(),'status-401','키가 틀리면 상태 코드를 알린다');
+  }finally{
+    globalThis.fetch=realFetch;
+    for(const k of Object.keys(env))delete env[k];Object.assign(env,keep);
+  }
 });

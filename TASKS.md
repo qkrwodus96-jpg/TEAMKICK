@@ -40,6 +40,18 @@
 
 ## 이번 세션에서 구현한 것
 
+- [x] `T09` **팀 로고·선수 사진 업로드** — `DONE`
+  - 변경 파일: `lib/images.ts`(신규), `app/api/image/route.ts`(신규),
+    `lib/model.ts`(setTeamLogo·setMemberPhoto), `app/screens.tsx`(ImageField·연결),
+    `app/teamkick.tsx`(Crest 로고·PlayerPhoto), `app/globals.css`,
+    `.openai/hosting.json`(r2 선언)
+  - 실제 업로드·표시·삭제, 종류(바이트 확인)·2MB 제한, 브라우저에서 512px로 축소,
+    이전 파일 자동 정리, 팀·팀원 경로를 벗어난 키 거부
+  - 접근 권한: 팀 로고는 로그인 이용자, 선수 사진은 그 팀 활동 팀원만.
+    비로그인 401, 외부 계정 403 확인
+  - 저장소 미연결 시에도 앱은 정상 동작하고 업로드만 분명히 거절
+  - **사용자 확인 필요**: 배포 환경에서 R2가 실제로 붙는지
+
 - [x] `T01` **자체 회원가입** — `DONE`
   - 변경 파일: `lib/auth.ts`(신규), `app/api/auth/route.ts`(신규),
     `db/schema.ts`+`drizzle/0001_dizzy_slayback.sql`(accounts·sessions),
@@ -84,9 +96,7 @@
 - [ ] `T03` **구장명 검색 → 주소 자동 입력** — `TODO`
       현재는 구장명·주소 수기 입력, 지도는 네이버 검색 링크만.
       검색 API 장애·미설정 시 수기 입력 유지 필요
-- [ ] `T09` **팀 로고·프로필 이미지 업로드** — `BLOCKED`
-      `hosting.json`의 `r2: null` — 파일 저장소가 연결되어 있지 않다.
-      R2 바인딩 설정이 있어야 진행 가능
+- [x] `T09` 팀 로고·프로필 이미지 업로드 — **완료**(위 참고)
 - [ ] `T04` **브라우저 없이 동작하는 예약 작업** — `TODO`
       출석 초안·투표 마감 24시간 전 알림을 서버 스케줄에서 처리해야 함
 - [ ] `T10` **광고 영역 준비** — `TODO`

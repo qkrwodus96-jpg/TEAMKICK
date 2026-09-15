@@ -52,6 +52,9 @@ pnpm db:generate                        # 스키마 변경 시 migration 생성
 `drizzle/`의 SQL을 순서대로 로컬 D1 파일에 적용해야 한다
 (`.wrangler/state/v3/d1/miniflare-D1DatabaseObject/*.sqlite`).
 
+로컬 개발 서버는 R2도 흉내 낸다(`.wrangler/state/v3/r2/`). `.openai/hosting.json`의
+`r2` 값이 있으면 바인딩이 붙고, 없으면 앱은 그대로 돌되 이미지 업로드만 막힌다.
+
 로컬에서도 앱 화면에서 직접 회원가입해 여러 계정을 만들 수 있다.
 다중 사용자 권한·동시성 검증은 여전히 `tests/core.test.mjs`가 기준이다.
 

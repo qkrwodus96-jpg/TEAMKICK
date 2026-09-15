@@ -16,7 +16,7 @@ compile('lib/model.ts','model.mjs');
 compile('lib/store.ts','store.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/owner-config.ts','owner-config.mjs');
 compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
-compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
+compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
 const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,iso}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
@@ -335,4 +335,28 @@ test('운영자 재설정은 설정 코드와 기존 운영자 계정 부재를 
   assert.equal(s.settings.filter(x=>x.id==='owner').length,1,'운영자 설정은 하나만 남는다');
   assert.equal(visibleState(s,other.id).isOwner,true);
   assert.equal(visibleState(s,owner.id).isOwner,false);
+});
+
+test('팀 로고와 선수 사진은 권한과 저장 경로를 함께 검증한다',()=>{
+  const {s,a,b}=fixture(),m=addPlayer(s,a);
+  const logo='teams/'+a+'/'+'abc.png';
+  assert.throws(()=>command(s,member,{type:'setTeamLogo',teamId:a,key:logo}),/권한/,'일반 팀원은 팀 로고를 못 바꾼다');
+  assert.throws(()=>command(s,B,{type:'setTeamLogo',teamId:a,key:logo}),/권한/,'다른 팀 주장도 못 바꾼다');
+  assert.throws(()=>command(s,A,{type:'setTeamLogo',teamId:a,key:'teams/'+b+'/abc.png'}),/이미지 정보/,'다른 팀 경로의 키는 거부한다');
+  assert.throws(()=>command(s,A,{type:'setTeamLogo',teamId:a,key:'teams/'+a+'/../../etc/passwd'}),/이미지 정보/,'경로 조작은 거부한다');
+  command(s,A,{type:'setTeamLogo',teamId:a,key:logo});
+  assert.equal(s.teams.find(x=>x.id===a).logo,logo);
+  command(s,A,{type:'setTeamLogo',teamId:a,key:''});
+  assert.equal(s.teams.find(x=>x.id===a).logo,'','빈 값으로 지울 수 있다');
+
+  const photo='members/'+a+'/'+m.id+'/p.png';
+  assert.throws(()=>command(s,A,{type:'setMemberPhoto',teamId:a,memberId:m.id,key:'members/'+a+'/다른사람/p.png'}),/이미지 정보/,'다른 팀원 경로의 키는 거부한다');
+  command(s,member,{type:'setMemberPhoto',teamId:a,memberId:m.id,key:photo});
+  assert.equal(s.members.find(x=>x.id===m.id).photo,photo,'본인은 자기 사진을 바꿀 수 있다');
+  command(s,A,{type:'setMemberPhoto',teamId:a,memberId:m.id,key:photo});
+  const other={id:'other',name:'다른 팀원'},om=addPlayer(s,a,other);
+  assert.throws(()=>command(s,other,{type:'setMemberPhoto',teamId:a,memberId:m.id,key:'members/'+a+'/'+m.id+'/x.png'}),/본인 또는 주장/,'남의 사진은 못 바꾼다');
+  assert.throws(()=>command(s,B,{type:'setMemberPhoto',teamId:a,memberId:m.id,key:photo}),/권한/,'다른 팀 주장도 못 바꾼다');
+  command(s,A,{type:'removeMember',teamId:a,memberId:om.id});
+  assert.throws(()=>command(s,A,{type:'setMemberPhoto',teamId:a,memberId:om.id,key:'members/'+a+'/'+om.id+'/x.png'}),/활동 중인 팀원/);
 });

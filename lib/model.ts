@@ -18,6 +18,7 @@ export const approvedGuests=(s:State,g:string,t:string)=>s.guests.filter(x=>x.ga
 export function requireTeam(s:State,t:string,u:string,level="member",write=true){const team=teamOf(s,t);ensure(team,"팀을 찾을 수 없어요.",404);const m=membership(s,t,u);ensure(m&&((level==="member")||(level==="manager"&&["captain","manager"].includes(m.role))||(level==="captain"&&m.role==="captain")),"이 팀에서 해당 작업을 할 권한이 없어요.",403);ensure(!write||team!.status==="active","현재 이용 가능한 팀이 아니에요.",403);return m!}
 export const textValue=(v:any,max=200,required=true)=>{const x=String(v??"").trim();ensure(x.length<=max&&(!required||x.length>0),"입력 내용의 길이를 확인해주세요.");return x};
 export const integer=(v:any,min=0,max=99)=>{const n=Number(v);ensure(Number.isInteger(n)&&n>=min&&n<=max,"숫자 범위를 확인해주세요.");return n};
+export const imageKey=(v:unknown,prefix:string)=>{const key=String(v??"").trim();ensure(key.length<=200,"이미지 정보를 확인해주세요.");ensure(!key||(key.startsWith(prefix)&&/^[A-Za-z0-9/_.-]+$/.test(key)&&!key.includes("..")),"이미지 정보를 확인해주세요.");return key};
 export const containsTeam=(g:Row,t:string)=>g.home===t||g.away===t;
 export function currentVote(side:Row,memberId:string,cutoff=Infinity){const history=side.votes?.[memberId]??[];return [...history].filter((v:any)=>Date.parse(v.at)<=cutoff).at(-1)?.value??"none"}
 export function eligibleMembers(s:State,side:Row,g:Row){const when=Math.min(Date.now(),Date.parse(g.start));return s.members.filter(m=>m.teamId===side.teamId&&(m.periods??[]).some((p:any)=>Date.parse(p.start)<=when&&(!p.end||Date.parse(p.end)>when)))}
@@ -181,6 +182,13 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
     userNotice(s,r.userId,"용병 확정 취소",teamOf(s,t)!.name+" 경기의 용병 확정이 취소되었어요.");
    }
   }
+ }
+ else if(type==="setTeamLogo"){requireTeam(s,t,a.id,"captain");teamOf(s,t)!.logo=imageKey(c.key,"teams/"+t+"/");}
+ else if(type==="setMemberPhoto"){
+  const me=requireTeam(s,t,a.id,"member");const m=s.members.find(x=>x.id===c.memberId&&x.teamId===t);ensure(m,"팀원을 찾을 수 없어요.",404);
+  ensure(m!.id===me.id||me.role==="captain","본인 또는 주장만 선수 사진을 바꿀 수 있어요.",403);
+  ensure(m!.status==="active","활동 중인 팀원의 사진만 바꿀 수 있어요.");
+  m!.photo=imageKey(c.key,"members/"+t+"/"+m!.id+"/");
  }
  else if(type==="createNotice"){requireTeam(s,t,a.id,"captain");s.notices.push({id:id(),teamId:t,title:textValue(c.title,100),body:textValue(c.body,1500),pinned:c.pinned===true,at:stamp});notice(s,t,"새 팀 공지",c.title);}
  else if(type==="deleteNotice"){requireTeam(s,t,a.id,"captain");s.notices=s.notices.filter(x=>x.id!==c.noticeId||x.teamId!==t);}

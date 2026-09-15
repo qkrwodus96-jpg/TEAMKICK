@@ -8,6 +8,14 @@ export const blank=():State=>({users:[],teams:[],members:[],games:[],sides:[],re
 export const setupIncomplete=(e:unknown)=>/no such table|no such column/i.test(String(e));
 export const SETUP_MESSAGE="데이터베이스 준비가 아직 끝나지 않았어요. 관리자에게 문의해주세요.";
 
+// 공개 전까지만 쓰는 진단용. 예상하지 못한 오류의 종류와 앞부분을 응답에 덧붙인다.
+// 개인정보나 키가 들어갈 수 있는 값은 담지 않는다. 공개 전환 전에 없앤다(LEGAL.md).
+export function errorHint(e:unknown){
+ const name=e instanceof Error?e.name:typeof e;
+ const message=(e instanceof Error?e.message:String(e)).slice(0,160);
+ return " ["+name+": "+message+"]";
+}
+
 export type Actor={id:string;name:string;ownerSetup?:boolean;ownerReset?:boolean;verified?:boolean};
 export class AppError extends Error{constructor(message:string,public status=400){super(message)}}
 export const ensure=(value:any,message:string,status=400)=>{if(!value)throw new AppError(message,status)};

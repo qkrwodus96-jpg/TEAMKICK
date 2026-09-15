@@ -16,7 +16,7 @@ compile('lib/model.ts','model.mjs');
 compile('lib/store.ts','store.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/owner-config.ts','owner-config.mjs');
 compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
-compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
+compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
 const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,iso}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
@@ -262,11 +262,12 @@ test('주장은 팀원의 선수 정보를 수정할 수 있고 그 명령으로
   assert.throws(()=>command(s,A,{type:'editMember',teamId:a,memberId:m.id,name:'선수',number:200,position:'FW'}),/숫자 범위/);
 });
 
+const register=(input)=>auth.signUp({agree:true,adult:true,...input});
 const cookieRequest=token=>new Request('https://example.test/api/app',{headers:token?{cookie:'teamkick_session='+token}:{}});
 
 test('자체 회원가입은 비밀번호를 해시로만 저장하고 세션으로 신원을 확인한다',async()=>{
   const db=localDatabase();
-  const {user,token}=await auth.signUp({email:' Park@Example.COM ',name:'박재연',password:'teamkick-1234'});
+  const {user,token}=await register({email:' Park@Example.COM ',name:'박재연',password:'teamkick-1234'});
   assert.equal(user.fullName,'박재연');
   const row=db.prepare('SELECT email,name,password FROM accounts').get();
   assert.equal(row.email,'park@example.com','이메일은 소문자로 정규화해 저장한다');
@@ -282,11 +283,11 @@ test('자체 회원가입은 비밀번호를 해시로만 저장하고 세션으
 
 test('로그인은 대소문자 무관하고 잘못된 입력과 중복 가입을 거부한다',async()=>{
   const db=localDatabase();
-  await auth.signUp({email:'a@b.com',name:'가나',password:'teamkick-1234'});
-  await assert.rejects(()=>auth.signUp({email:'A@B.com',name:'다른 사람',password:'teamkick-1234'}),/이미 가입된 이메일/);
-  await assert.rejects(()=>auth.signUp({email:'주소아님',name:'가나',password:'teamkick-1234'}),/이메일 주소/);
-  await assert.rejects(()=>auth.signUp({email:'c@d.com',name:'가나',password:'짧음'}),/8자 이상/);
-  await assert.rejects(()=>auth.signUp({email:'c@d.com',name:'',password:'teamkick-1234'}),/이름/);
+  await register({email:'a@b.com',name:'가나',password:'teamkick-1234'});
+  await assert.rejects(()=>register({email:'A@B.com',name:'다른 사람',password:'teamkick-1234'}),/이미 가입된 이메일/);
+  await assert.rejects(()=>register({email:'주소아님',name:'가나',password:'teamkick-1234'}),/이메일 주소/);
+  await assert.rejects(()=>register({email:'c@d.com',name:'가나',password:'짧음'}),/8자 이상/);
+  await assert.rejects(()=>register({email:'c@d.com',name:'',password:'teamkick-1234'}),/이름/);
   const {token}=await auth.signIn({email:'A@B.COM',password:'teamkick-1234'});
   assert.ok(token);
   await assert.rejects(()=>auth.signIn({email:'a@b.com',password:'틀린비밀번호'}),/이메일 또는 비밀번호/);
@@ -296,7 +297,7 @@ test('로그인은 대소문자 무관하고 잘못된 입력과 중복 가입�
 
 test('로그인 실패가 반복되면 계정을 잠그고 로그아웃·만료 세션은 무효가 된다',async()=>{
   const db=localDatabase();
-  const {token}=await auth.signUp({email:'a@b.com',name:'가나',password:'teamkick-1234'});
+  const {token}=await register({email:'a@b.com',name:'가나',password:'teamkick-1234'});
   for(let i=0;i<10;i++)await assert.rejects(()=>auth.signIn({email:'a@b.com',password:'틀림'}),/이메일 또는 비밀번호/);
   await assert.rejects(()=>auth.signIn({email:'a@b.com',password:'teamkick-1234'}),/잠겼어요/);
   const later=Date.now()+16*60000;
@@ -311,8 +312,8 @@ test('로그인 실패가 반복되면 계정을 잠그고 로그아웃·만료 
 
 test('서로 다른 계정은 서로의 세션과 팀 데이터에 접근할 수 없다',async()=>{
   const db=localDatabase();
-  const one=await auth.signUp({email:'one@t.com',name:'첫째',password:'teamkick-1234'});
-  const two=await auth.signUp({email:'two@t.com',name:'둘째',password:'teamkick-1234'});
+  const one=await register({email:'one@t.com',name:'첫째',password:'teamkick-1234'});
+  const two=await register({email:'two@t.com',name:'둘째',password:'teamkick-1234'});
   assert.notEqual(one.user.userId,two.user.userId);
   assert.equal((await auth.currentUser(cookieRequest(one.token))).userId,one.user.userId);
   assert.equal((await auth.currentUser(cookieRequest(two.token))).userId,two.user.userId);
@@ -405,4 +406,34 @@ test('참여 투표 알림은 미응답자에게만 가고 마감 뒤에는 보�
   assert.throws(()=>command(s,A,{type:'remindVote',teamId:a,gameId},afterDeadline),/마감/);
   command(s,A,{type:'cancelGame',teamId:a,gameId,reason:'우천'});
   assert.throws(()=>command(s,A,{type:'remindVote',teamId:a,gameId}),/취소된 경기/);
+});
+
+test('가입에는 약관·개인정보 동의와 만 14세 확인이 필요하고 동의 시각을 남긴다',async()=>{
+  const db=localDatabase();
+  await assert.rejects(()=>auth.signUp({email:'a@b.com',name:'가나',password:'teamkick-1234',adult:true}),/동의/,'동의 없이 가입할 수 없다');
+  await assert.rejects(()=>auth.signUp({email:'a@b.com',name:'가나',password:'teamkick-1234',agree:true}),/14세/,'나이 확인 없이 가입할 수 없다');
+  await assert.rejects(()=>auth.signUp({email:'a@b.com',name:'가나',password:'teamkick-1234',agree:'예',adult:true}),/동의/,'체크하지 않은 값은 동의로 보지 않는다');
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM accounts').get().n,0,'거부된 가입은 계정을 만들지 않는다');
+  await register({email:'a@b.com',name:'가나',password:'teamkick-1234'});
+  const row=db.prepare('SELECT agreed_at FROM accounts').get();
+  assert.ok(row.agreed_at&&Number.isFinite(Date.parse(row.agreed_at)),'동의 시각을 저장한다');
+  db.close();
+});
+
+test('탈퇴하면 팀 활동이 정리되고 남은 기록에서 개인 식별 정보가 빠진다',()=>{
+  const {s,a}=fixture(),m=addPlayer(s,a);
+  const g=game(s,a,{start:NOW-2*DAY});
+  command(s,member,{type:'vote',teamId:a,gameId:g,value:'yes'},NOW-3*DAY);
+  command(s,A,{type:'completeGame',teamId:a,gameId:g});
+  command(s,A,{type:'attendance',teamId:a,gameId:g,values:attendanceDraft(s,sideOf(s,g,a),s.games[0])});
+  assert.throws(()=>command(s,A,{type:'closeAccount'}),/주장/,'주장은 인계 전에 탈퇴할 수 없다');
+  assert.ok(s.users.some(x=>x.id===member.id));
+  command(s,member,{type:'closeAccount'});
+  assert.equal(s.members.find(x=>x.id===m.id).status,'left','팀에서 나간 상태가 된다');
+  assert.equal(s.users.some(x=>x.id===member.id),false,'계정 이름 기록이 지워진다');
+  assert.equal(s.notifications.some(x=>x.userId===member.id),false,'받은 알림이 지워진다');
+  assert.equal(s.members.find(x=>x.id===m.id).photo,'','선수 사진 연결이 끊긴다');
+  const summary=summaries(visibleState(s,A.id,a),'1970','2100');
+  assert.equal(summary.players.find(x=>x.id===m.id).attend,1,'과거 출석 기록은 남는다');
+  assert.equal(visibleState(s,member.id).teamId,'','탈퇴 후에는 팀 화면이 보이지 않는다');
 });

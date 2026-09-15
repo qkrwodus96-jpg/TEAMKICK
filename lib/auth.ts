@@ -35,7 +35,7 @@ export async function verifyPassword(password:string,stored:string){
  return diff===0; // 길이·내용 비교 시간을 일정하게 유지한다
 }
 
-type Credentials={email?:unknown;password?:unknown;name?:unknown};
+type Credentials={email?:unknown;password?:unknown;name?:unknown;agree?:unknown;adult?:unknown};
 type AccountRow={id:string;name:string;password:string;failures:number;locked_until:string|null};
 type SessionRow={id:string;name:string;expires:string};
 const hashToken=async(token:string)=>toHex(await crypto.subtle.digest("SHA-256",encode(token)));
@@ -78,12 +78,14 @@ async function startSession(accountId:string,now=Date.now()){
 
 export async function signUp(input:Credentials,now=Date.now()){
  const email=checkEmail(input.email),name=checkName(input.name),password=checkPassword(input.password);
+ ensure(input.agree===true,"이용약관과 개인정보 수집·이용에 동의해주세요.");
+ ensure(input.adult===true,"만 14세 이상만 가입할 수 있어요.");
  const existing=await db().prepare("SELECT id FROM accounts WHERE email=?").bind(email).first();
  ensure(!existing,"이미 가입된 이메일이에요. 로그인해주세요.",409);
- const account={id:id(),email,name,password:await hashPassword(password),at:iso(now)};
+ const account={id:id(),email,name,password:await hashPassword(password),agreedAt:iso(now),at:iso(now)};
  try{
-  await db().prepare("INSERT INTO accounts(id,email,name,password,failures,locked_until,at) VALUES(?,?,?,?,0,NULL,?)")
-   .bind(account.id,account.email,account.name,account.password,account.at).run();
+  await db().prepare("INSERT INTO accounts(id,email,name,password,failures,locked_until,agreed_at,at) VALUES(?,?,?,?,0,NULL,?,?)")
+   .bind(account.id,account.email,account.name,account.password,account.agreedAt,account.at).run();
  }catch(e){
   if(String(e).includes("UNIQUE"))throw new AppError("이미 가입된 이메일이에요. 로그인해주세요.",409);
   throw e;
@@ -127,4 +129,10 @@ export async function currentUser(req:Request,now=Date.now()){
 
 export async function accountExists(accountId:string){
  return !!await db().prepare("SELECT id FROM accounts WHERE id=?").bind(accountId).first();
+}
+
+// 탈퇴. 로그인 수단과 세션을 지운다. 팀 활동 기록은 model 의 closeAccount 가 먼저 정리한다.
+export async function closeAccount(accountId:string){
+ await db().prepare("DELETE FROM sessions WHERE account_id=?").bind(accountId).run();
+ await db().prepare("DELETE FROM accounts WHERE id=?").bind(accountId).run();
 }

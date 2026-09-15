@@ -206,6 +206,19 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  else if(type==="deleteNotice"){requireTeam(s,t,a.id,"captain");s.notices=s.notices.filter(x=>x.id!==c.noticeId||x.teamId!==t);}
  else if(type==="invite"){requireTeam(s,t,a.id,"captain");const token=crypto.randomUUID()+crypto.randomUUID();s.invites.push({id:token,teamId:t,expires:iso(now+7*24*3600e3),active:true});output={invite:token};}
  else if(type==="revokeInvite"){requireTeam(s,t,a.id,"captain");const v=s.invites.find(x=>x.id===c.inviteId&&x.teamId===t);ensure(v,"초대를 찾을 수 없어요.");v!.active=false;}
+ else if(type==="closeAccount"){
+  const mine=s.members.filter(x=>x.userId===a.id&&x.status==="active");
+  ensure(!mine.some(x=>x.role==="captain"),"주장을 맡은 팀이 있어요. 먼저 주장을 인계한 뒤 탈퇴할 수 있어요.",409);
+  ensure(!s.teams.some(x=>x.applicant===a.id&&x.status==="pending"),"승인 대기 중인 팀 신청이 있어요. 처리된 뒤에 탈퇴할 수 있어요.",409);
+  ensure(!isOwner(s,a.id),"서비스 운영자 계정은 이 화면에서 탈퇴할 수 없어요.",409);
+  for(const x of mine){x.status="left";if(x.periods.at(-1))x.periods.at(-1).end=stamp;}
+  for(const x of s.members.filter(y=>y.userId===a.id&&y.status==="pending"))x.status="left";
+  for(const x of s.guests.filter(y=>y.userId===a.id&&["pending","approved"].includes(y.status)))x.status="withdrawn";
+  // 남는 기록에서 개인 식별 정보를 지운다. 과거 경기·출석·기록의 선수 표시 이름은 그대로 둔다.
+  s.users=s.users.filter(x=>x.id!==a.id);
+  s.notifications=s.notifications.filter(x=>x.userId!==a.id);
+  for(const x of s.members.filter(y=>y.userId===a.id))x.photo="";
+ }
  else if(type==="readNotifications"){for(const n of s.notifications.filter(x=>x.userId===a.id))n.read=true;}
  else if(type==="correctRequest"){requireTeam(s,t,a.id);for(const m of s.members.filter(x=>x.teamId===t&&["captain","manager"].includes(x.role)&&x.status==="active"))userNotice(s,m.userId,"기록 정정 요청",a.name+": "+textValue(c.message,500),t);}
  else throw new AppError("지원하지 않는 작업이에요.");

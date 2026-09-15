@@ -1,11 +1,11 @@
-import {currentUser,accountExists} from "@/lib/auth";
+import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";
 import {storageReady} from "@/lib/images";
 import {placeSearchReady} from "@/lib/places";
 import {load,commit} from "@/lib/store";
 import {applyCommand,visibleState,AppError,iso,id} from "@/lib/model";
 import {OWNER_SETUP_HASH} from "@/lib/owner-config";
 export const dynamic="force-dynamic";
-const json=(x:any,status=200)=>Response.json(x,{status,headers:{"Cache-Control":"no-store"}});
+const json=(x:any,status=200,cookie?:string)=>Response.json(x,{status,headers:cookie?{"Cache-Control":"no-store","Set-Cookie":cookie}:{"Cache-Control":"no-store"}});
 export async function GET(req:Request){try{const user=await currentUser(req);if(!user)return json({user:null});const {state}=await load();const teamId=new URL(req.url).searchParams.get("team")??undefined;const token=new URL(req.url).searchParams.get("invite");const invite=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());return json({storageReady:storageReady(),placeSearchReady:placeSearchReady(),invitedTeam:invite?.teamId??null,user:{id:user.userId,name:state.users.find(x=>x.id===user.userId)?.name??user.fullName??"팀원"},...visibleState(state,user.userId,teamId)});}catch(e){console.error("TeamKick load",e);return json({error:e instanceof AppError?e.message:"데이터를 불러오지 못했어요. 다시 시도해주세요."},e instanceof AppError?e.status:503)}}
 export async function POST(req:Request){
  try{
@@ -21,7 +21,7 @@ export async function POST(req:Request){
    const ownerReset=c.type==="setupOwner"&&!!ownerId&&ownerId!==user.userId&&!(await accountExists(ownerId));
    const after=structuredClone(state);const output=applyCommand(after,{id:user.userId,name:user.fullName??state.users.find(x=>x.id===user.userId)?.name??"팀원",ownerSetup:setup,ownerReset},c);
    after.receipts.push({id:user.userId+":"+c.mutationId,output,at:iso()});after.receipts=after.receipts.filter(x=>Date.parse(x.at)>Date.now()-7*864e5);
-   try{await commit(state,after,version);return json({ok:true,output,...visibleState(after,user.userId,c.teamId)});}catch(e){if(String(e).includes("revision_matches")||String(e).includes("CHECK constraint")){if(attempt<3)continue;throw new AppError("다른 변경이 먼저 저장되었어요. 새로고침 후 다시 시도해주세요.",409)}throw e}
+   try{await commit(state,after,version);if(c.type==="closeAccount"){await closeAccount(user.userId);return json({ok:true,closed:true},200,clearedCookie())}return json({ok:true,output,...visibleState(after,user.userId,c.teamId)});}catch(e){if(String(e).includes("revision_matches")||String(e).includes("CHECK constraint")){if(attempt<3)continue;throw new AppError("다른 변경이 먼저 저장되었어요. 새로고침 후 다시 시도해주세요.",409)}throw e}
   }
  }catch(e){console.error("TeamKick mutation",e instanceof AppError?e.message:e);return json({error:e instanceof AppError?e.message:"저장하지 못했어요. 입력 내용을 유지한 채 다시 시도해주세요."},e instanceof AppError?e.status:503)}
  return json({error:"저장 요청을 다시 시도해주세요."},409);

@@ -18,7 +18,6 @@
 | 기본 언어 | 한국어 |
 | 보유 도메인 | `teamkick.co.kr` (가비아 등록, Brevo 인증 완료 2026-09-15) |
 | 메일 발송 | Brevo. `MAIL_FROM` = `팀킥 <no-reply@teamkick.co.kr>` |
-| 이메일 확인 | 보내되 **팀 활동의 조건으로 두지 않는다**(ASM-04). 네이버 미수신 확인됨 |
 | 통계·화면 기준 시간대 | Asia/Seoul |
 
 ### 기존 ChatGPT Sites 프로젝트 (참고 정보)

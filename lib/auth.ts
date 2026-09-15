@@ -1,5 +1,6 @@
 import {env} from "cloudflare:workers";
 import {AppError,ensure,iso,id} from "./model";
+import {sendMail,mailReady} from "./mail";
 
 // 자체 회원가입 인증. 비밀번호는 PBKDF2-HMAC-SHA256으로만 저장하고 원문은 남기지 않는다.
 // 반복 횟수는 OWASP Password Storage Cheat Sheet 권고(600,000)를 따른다.
@@ -135,4 +136,44 @@ export async function accountExists(accountId:string){
 export async function closeAccount(accountId:string){
  await db().prepare("DELETE FROM sessions WHERE account_id=?").bind(accountId).run();
  await db().prepare("DELETE FROM accounts WHERE id=?").bind(accountId).run();
+}
+
+// 비밀번호 재설정. 토큰 원문은 메일로만 나가고 서버에는 해시만 남긴다.
+const RESET_MINUTES=60,RESET_COOLDOWN_MINUTES=3;
+type ResetRow={id:string;account_id:string;expires:string;used:number;at:string};
+
+export async function requestPasswordReset(input:{email?:unknown},origin:string,now=Date.now()){
+ const email=normalizeEmail(input.email);
+ ensure(mailReady(),"메일 발송이 아직 설정되지 않았어요. 관리자에게 문의해주세요.",503);
+ const account=await db().prepare("SELECT id,name FROM accounts WHERE email=?").bind(email).first<{id:string;name:string}>();
+ // 가입 여부를 응답으로 알려주지 않는다. 없는 주소면 조용히 끝낸다.
+ if(!account)return;
+ const recent=await db().prepare("SELECT at FROM password_resets WHERE account_id=? AND used=0 AND expires>? ORDER BY at DESC")
+  .bind(account.id,iso(now)).first<{at:string}>();
+ if(recent&&now-Date.parse(recent.at)<RESET_COOLDOWN_MINUTES*60000)return; // 연달아 보내지 않는다
+ const token=toBase64(crypto.getRandomValues(new Uint8Array(32))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+ await db().prepare("INSERT INTO password_resets(id,account_id,expires,used,at) VALUES(?,?,?,0,?)")
+  .bind(await hashToken(token),account.id,iso(now+RESET_MINUTES*60000),iso(now)).run();
+ const link=origin+"/?reset="+encodeURIComponent(token);
+ await sendMail(email,"팀킥 비밀번호 재설정",
+  account.name+"님, 아래 주소에서 비밀번호를 새로 정할 수 있어요.\n\n"+link+
+  "\n\n이 주소는 "+RESET_MINUTES+"분 동안만, 한 번만 쓸 수 있어요.\n본인이 요청한 것이 아니면 이 메일은 무시해주세요.");
+}
+
+export async function resetPassword(input:{token?:unknown;password?:unknown},now=Date.now()){
+ const token=String(input.token??"");
+ const password=checkPassword(input.password);
+ const expired="링크가 만료되었거나 이미 사용되었어요. 다시 요청해주세요.";
+ ensure(token,expired,400);
+ const row=await db().prepare("SELECT id,account_id,expires,used,at FROM password_resets WHERE id=?")
+  .bind(await hashToken(token)).first<ResetRow>();
+ ensure(row&&!row.used&&Date.parse(row.expires)>now,expired,400);
+ await db().prepare("UPDATE accounts SET password=?,failures=0,locked_until=NULL WHERE id=?")
+  .bind(await hashPassword(password),row!.account_id).run();
+ await db().prepare("UPDATE password_resets SET used=1 WHERE id=?").bind(row!.id).run();
+ // 쓰던 기기에서 모두 로그아웃시킨다.
+ await db().prepare("DELETE FROM sessions WHERE account_id=?").bind(row!.account_id).run();
+ const account=await db().prepare("SELECT id,name FROM accounts WHERE id=?").bind(row!.account_id).first<{id:string;name:string}>();
+ ensure(account,expired,400);
+ return {user:{userId:account!.id,fullName:account!.name},token:await startSession(account!.id,now)};
 }

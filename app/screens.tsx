@@ -10,28 +10,33 @@ import {Upload,Plus,Search,MapPin,CalendarDays,Clock,Users,ShieldCheck,Copy,Exte
 import {Picker,Crest,imageUrl,Empty,Fixture,GameBadge,GuestBadge,PlayerPhoto,Vote,koreanDate,time,localDay,inputTime,fromInput,opponent} from "./teamkick";
 import {currentVote,guestStatusOf,type Row} from "@/lib/model";
 import {TERMS,PRIVACY} from "@/lib/legal";
-export function AuthPanel({onDemo}:{onDemo:()=>void}){
- const [mode,setMode]=useState("login"),[form,setForm]=useState<Record<string,string>>({email:"",password:"",name:""});
+export function AuthPanel({onDemo,mailReady=true,resetToken=""}:{onDemo:()=>void;mailReady?:boolean;resetToken?:string}){
+ const [mode,setMode]=useState(resetToken?"reset":"login"),[form,setForm]=useState<Record<string,string>>({email:"",password:"",name:""});
  const [busy,setBusy]=useState(false),[failure,setFailure]=useState("");
- const signup=mode==="signup",[legal,setLegal]=useState("");
+ const [token,setToken]=useState(resetToken);
+ const signup=mode==="signup",forgot=mode==="forgot",reset=mode==="reset",[legal,setLegal]=useState("");
+ const [sent,setSent]=useState(false);
  const field=(key:string)=>({value:form[key]??"",onChange:(e:ChangeEvent<HTMLInputElement>)=>setForm(f=>({...f,[key]:e.target.value}))});
  async function submit(e:FormEvent){
   e.preventDefault();setBusy(true);setFailure("");
   try{
-   const res=await fetch("/api/auth",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:signup?"signup":"login",email:form.email,password:form.password,name:form.name,agree:form.agree==="y",adult:form.adult==="y"})});
+   const action=signup?"signup":forgot?"forgot":reset?"reset":"login";
+   const res=await fetch("/api/auth",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action,email:form.email,password:form.password,name:form.name,token,agree:form.agree==="y",adult:form.adult==="y"})});
    const out=await res.json().catch(()=>({})) as {error?:string};
    if(!res.ok)throw new Error(out.error||"처리하지 못했어요. 잠시 후 다시 시도해주세요.");
-   window.location.reload();
+   if(forgot){setSent(true);setBusy(false);return}
+   window.location.replace("/");
   }catch(err){setFailure(err instanceof Error?err.message:"처리하지 못했어요. 잠시 후 다시 시도해주세요.");setBusy(false)}
  }
  return <section className="onboarding panel">
-  <h2 className="view-heading">{signup?"팀킥 회원가입":"팀킥 로그인"}</h2>
-  <p className="small muted" style={{marginBottom:20,lineHeight:1.7}}>{signup?"가입한 뒤 팀을 등록하거나 소속 팀에 가입을 신청할 수 있어요.":"가입한 이메일과 비밀번호로 로그인하세요."}</p>
+  <h2 className="view-heading">{signup?"팀킥 회원가입":forgot?"비밀번호 찾기":reset?"새 비밀번호 정하기":"팀킥 로그인"}</h2>
+  <p className="small muted" style={{marginBottom:20,lineHeight:1.7}}>{signup?"가입한 뒤 팀을 등록하거나 소속 팀에 가입을 신청할 수 있어요.":forgot?"가입한 이메일로 재설정 링크를 보내드려요.":reset?"새로 쓸 비밀번호를 정해주세요. 다른 기기에서는 모두 로그아웃돼요.":"가입한 이메일과 비밀번호로 로그인하세요."}</p>
   {failure&&<p className="error-bar" role="alert">{failure}</p>}
+  {sent&&<p className="data-note" role="status" style={{lineHeight:1.8}}>가입된 주소라면 재설정 링크를 보냈어요. 받은 편지함을 확인해주세요. 링크는 1시간 동안 한 번만 쓸 수 있어요.</p>}
   <form className="form-grid" onSubmit={submit}>
    {signup&&<label>이름<input type="text" required maxLength={30} autoComplete="name" {...field("name")}/></label>}
-   <label>이메일<input type="email" required autoComplete="email" {...field("email")}/></label>
-   <label>비밀번호<input type="password" required minLength={8} autoComplete={signup?"new-password":"current-password"} {...field("password")}/></label>
+   {!reset&&<label>이메일<input type="email" required autoComplete="email" {...field("email")}/></label>}
+   {!forgot&&<label>{reset?"새 비밀번호":"비밀번호"}<input type="password" required minLength={8} autoComplete={signup||reset?"new-password":"current-password"} {...field("password")}/></label>}
    {signup&&<p className="data-note">비밀번호는 8자 이상으로 정해주세요.</p>}
    {signup&&<label className="row" style={{gap:9,fontWeight:400,fontSize:14,alignItems:"flex-start"}}>
     <input type="checkbox" required style={{width:"auto",marginTop:3}} checked={form.agree==="y"} onChange={e=>setForm(f=>({...f,agree:e.target.checked?"y":""}))}/>
@@ -41,10 +46,12 @@ export function AuthPanel({onDemo}:{onDemo:()=>void}){
     <input type="checkbox" required style={{width:"auto",marginTop:3}} checked={form.adult==="y"} onChange={e=>setForm(f=>({...f,adult:e.target.checked?"y":""}))}/>
     <span>(필수) 만 14세 이상입니다.</span>
    </label>}
-   <button type="submit" className="btn btn-green" disabled={busy}>{busy&&<LoaderCircle className="loader" size={16}/>} {signup?"가입하고 시작하기":"로그인"}</button>
+   <button type="submit" className="btn btn-green" disabled={busy}>{busy&&<LoaderCircle className="loader" size={16}/>} {signup?"가입하고 시작하기":forgot?"재설정 링크 받기":reset?"비밀번호 바꾸기":"로그인"}</button>
   </form>
   <div className="action-strip">
-   <button className="btn" onClick={()=>{setMode(signup?"login":"signup");setFailure("")}}>{signup?"이미 계정이 있어요 · 로그인":"처음이에요 · 회원가입"}</button>
+   {reset?<button className="btn" onClick={()=>{setToken("");setMode("login");setFailure("")}}>로그인으로 돌아가기</button>
+    :<button className="btn" onClick={()=>{setMode(signup||forgot?"login":"signup");setFailure("");setSent(false)}}>{signup||forgot?"로그인으로 돌아가기":"처음이에요 · 회원가입"}</button>}
+   {mode==="login"&&mailReady&&<button className="btn btn-ghost" onClick={()=>{setMode("forgot");setFailure("");setSent(false)}}>비밀번호를 잊으셨나요?</button>}
    <button className="btn btn-ghost" onClick={onDemo}>샘플 팀 둘러보기</button>
   </div>
   <p className="data-note" style={{marginTop:14}}>

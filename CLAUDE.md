@@ -60,6 +60,7 @@ pnpm db:generate                        # 스키마 변경 시 migration 생성
 로컬에서도 앱 화면에서 직접 회원가입해 여러 계정을 만들 수 있다.
 다중 사용자 권한·동시성 검증은 여전히 `tests/core.test.mjs`가 기준이다.
 
+비밀번호 재설정 메일은 `RESEND_API_KEY`와 `MAIL_FROM`이 있어야 동작한다.
 구장 검색은 `KAKAO_REST_KEY` 환경변수가 있어야 동작한다. 로컬에서는 `.dev.vars`에
 넣고(이 파일은 git에 올리지 않는다), 없으면 검색만 막히고 수기 입력은 그대로 된다.
 

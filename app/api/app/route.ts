@@ -1,12 +1,13 @@
 import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";
 import {storageReady} from "@/lib/images";
 import {placeSearchReady} from "@/lib/places";
+import {mailReady} from "@/lib/mail";
 import {load,commit} from "@/lib/store";
 import {applyCommand,visibleState,AppError,iso,id} from "@/lib/model";
 import {OWNER_SETUP_HASH} from "@/lib/owner-config";
 export const dynamic="force-dynamic";
 const json=(x:any,status=200,cookie?:string)=>Response.json(x,{status,headers:cookie?{"Cache-Control":"no-store","Set-Cookie":cookie}:{"Cache-Control":"no-store"}});
-export async function GET(req:Request){try{const user=await currentUser(req);if(!user)return json({user:null});const {state}=await load();const teamId=new URL(req.url).searchParams.get("team")??undefined;const token=new URL(req.url).searchParams.get("invite");const invite=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());return json({storageReady:storageReady(),placeSearchReady:placeSearchReady(),invitedTeam:invite?.teamId??null,user:{id:user.userId,name:state.users.find(x=>x.id===user.userId)?.name??user.fullName??"팀원"},...visibleState(state,user.userId,teamId)});}catch(e){console.error("TeamKick load",e);return json({error:e instanceof AppError?e.message:"데이터를 불러오지 못했어요. 다시 시도해주세요."},e instanceof AppError?e.status:503)}}
+export async function GET(req:Request){try{const user=await currentUser(req);if(!user)return json({user:null,mailReady:mailReady()});const {state}=await load();const teamId=new URL(req.url).searchParams.get("team")??undefined;const token=new URL(req.url).searchParams.get("invite");const invite=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());return json({storageReady:storageReady(),placeSearchReady:placeSearchReady(),mailReady:mailReady(),invitedTeam:invite?.teamId??null,user:{id:user.userId,name:state.users.find(x=>x.id===user.userId)?.name??user.fullName??"팀원"},...visibleState(state,user.userId,teamId)});}catch(e){console.error("TeamKick load",e);return json({error:e instanceof AppError?e.message:"데이터를 불러오지 못했어요. 다시 시도해주세요."},e instanceof AppError?e.status:503)}}
 export async function POST(req:Request){
  try{
   const user=await currentUser(req);if(!user)throw new AppError("먼저 로그인해주세요.",401);

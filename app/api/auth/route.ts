@@ -1,4 +1,4 @@
-import {signUp,signIn,signOut,sessionCookie,clearedCookie} from "@/lib/auth";
+import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword} from "@/lib/auth";
 import {AppError} from "@/lib/model";
 export const dynamic="force-dynamic";
 const json=(x:unknown,status=200,cookie?:string)=>Response.json(x,{status,headers:cookie?{"Cache-Control":"no-store","Set-Cookie":cookie}:{"Cache-Control":"no-store"}});
@@ -11,6 +11,8 @@ export async function POST(req:Request){
   if(!c||typeof c!=="object")throw new AppError("요청 정보를 확인해주세요.");
   if(c.action==="signup"){const {user,token}=await signUp(c);return json({ok:true,user:{id:user.userId,name:user.fullName}},200,sessionCookie(token))}
   if(c.action==="login"){const {user,token}=await signIn(c);return json({ok:true,user:{id:user.userId,name:user.fullName}},200,sessionCookie(token))}
+  if(c.action==="forgot"){await requestPasswordReset(c,new URL(req.url).origin);return json({ok:true})}
+  if(c.action==="reset"){const {user,token}=await resetPassword(c);return json({ok:true,user:{id:user.userId,name:user.fullName}},200,sessionCookie(token))}
   if(c.action==="logout"){await signOut(req);return json({ok:true},200,clearedCookie())}
   throw new AppError("지원하지 않는 작업이에요.");
  }catch(e){

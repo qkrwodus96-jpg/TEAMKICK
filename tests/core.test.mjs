@@ -15,8 +15,8 @@ function compile(file,name,replace=s=>s){
 compile('lib/model.ts','model.mjs');
 compile('lib/store.ts','store.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/owner-config.ts','owner-config.mjs');
-compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
-compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
+compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('import {sendMail,mailReady} from "./mail";','const sendMail=async(to,subject,text)=>{(globalThis.__teamkickTestMail??=[]).push({to,subject,text})};const mailReady=()=>globalThis.__teamkickTestMailReady!==false;').replace('"./model"','"./model.mjs"'));
+compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
 const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,iso}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
@@ -436,4 +436,51 @@ test('탈퇴하면 팀 활동이 정리되고 남은 기록에서 개인 식별 
   const summary=summaries(visibleState(s,A.id,a),'1970','2100');
   assert.equal(summary.players.find(x=>x.id===m.id).attend,1,'과거 출석 기록은 남는다');
   assert.equal(visibleState(s,member.id).teamId,'','탈퇴 후에는 팀 화면이 보이지 않는다');
+});
+
+test('비밀번호 재설정 링크는 한 번만, 한 시간만 쓸 수 있고 다른 기기 세션을 끊는다',async()=>{
+  const db=localDatabase();globalThis.__teamkickTestMail=[];
+  const {token:oldSession}=await register({email:'reset@t.com',name:'되찾기',password:'teamkick-1234'});
+  await auth.requestPasswordReset({email:'없는@주소.com'},'https://teamkick.test');
+  assert.equal(globalThis.__teamkickTestMail.length,0,'가입되지 않은 주소에는 보내지 않는다');
+  await auth.requestPasswordReset({email:'RESET@T.com'},'https://teamkick.test');
+  assert.equal(globalThis.__teamkickTestMail.length,1,'대소문자가 달라도 찾는다');
+  const mail=globalThis.__teamkickTestMail[0];
+  assert.equal(mail.to,'reset@t.com');
+  const link=mail.text.match(/https:\/\/teamkick\.test\/\?reset=([^\s]+)/);
+  assert.ok(link,'메일에 재설정 주소가 들어간다');
+  const raw=decodeURIComponent(link[1]);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM password_resets WHERE id=?').get(raw).n,0,'토큰 원문은 저장하지 않는다');
+
+  await auth.requestPasswordReset({email:'reset@t.com'},'https://teamkick.test');
+  assert.equal(globalThis.__teamkickTestMail.length,1,'연달아 요청해도 다시 보내지 않는다');
+
+  await assert.rejects(()=>auth.resetPassword({token:raw,password:'짧음'}),/8자 이상/);
+  await assert.rejects(()=>auth.resetPassword({token:'가짜토큰',password:'teamkick-9999'}),/만료|사용/);
+  assert.ok(await auth.currentUser(cookieRequest(oldSession)),'아직은 기존 세션이 살아 있다');
+
+  const done=await auth.resetPassword({token:raw,password:'teamkick-9999'});
+  assert.equal(done.user.fullName,'되찾기');
+  assert.equal(await auth.currentUser(cookieRequest(oldSession)),null,'재설정하면 기존 기기에서 로그아웃된다');
+  assert.ok(await auth.currentUser(cookieRequest(done.token)),'새 세션으로는 들어갈 수 있다');
+  await assert.rejects(()=>auth.resetPassword({token:raw,password:'teamkick-0000'}),/만료|사용/,'같은 링크를 다시 쓸 수 없다');
+  await assert.rejects(()=>auth.signIn({email:'reset@t.com',password:'teamkick-1234'}),/이메일 또는 비밀번호/,'예전 비밀번호는 막힌다');
+  assert.ok((await auth.signIn({email:'reset@t.com',password:'teamkick-9999'})).token,'새 비밀번호로 로그인된다');
+
+  globalThis.__teamkickTestMail=[];
+  const later=Date.now()+61*60000;
+  await auth.requestPasswordReset({email:'reset@t.com'},'https://teamkick.test',later);
+  const second=decodeURIComponent(globalThis.__teamkickTestMail[0].text.match(/reset=([^\s]+)/)[1]);
+  await assert.rejects(()=>auth.resetPassword({token:second,password:'teamkick-1111'},later+61*60000),/만료|사용/,'한 시간이 지나면 만료된다');
+  db.close();globalThis.__teamkickTestMail=[];
+});
+
+test('메일 발송이 설정되지 않으면 비밀번호 찾기를 성공한 것처럼 보이지 않는다',async()=>{
+  const db=localDatabase();globalThis.__teamkickTestMail=[];
+  await register({email:'nomail@t.com',name:'가나',password:'teamkick-1234'});
+  globalThis.__teamkickTestMailReady=false;
+  await assert.rejects(()=>auth.requestPasswordReset({email:'nomail@t.com'},'https://teamkick.test'),/설정되지 않았어요/);
+  assert.equal(globalThis.__teamkickTestMail.length,0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM password_resets').get().n,0,'보내지 못하면 토큰도 남기지 않는다');
+  globalThis.__teamkickTestMailReady=true;db.close();
 });

@@ -1,3 +1,6 @@
 import TeamKick from "./teamkick";
 export const dynamic="force-dynamic";
-export default function Home(){return <TeamKick/>}
+export default async function Home({searchParams}:{searchParams:Promise<Record<string,string|string[]|undefined>>}){
+ const params=await searchParams;
+ return <TeamKick resetToken={typeof params.reset==="string"?params.reset:""}/>;
+}

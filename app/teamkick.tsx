@@ -33,7 +33,7 @@ export function Calendar({month,setMonth,selected,onSelect,games,large=false}:an
 }
 export function Fixture({g,v,onClick}:any){const z=v.sides?.find((x:Row)=>x.gameId===g.id);return <div role="button" tabIndex={0} onKeyDown={e=>e.key==="Enter"&&onClick()} className="fixture-row" onClick={onClick}><div className="fixture-date"><b>{new Date(new Date(g.start).getTime()+9*3600e3).getUTCDate()}</b><span>{days[new Date(new Date(g.start).getTime()+9*3600e3).getUTCDay()]}요일</span></div><div className="fixture-info"><strong>{v.teams.find((t:Row)=>t.id===v.teamId)?.name} <span className="muted" style={{fontWeight:400}}>vs</span> {opponent(v,g)||"상대팀 미정"}</strong><p>{time(g.start)} · {g.venue}</p></div>{g.result?.status==="confirmed"?<span className="mini-result">{g.home===v.teamId?g.result.a:g.result.b} : {g.home===v.teamId?g.result.b:g.result.a}</span>:<GameBadge g={g}/>}<GuestBadge z={z}/><ChevronRight/></div>}
 const nav=[{id:"home",label:"홈",icon:Home},{id:"schedule",label:"일정",icon:CalendarDays},{id:"matching",label:"매칭",icon:Handshake},{id:"records",label:"기록",icon:ChartNoAxesCombined},{id:"team",label:"우리팀",icon:Users}];
-export default function TeamKick(){
+export default function TeamKick({resetToken=""}:{resetToken?:string}){
  const [samples,setSamples]=useState(demoState),[demo,setDemo]=useState(true),[demoActor,setDemoActor]=useState("demo-a"),[demoTeam,setDemoTeam]=useState("team-a");
  const [real,setReal]=useState<any>(null),[view,setView]=useState("home"),[modal,setModal]=useState<any>(null),[busy,setBusy]=useState(false),[error,setError]=useState(""),[loading,setLoading]=useState(true);
  const today=localDay(new Date().toISOString()),[month,setMonth]=useState(today.slice(0,7)),[selected,setSelected]=useState(today),[scheduleMode,setScheduleMode]=useState("calendar"),[dateFilter,setDateFilter]=useState(false);
@@ -65,7 +65,7 @@ export default function TeamKick(){
  {error&&<div className="error-bar">{error} <button onClick={()=>refresh(v.teamId).then(()=>setError("")).catch(e=>setError(e.message))}>다시 시도</button></div>}
  {demo&&<div className="demo-strip"><span>샘플 팀 둘러보기 · 변경 사항은 실제 팀에 저장되지 않아요.</span><button onClick={toActual}>우리 팀 시작하기 <span aria-hidden>↗</span></button></div>}
  <div className="md:hidden" style={{marginBottom:20}}>{teamPicker}</div>
- {!demo&&!v.user?<AuthPanel onDemo={()=>setDemo(true)}/>:
+ {!demo&&!v.user?<AuthPanel onDemo={()=>setDemo(true)} mailReady={real?.mailReady!==false} resetToken={resetToken}/>:
  !team&&view!=="admin"&&view!=="matching"?<Management {...common} onboarding/>:
  <>
  <div className="page-title"><div><h1>{view==="home"?"우리 팀의 매치데이":view==="schedule"?"경기 일정":view==="matching"?"함께 뛸 팀을 찾아요":view==="records"?"우리 팀의 기록":view==="admin"?"서비스 관리":"우리팀"}</h1><p>{view==="home"?"함께 뛰는 순간, 하나씩 쌓이는 기록.":view==="schedule"?"다가오는 경기를 확인하고 참여 여부를 알려주세요.":view==="matching"?"우리 팀에 맞는 상대와 다음 경기를 준비하세요.":view==="records"?"함께 만든 결과를 기간별로 확인하세요.":view==="admin"?"팀 등록 요청과 서비스 이용 상태를 관리하세요.":"팀원들과 함께 다음 경기를 준비하세요."}</p></div>{manager&&["home","schedule","matching"].includes(view)&&<button disabled={busy||team?.status!=="active"} className="btn btn-green" onClick={()=>setModal({kind:"createGame",listing:view==="matching"&&captain})}><Plus/>경기 만들기</button>}</div>

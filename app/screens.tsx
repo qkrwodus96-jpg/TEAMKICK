@@ -11,14 +11,17 @@ import {Picker,Crest,imageUrl,Empty,Fixture,GameBadge,GuestBadge,PlayerPhoto,Vot
 import {currentVote,guestStatusOf,type Row} from "@/lib/model";
 import {TERMS,PRIVACY} from "@/lib/legal";
 export function AuthPanel({onDemo,mailReady=true,resetToken=""}:{onDemo:()=>void;mailReady?:boolean;resetToken?:string}){
- const [mode,setMode]=useState(resetToken?"reset":"login"),[form,setForm]=useState<Record<string,string>>({email:"",password:"",name:""});
+ const [mode,setMode]=useState(resetToken?"reset":"login"),[form,setForm]=useState<Record<string,string>>({email:"",password:"",password2:"",name:""});
  const [busy,setBusy]=useState(false),[failure,setFailure]=useState("");
  const [token,setToken]=useState(resetToken);
  const signup=mode==="signup",forgot=mode==="forgot",reset=mode==="reset",[legal,setLegal]=useState("");
  const [sent,setSent]=useState(false);
  const field=(key:string)=>({value:form[key]??"",onChange:(e:ChangeEvent<HTMLInputElement>)=>setForm(f=>({...f,[key]:e.target.value}))});
  async function submit(e:FormEvent){
-  e.preventDefault();setBusy(true);setFailure("");
+  e.preventDefault();
+  // 서버로 보내기 전에 확인한다. 잘못 친 비밀번호로 가입하면 원인을 모른 채 로그인이 막힌다.
+  if((signup||reset)&&form.password!==(form.password2??"")){setFailure("비밀번호가 서로 달라요. 확인란을 다시 입력해주세요.");return}
+  setBusy(true);setFailure("");
   try{
    const action=signup?"signup":forgot?"forgot":reset?"reset":"login";
    const res=await fetch("/api/auth",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action,email:form.email,password:form.password,name:form.name,token,agree:form.agree==="y",adult:form.adult==="y"})});
@@ -37,7 +40,8 @@ export function AuthPanel({onDemo,mailReady=true,resetToken=""}:{onDemo:()=>void
    {signup&&<label>이름<input type="text" required maxLength={30} autoComplete="name" {...field("name")}/></label>}
    {!reset&&<label>이메일<input type="email" required autoComplete="email" {...field("email")}/></label>}
    {!forgot&&<label>{reset?"새 비밀번호":"비밀번호"}<input type="password" required minLength={8} autoComplete={signup||reset?"new-password":"current-password"} {...field("password")}/></label>}
-   {signup&&<p className="data-note">비밀번호는 8자 이상으로 정해주세요.</p>}
+   {(signup||reset)&&<label>비밀번호 확인<input type="password" required minLength={8} autoComplete="new-password" {...field("password2")}/></label>}
+   {(signup||reset)&&<p className="data-note">비밀번호는 8자 이상으로 정해주세요. 확인란에 같은 값을 한 번 더 입력해주세요.</p>}
    {signup&&<label className="row" style={{gap:9,fontWeight:400,fontSize:14,alignItems:"flex-start"}}>
     <input type="checkbox" required style={{width:"auto",marginTop:3}} checked={form.agree==="y"} onChange={e=>setForm(f=>({...f,agree:e.target.checked?"y":""}))}/>
     <span>(필수) <button type="button" className="text-link" style={{display:"inline"}} onClick={()=>setLegal("terms")}>이용약관</button>과 <button type="button" className="text-link" style={{display:"inline"}} onClick={()=>setLegal("privacy")}>개인정보 수집·이용</button>에 동의합니다.</span>

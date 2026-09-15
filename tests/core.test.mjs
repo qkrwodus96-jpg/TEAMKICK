@@ -565,7 +565,7 @@ test('제한 기록은 시간이 지나면 지운다',async()=>{
   assert.equal(rows.length,1,'만료된 기록은 남기지 않는다');
 });
 
-test('가입하면 확인 메일을 보내고, 확인 전에는 팀을 만들거나 가입 신청할 수 없다',async()=>{
+test('가입하면 확인 메일을 보내지만, 확인 전이라도 팀 활동은 막지 않는다',async()=>{
   const db=localDatabase();globalThis.__teamkickTestMail=[];
   const {user}=await auth.signUp({email:'new@t.com',name:'새사람',password:'teamkick-1234',agree:true,adult:true},'https://teamkick.test');
   assert.equal(globalThis.__teamkickTestMail.length,1,'가입하면 확인 메일이 나간다');
@@ -573,14 +573,17 @@ test('가입하면 확인 메일을 보내고, 확인 전에는 팀을 만들거
   assert.ok(link,'메일에 확인 주소가 들어 있다');
   assert.equal(db.prepare('SELECT verified_at FROM accounts WHERE id=?').get(user.userId).verified_at,null,'아직 확인 전이다');
 
+  // 국내 메일 서비스가 확인 메일을 버리는 경우가 있다. 확인을 팀 활동의 조건으로 두면
+  // 막히는 쪽은 진짜 사용자다. 팀 생성은 운영자가, 팀 가입은 주장이 승인하므로
+  // 가짜 계정이 팀에 들어올 길은 이미 막혀 있다.
   const unverified={id:user.userId,name:'새사람',verified:false};
-  assert.throws(()=>applyCommand(blank(),unverified,{type:'createTeam',name:'새 팀',region:'서울',description:'설명'}),/이메일 확인/);
   const f=fixture();
-  assert.throws(()=>applyCommand(f.s,unverified,{type:'joinTeam',teamId:f.a,name:'새사람'}),/이메일 확인/);
+  applyCommand(f.s,unverified,{type:'joinTeam',teamId:f.a,name:'새사람'});
+  assert.equal(f.s.members.find(m=>m.userId===user.userId)?.status,'pending','확인 전에도 가입 신청은 된다');
+  assert.throws(()=>applyCommand(f.s,{id:'다른사람',name:'침입자'},{type:'approveMember',teamId:f.a,memberId:f.s.members.find(m=>m.userId===user.userId).id}),/권한/,'승인은 여전히 주장만 한다');
 
   await auth.verifyEmail({token:decodeURIComponent(link[1])});
   assert.ok(db.prepare('SELECT verified_at FROM accounts WHERE id=?').get(user.userId).verified_at,'확인 시각이 남는다');
-  applyCommand(f.s,{id:user.userId,name:'새사람',verified:true},{type:'joinTeam',teamId:f.a,name:'새사람'});
   await assert.rejects(()=>auth.verifyEmail({token:decodeURIComponent(link[1])}),/만료되었거나 이미 사용/,'한 번만 쓸 수 있다');
 
   // 메일 발송이 준비되지 않았으면 가입은 되되 확인 메일은 나가지 않는다.

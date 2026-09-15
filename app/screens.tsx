@@ -1,5 +1,5 @@
 "use client";
-import {useState,useEffect} from "react";
+import {useState,useEffect,type ChangeEvent,type FormEvent} from "react";
 import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from "@/components/ui/dialog";
 import {AlertDialog,AlertDialogContent,AlertDialogHeader,AlertDialogTitle,AlertDialogDescription,AlertDialogFooter,AlertDialogCancel,AlertDialogAction} from "@/components/ui/alert-dialog";
 import {Tabs,TabsList,TabsTrigger,TabsContent} from "@/components/ui/tabs";
@@ -9,6 +9,37 @@ import {toast} from "sonner";
 import {Plus,Search,MapPin,CalendarDays,Clock,Users,ShieldCheck,Copy,ExternalLink,Settings,Check,CheckCircle2,X,ArrowLeft,LogOut,Download,Pin,LoaderCircle,Goal,Handshake} from "lucide-react";
 import {Picker,Crest,Empty,Fixture,GameBadge,GuestBadge,Vote,koreanDate,time,localDay,inputTime,fromInput,opponent} from "./teamkick";
 import {currentVote,guestStatusOf,type Row} from "@/lib/model";
+export function AuthPanel({onDemo}:{onDemo:()=>void}){
+ const [mode,setMode]=useState("login"),[form,setForm]=useState<Record<string,string>>({email:"",password:"",name:""});
+ const [busy,setBusy]=useState(false),[failure,setFailure]=useState("");
+ const signup=mode==="signup";
+ const field=(key:string)=>({value:form[key]??"",onChange:(e:ChangeEvent<HTMLInputElement>)=>setForm(f=>({...f,[key]:e.target.value}))});
+ async function submit(e:FormEvent){
+  e.preventDefault();setBusy(true);setFailure("");
+  try{
+   const res=await fetch("/api/auth",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:signup?"signup":"login",email:form.email,password:form.password,name:form.name})});
+   const out=await res.json().catch(()=>({})) as {error?:string};
+   if(!res.ok)throw new Error(out.error||"처리하지 못했어요. 잠시 후 다시 시도해주세요.");
+   window.location.reload();
+  }catch(err){setFailure(err instanceof Error?err.message:"처리하지 못했어요. 잠시 후 다시 시도해주세요.");setBusy(false)}
+ }
+ return <section className="onboarding panel">
+  <h2 className="view-heading">{signup?"팀킥 회원가입":"팀킥 로그인"}</h2>
+  <p className="small muted" style={{marginBottom:20,lineHeight:1.7}}>{signup?"가입한 뒤 팀을 등록하거나 소속 팀에 가입을 신청할 수 있어요.":"가입한 이메일과 비밀번호로 로그인하세요."}</p>
+  {failure&&<p className="error-bar" role="alert">{failure}</p>}
+  <form className="form-grid" onSubmit={submit}>
+   {signup&&<label>이름<input type="text" required maxLength={30} autoComplete="name" {...field("name")}/></label>}
+   <label>이메일<input type="email" required autoComplete="email" {...field("email")}/></label>
+   <label>비밀번호<input type="password" required minLength={8} autoComplete={signup?"new-password":"current-password"} {...field("password")}/></label>
+   {signup&&<p className="data-note">비밀번호는 8자 이상으로 정해주세요.</p>}
+   <button type="submit" className="btn btn-green" disabled={busy}>{busy&&<LoaderCircle className="loader" size={16}/>} {signup?"가입하고 시작하기":"로그인"}</button>
+  </form>
+  <div className="action-strip">
+   <button className="btn" onClick={()=>{setMode(signup?"login":"signup");setFailure("")}}>{signup?"이미 계정이 있어요 · 로그인":"처음이에요 · 회원가입"}</button>
+   <button className="btn btn-ghost" onClick={onDemo}>샘플 팀 둘러보기</button>
+  </div>
+ </section>;
+}
 export function Matching(p:any){
  const {v,busy,setModal,run,captain,manager}=p,[tab,setTab]=useState(v.teamId?"open":"guest"),[query,setQuery]=useState(""),[format,setFormat]=useState("all"),[date,setDate]=useState("");
  const listings=v.listings.filter((g:Row)=>(format==="all"||g.format===format)&&(!date||localDay(g.start)===date)&&(g.region+" "+g.venue+" "+v.teams.find((t:Row)=>t.id===g.home)?.name).includes(query));
@@ -90,7 +121,7 @@ export function AppDialogs(p:any){
  {modal?.kind==="player"&&<><div className="team-header"><span className="player-avatar">{modal.player.name.slice(-2)}</span><div><h2>{modal.player.name}</h2><p>#{modal.player.number} · {modal.player.position}</p></div></div><div className="stats-grid" style={{gridTemplateColumns:"repeat(3,1fr)"}}>{["goals","assists","attend"].map((k,i)=><div className="stat-card" key={k}><span className="stat-label">{["골","어시스트","출석"][i]}</span><div className="stat-value">{modal.player[k]}</div></div>)}</div><p className="data-note">위 숫자는 선택한 기간의 기록입니다. 아래는 전체 경기 이력입니다.</p>{v.sides.filter((s:Row)=>s.records[modal.player.id]||s.attendance[modal.player.id]).map((s:Row)=>{const g=v.games.find((g:Row)=>g.id===s.gameId);return g?<div className="notice" key={s.id}><p>{koreanDate(g.start)} · {opponent(v,g)}</p><span>{s.attendance[modal.player.id]?"출석":"불참"} · {s.records[modal.player.id]?.goals??0}골 · {s.records[modal.player.id]?.assists??0}어시스트</span></div>:null})}</>}
  {modal?.kind==="correct"&&<form className="form-grid" onSubmit={e=>{e.preventDefault();save({type:"correctRequest",teamId:v.teamId,gameId:modal.gameId,message:form.message})}}><label>정정할 내용<textarea required value={form.message??""} onChange={e=>field("message",e.target.value)}/></label>{submit("기록 담당자에게 요청")}</form>}
  {modal?.kind==="setup"&&<form className="form-grid" onSubmit={e=>{e.preventDefault();save({type:"setupOwner",code:form.code})}}>{label("운영자 초기 설정 코드","code","password")}<p className="data-note">첫 로그인 순서로 권한을 부여하지 않습니다. 코드는 최초 운영자 등록에 한 번 사용합니다.</p>{submit("서비스 운영자로 등록")}</form>}
- {modal?.kind==="settings"&&<div className="gap-grid"><div className="row"><span className="avatar">{v.user?.name?.slice(-2)||"MY"}</span><strong>{demo?"샘플 팀 공간":v.user?.name||"로그인이 필요해요"}</strong></div>{demo?<button className="btn btn-green" onClick={()=>{p.setDemo(false);setModal(null);p.setView("team")}}>실제 우리 팀 공간으로</button>:<button className="btn" onClick={()=>{p.setDemo(true);setModal(null);p.setView("home")}}>샘플 팀 둘러보기</button>}{v.isOwner&&<button className="btn" onClick={()=>{p.setView("admin");setModal(null)}}><ShieldCheck/>서비스 관리</button>}{p.real?.setupNeeded&&p.real?.user&&<button className="btn" onClick={()=>{p.setDemo(false);setModal({kind:"setup"})}}>운영자 초기 설정</button>}{install?<button className="btn" onClick={async()=>{await install.prompt();setInstall(null)}}><Download/>홈 화면에 설치</button>:<p className="data-note">휴대폰 브라우저의 공유·메뉴에서 ‘홈 화면에 추가’를 선택해 앱처럼 열 수 있어요.</p>}{!demo&&v.role&&v.role!=="captain"&&<button className="btn btn-danger" onClick={()=>setConfirm({title:"현재 팀에서 탈퇴할까요?",command:{type:"leaveTeam",teamId:v.teamId}})}>팀 탈퇴</button>}{p.real?.user?<a className="btn" href="/signout-with-chatgpt?return_to=/" target="_top"><LogOut/>로그아웃</a>:<a className="btn btn-green" href={"/signin-with-chatgpt?return_to="+encodeURIComponent(typeof window!=="undefined"?"/"+window.location.search:"/")} target="_top">ChatGPT로 로그인</a>}<p className="data-note">팀킥 · 초기 팀 운영 버전<br/>앱 내 알림을 지원합니다. 휴대폰 푸시는 아직 연결되지 않았습니다.</p></div>}
+ {modal?.kind==="settings"&&<div className="gap-grid"><div className="row"><span className="avatar">{v.user?.name?.slice(-2)||"MY"}</span><strong>{demo?"샘플 팀 공간":v.user?.name||"로그인이 필요해요"}</strong></div>{demo?<button className="btn btn-green" onClick={()=>{p.setDemo(false);setModal(null);p.setView("team")}}>실제 우리 팀 공간으로</button>:<button className="btn" onClick={()=>{p.setDemo(true);setModal(null);p.setView("home")}}>샘플 팀 둘러보기</button>}{v.isOwner&&<button className="btn" onClick={()=>{p.setView("admin");setModal(null)}}><ShieldCheck/>서비스 관리</button>}{p.real?.setupNeeded&&p.real?.user&&<button className="btn" onClick={()=>{p.setDemo(false);setModal({kind:"setup"})}}>운영자 초기 설정</button>}{install?<button className="btn" onClick={async()=>{await install.prompt();setInstall(null)}}><Download/>홈 화면에 설치</button>:<p className="data-note">휴대폰 브라우저의 공유·메뉴에서 ‘홈 화면에 추가’를 선택해 앱처럼 열 수 있어요.</p>}{!demo&&v.role&&v.role!=="captain"&&<button className="btn btn-danger" onClick={()=>setConfirm({title:"현재 팀에서 탈퇴할까요?",command:{type:"leaveTeam",teamId:v.teamId}})}>팀 탈퇴</button>}{p.real?.user?<button className="btn" disabled={busy} onClick={async()=>{await fetch("/api/auth",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"logout"})});window.location.reload()}}><LogOut/>로그아웃</button>:<button className="btn btn-green" onClick={()=>{p.setDemo(false);setModal(null)}}>로그인 · 회원가입</button>}<p className="data-note">팀킥 · 초기 팀 운영 버전<br/>앱 내 알림을 지원합니다. 휴대폰 푸시는 아직 연결되지 않았습니다.</p></div>}
  </DialogContent></Dialog>
  <AlertDialog open={!!confirm} onOpenChange={o=>!o&&setConfirm(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{confirm?.title}</AlertDialogTitle><AlertDialogDescription>팀 상태와 관련 기록에 반영됩니다. 내용을 확인한 후 진행해주세요.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>돌아가기</AlertDialogCancel><AlertDialogAction disabled={busy} onClick={()=>{const c=confirm.command;setConfirm(null);save(c)}}>확인</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></>
 }

@@ -2,7 +2,7 @@ export type Row={id:string;[key:string]:any};
 export type State={users:Row[];teams:Row[];members:Row[];games:Row[];sides:Row[];requests:Row[];guests:Row[];notices:Row[];notifications:Row[];invites:Row[];audit:Row[];receipts:Row[];settings:Row[]};
 export const collections=["users","teams","members","games","sides","requests","guests","notices","notifications","invites","audit","receipts","settings"] as const;
 export const blank=():State=>({users:[],teams:[],members:[],games:[],sides:[],requests:[],guests:[],notices:[],notifications:[],invites:[],audit:[],receipts:[],settings:[]});
-export type Actor={id:string;name:string;ownerSetup?:boolean};
+export type Actor={id:string;name:string;ownerSetup?:boolean;ownerReset?:boolean};
 export class AppError extends Error{constructor(message:string,public status=400){super(message)}}
 export const ensure=(value:any,message:string,status=400)=>{if(!value)throw new AppError(message,status)};
 export const iso=(ms=Date.now())=>new Date(ms).toISOString();
@@ -32,7 +32,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  const type=textValue(c.type,50),t=String(c.teamId??""),stamp=iso(now);let output:any={};
  if(!s.users.find(u=>u.id===a.id))s.users.push({id:a.id,name:a.name,at:stamp});
  const owner=isOwner(s,a.id);
- if(type==="setupOwner"){ensure(!s.settings.some(x=>x.id==="owner"),"운영자 설정이 이미 완료되었어요.",409);ensure(a.ownerSetup,"초기 설정 코드가 올바르지 않아요.",403);s.settings.push({id:"owner",userId:a.id});}
+ if(type==="setupOwner"){const current=s.settings.find(x=>x.id==="owner");ensure(!current||a.ownerReset,"운영자 설정이 이미 완료되었어요.",409);ensure(a.ownerSetup,"초기 설정 코드가 올바르지 않아요.",403);if(current)current.userId=a.id;else s.settings.push({id:"owner",userId:a.id});}
  else if(type==="createTeam"){
   ensure(s.teams.filter(x=>x.applicant===a.id&&x.status==="pending").length<3,"대기 중인 팀 신청을 먼저 확인해주세요.");
   const team={id:id(),name:textValue(c.name,40),region:textValue(c.region,40),description:textValue(c.description,500,false),format:textValue(c.format||"11인제",20),days:textValue(c.days||"주말",30),level:textValue(c.level||"중",20),status:"pending",applicant:a.id,applicantName:a.name,at:stamp,reason:"",color:"green"};

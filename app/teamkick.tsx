@@ -9,7 +9,7 @@ import {Toaster} from "@/components/ui/sonner";
 import {toast} from "sonner";
 import {demoState} from "@/lib/demo";
 import {applyCommand,visibleState,summaries,currentVote,type Row} from "@/lib/model";
-import {Management,Matching,AppDialogs} from "./screens";
+import {AuthPanel,Management,Matching,AppDialogs} from "./screens";
 export const days=["일","월","화","수","목","금","토"];
 export const koreanDate=(iso:string)=>new Date(iso).toLocaleDateString("ko-KR",{timeZone:"Asia/Seoul",month:"long",day:"numeric",weekday:"short"});
 export const time=(iso:string)=>new Date(iso).toLocaleTimeString("ko-KR",{timeZone:"Asia/Seoul",hour:"2-digit",minute:"2-digit",hour12:false});
@@ -61,7 +61,7 @@ export default function TeamKick(){
  {error&&<div className="error-bar">{error} <button onClick={()=>refresh(v.teamId).then(()=>setError("")).catch(e=>setError(e.message))}>다시 시도</button></div>}
  {demo&&<div className="demo-strip"><span>샘플 팀 둘러보기 · 변경 사항은 실제 팀에 저장되지 않아요.</span><button onClick={toActual}>우리 팀 시작하기 <span aria-hidden>↗</span></button></div>}
  <div className="md:hidden" style={{marginBottom:20}}>{teamPicker}</div>
- {!demo&&!v.user?<section className="onboarding panel"><Empty title="우리 팀의 첫 경기를 준비해볼까요?" description="로그인하고 팀을 등록하거나, 소속 팀에 가입을 신청하세요."/><a className="btn btn-green" href={"/signin-with-chatgpt?return_to="+encodeURIComponent(typeof window!=="undefined"?"/"+window.location.search:"/")} target="_top">ChatGPT로 로그인</a><button className="btn btn-ghost" onClick={()=>setDemo(true)}>샘플 팀 둘러보기</button></section>:
+ {!demo&&!v.user?<AuthPanel onDemo={()=>setDemo(true)}/>:
  !team&&view!=="admin"&&view!=="matching"?<Management {...common} onboarding/>:
  <>
  <div className="page-title"><div><h1>{view==="home"?"우리 팀의 매치데이":view==="schedule"?"경기 일정":view==="matching"?"함께 뛸 팀을 찾아요":view==="records"?"우리 팀의 기록":view==="admin"?"서비스 관리":"우리팀"}</h1><p>{view==="home"?"함께 뛰는 순간, 하나씩 쌓이는 기록.":view==="schedule"?"다가오는 경기를 확인하고 참여 여부를 알려주세요.":view==="matching"?"우리 팀에 맞는 상대와 다음 경기를 준비하세요.":view==="records"?"함께 만든 결과를 기간별로 확인하세요.":view==="admin"?"팀 등록 요청과 서비스 이용 상태를 관리하세요.":"팀원들과 함께 다음 경기를 준비하세요."}</p></div>{manager&&["home","schedule","matching"].includes(view)&&<button disabled={busy||team?.status!=="active"} className="btn btn-green" onClick={()=>setModal({kind:"createGame",listing:view==="matching"&&captain})}><Plus/>경기 만들기</button>}</div>

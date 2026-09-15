@@ -25,8 +25,10 @@ TEAMKICK(모바일 표기: 팀킥) 저장소의 상시 개발 기준이다.
 - 스택: vinext(Vite 기반 Next 호환) + React 19 + TypeScript,
   Cloudflare Workers에서 서빙, **Cloudflare D1** 저장, Drizzle migration,
   shadcn/Radix UI, PWA(manifest·오프라인 안내).
-- 인증: **ChatGPT Sites 로그인 전용.** 서버가 `oai-authenticated-user-*`
-  헤더로 신원을 읽는다. 자체 회원가입은 없다.
+- 인증: **자체 회원가입(이메일 + 비밀번호).** `lib/auth.ts`가 비밀번호를
+  PBKDF2-HMAC-SHA256으로 저장하고 세션 쿠키로 신원을 확인한다.
+  계정·세션은 `entities`가 아니라 별도 `accounts`·`sessions` 테이블에 둔다.
+  `app/chatgpt-auth.ts`는 더 이상 사용하지 않는다.
 - 상태 저장: `entities` 단일 문서 테이블 + `state_revision` 버전 +
   `write_guards` CHECK 제약으로 낙관적 동시성 제어.
 - 모든 명령은 `POST /api/app` 하나로 들어가고 `lib/model.ts`가 권한을 검증한다.
@@ -47,13 +49,11 @@ pnpm db:generate                        # 스키마 변경 시 migration 생성
 ```
 
 **로컬 첫 실행 시 주의**: 로컬 D1에는 테이블이 없어 `/api/app`이 503이 된다.
-`drizzle/0000_bitter_cardiac.sql`을 로컬 D1 파일에 적용해야 한다
+`drizzle/`의 SQL을 순서대로 로컬 D1 파일에 적용해야 한다
 (`.wrangler/state/v3/d1/miniflare-D1DatabaseObject/*.sqlite`).
 
-로컬 개발 서버는 mock 로그인을 붙인다. `/signin-with-chatgpt`를 한 번 호출해
-`__sites_local_auth=1` 쿠키를 받으면 고정 사용자(`local_seedy`)로 로그인된다.
-**로컬 mock 사용자는 1명뿐이라 다중 사용자 권한 검증은 브라우저가 아니라
-`tests/core.test.mjs`에서 한다.**
+로컬에서도 앱 화면에서 직접 회원가입해 여러 계정을 만들 수 있다.
+다중 사용자 권한·동시성 검증은 여전히 `tests/core.test.mjs`가 기준이다.
 
 운영자 초기 설정 코드의 원문은 저장소에 없다(`lib/owner-config.ts`에 SHA-256만
 있음). 코드가 필요한 검증은 사용자에게 요청한다.

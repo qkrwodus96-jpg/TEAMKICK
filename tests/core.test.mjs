@@ -15,10 +15,12 @@ function compile(file,name,replace=s=>s){
 compile('lib/model.ts','model.mjs');
 compile('lib/store.ts','store.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/owner-config.ts','owner-config.mjs');
-compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {getChatGPTUser} from "@/app/chatgpt-auth";','const getChatGPTUser=async()=>globalThis.__teamkickTestIdentity;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
+compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
+compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
 const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,iso}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
+const auth=await import(path.join(runtime,'auth.mjs'));
 const api=await import(path.join(runtime,'api.mjs'));
 const NOW=Date.now(),DAY=864e5;
 const owner={id:'owner',name:'운영자',ownerSetup:true},A={id:'a',name:'A 주장'},B={id:'b',name:'B 주장'},C={id:'c',name:'C 주장'},member={id:'player',name:'선수'};
@@ -53,7 +55,7 @@ function applyGuest(s,teamId,gameId,actor){return command(s,actor,{type:'applyGu
 function localDatabase(){
   const db=new DatabaseSync(':memory:');
   for(const name of fs.readdirSync('drizzle').filter(x=>x.endsWith('.sql')).sort())db.exec(fs.readFileSync(path.join('drizzle',name),'utf8'));
-  const api={prepare(sql){return {sql,args:[],bind(...args){this.args=args;return this}}},async batch(statements){db.exec('BEGIN IMMEDIATE');try{const out=statements.map(x=>({success:true,results:db.prepare(x.sql).all(...x.args)}));db.exec('COMMIT');return out}catch(e){db.exec('ROLLBACK');throw e}}};
+  const api={prepare(sql){return {sql,args:[],bind(...args){this.args=args;return this},async first(){return db.prepare(this.sql).get(...this.args)??null},async run(){db.prepare(this.sql).run(...this.args);return {success:true}},async all(){return {results:db.prepare(this.sql).all(...this.args)}}}},async batch(statements){db.exec('BEGIN IMMEDIATE');try{const out=statements.map(x=>({success:true,results:db.prepare(x.sql).all(...x.args)}));db.exec('COMMIT');return out}catch(e){db.exec('ROLLBACK');throw e}}};
   globalThis.__teamkickTestEnv.DB=api;return db;
 }
 
@@ -258,4 +260,79 @@ test('주장은 팀원의 선수 정보를 수정할 수 있고 그 명령으로
   command(s,A,{type:'removeMember',teamId:a,memberId:om.id});
   assert.throws(()=>command(s,A,{type:'editMember',teamId:a,memberId:om.id,name:'다른 팀원',number:2,position:'DF'}),/활동 중인 팀원/);
   assert.throws(()=>command(s,A,{type:'editMember',teamId:a,memberId:m.id,name:'선수',number:200,position:'FW'}),/숫자 범위/);
+});
+
+const cookieRequest=token=>new Request('https://example.test/api/app',{headers:token?{cookie:'teamkick_session='+token}:{}});
+
+test('자체 회원가입은 비밀번호를 해시로만 저장하고 세션으로 신원을 확인한다',async()=>{
+  const db=localDatabase();
+  const {user,token}=await auth.signUp({email:' Park@Example.COM ',name:'박재연',password:'teamkick-1234'});
+  assert.equal(user.fullName,'박재연');
+  const row=db.prepare('SELECT email,name,password FROM accounts').get();
+  assert.equal(row.email,'park@example.com','이메일은 소문자로 정규화해 저장한다');
+  assert.ok(row.password.startsWith('pbkdf2$600000$'),'OWASP 권고 반복 횟수로 저장한다');
+  assert.equal(row.password.includes('teamkick-1234'),false,'비밀번호 원문이 저장되면 안 된다');
+  const stored=db.prepare('SELECT id FROM sessions').get();
+  assert.notEqual(stored.id,token,'세션 토큰 원문이 저장되면 안 된다');
+  assert.deepEqual(await auth.currentUser(cookieRequest(token)),{userId:user.userId,fullName:'박재연'});
+  assert.equal(await auth.currentUser(cookieRequest('')),null);
+  assert.equal(await auth.currentUser(cookieRequest('not-a-real-token')),null);
+  db.close();
+});
+
+test('로그인은 대소문자 무관하고 잘못된 입력과 중복 가입을 거부한다',async()=>{
+  const db=localDatabase();
+  await auth.signUp({email:'a@b.com',name:'가나',password:'teamkick-1234'});
+  await assert.rejects(()=>auth.signUp({email:'A@B.com',name:'다른 사람',password:'teamkick-1234'}),/이미 가입된 이메일/);
+  await assert.rejects(()=>auth.signUp({email:'주소아님',name:'가나',password:'teamkick-1234'}),/이메일 주소/);
+  await assert.rejects(()=>auth.signUp({email:'c@d.com',name:'가나',password:'짧음'}),/8자 이상/);
+  await assert.rejects(()=>auth.signUp({email:'c@d.com',name:'',password:'teamkick-1234'}),/이름/);
+  const {token}=await auth.signIn({email:'A@B.COM',password:'teamkick-1234'});
+  assert.ok(token);
+  await assert.rejects(()=>auth.signIn({email:'a@b.com',password:'틀린비밀번호'}),/이메일 또는 비밀번호/);
+  await assert.rejects(()=>auth.signIn({email:'없는@계정.com',password:'teamkick-1234'}),/이메일 또는 비밀번호/);
+  db.close();
+});
+
+test('로그인 실패가 반복되면 계정을 잠그고 로그아웃·만료 세션은 무효가 된다',async()=>{
+  const db=localDatabase();
+  const {token}=await auth.signUp({email:'a@b.com',name:'가나',password:'teamkick-1234'});
+  for(let i=0;i<10;i++)await assert.rejects(()=>auth.signIn({email:'a@b.com',password:'틀림'}),/이메일 또는 비밀번호/);
+  await assert.rejects(()=>auth.signIn({email:'a@b.com',password:'teamkick-1234'}),/잠겼어요/);
+  const later=Date.now()+16*60000;
+  assert.ok((await auth.signIn({email:'a@b.com',password:'teamkick-1234'},later)).token,'잠금 시간이 지나면 다시 로그인된다');
+  await auth.signOut(cookieRequest(token));
+  assert.equal(await auth.currentUser(cookieRequest(token)),null,'로그아웃한 세션은 무효다');
+  const {token:fresh}=await auth.signIn({email:'a@b.com',password:'teamkick-1234'},later);
+  assert.ok(await auth.currentUser(cookieRequest(fresh),later));
+  assert.equal(await auth.currentUser(cookieRequest(fresh),later+31*864e5),null,'만료된 세션은 무효다');
+  db.close();
+});
+
+test('서로 다른 계정은 서로의 세션과 팀 데이터에 접근할 수 없다',async()=>{
+  const db=localDatabase();
+  const one=await auth.signUp({email:'one@t.com',name:'첫째',password:'teamkick-1234'});
+  const two=await auth.signUp({email:'two@t.com',name:'둘째',password:'teamkick-1234'});
+  assert.notEqual(one.user.userId,two.user.userId);
+  assert.equal((await auth.currentUser(cookieRequest(one.token))).userId,one.user.userId);
+  assert.equal((await auth.currentUser(cookieRequest(two.token))).userId,two.user.userId);
+  const s=blank();
+  command(s,{id:one.user.userId,name:'첫째'},{type:'createTeam',teamId:'',name:'첫째 팀',region:'서울',description:''});
+  assert.equal(visibleState(s,two.user.userId).members.length,0);
+  assert.equal(visibleState(s,two.user.userId).games.length,0);
+  db.close();
+});
+
+test('운영자 재설정은 설정 코드와 기존 운영자 계정 부재를 함께 요구한다',()=>{
+  const s=blank();
+  command(s,owner,{type:'setupOwner'});
+  assert.equal(s.settings.find(x=>x.id==='owner').userId,owner.id);
+  const other={id:'other',name:'다른 사람',ownerSetup:true};
+  assert.throws(()=>command(s,other,{type:'setupOwner'}),/이미 완료/,'코드를 알아도 기존 운영자가 살아 있으면 가져갈 수 없다');
+  assert.throws(()=>command(s,{id:'no-code',name:'코드 없음',ownerReset:true},{type:'setupOwner'}),/초기 설정 코드/,'재설정 상황이어도 코드는 있어야 한다');
+  command(s,{...other,ownerReset:true},{type:'setupOwner'});
+  assert.equal(s.settings.find(x=>x.id==='owner').userId,other.id,'기존 운영자 계정이 없을 때만 재설정된다');
+  assert.equal(s.settings.filter(x=>x.id==='owner').length,1,'운영자 설정은 하나만 남는다');
+  assert.equal(visibleState(s,other.id).isOwner,true);
+  assert.equal(visibleState(s,owner.id).isOwner,false);
 });

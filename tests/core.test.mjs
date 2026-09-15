@@ -544,7 +544,8 @@ test('메일 요청 본문에 보내는 주소·받는 주소·회신 주소를 
 test('같은 접속 주소에서 반복되는 가입·로그인·비밀번호 찾기를 막는다',async()=>{
   const db=localDatabase();
   const one='203.0.113.7',two='203.0.113.8';
-  for(let i=0;i<10;i++)await auth.limit('signup',one,NOW);
+  const allowed=auth.LIMITS.signup.max;
+  for(let i=0;i<allowed;i++)await auth.limit('signup',one,NOW);
   await assert.rejects(()=>auth.limit('signup',one,NOW),/요청이 너무 잦아요/,'한 시간에 정해진 횟수를 넘기면 막는다');
   await auth.limit('signup',two,NOW); // 다른 접속 주소는 영향을 받지 않는다
   await auth.limit('login',one,NOW);  // 작업마다 따로 센다

@@ -277,7 +277,7 @@ test('자체 회원가입은 비밀번호를 해시로만 저장하고 세션으
   assert.equal(user.fullName,'박재연');
   const row=db.prepare('SELECT email,name,password FROM accounts').get();
   assert.equal(row.email,'park@example.com','이메일은 소문자로 정규화해 저장한다');
-  assert.ok(row.password.startsWith('pbkdf2$600000$'),'OWASP 권고 반복 횟수로 저장한다');
+  assert.ok(row.password.startsWith('pbkdf2$100000x6$'),'Workers 상한 안에서 OWASP 권고 작업량을 맞춘다');
   assert.equal(row.password.includes('teamkick-1234'),false,'비밀번호 원문이 저장되면 안 된다');
   const stored=db.prepare('SELECT id FROM sessions').get();
   assert.notEqual(stored.id,token,'세션 토큰 원문이 저장되면 안 된다');
@@ -649,4 +649,20 @@ test('상태 확인은 없는 표를 만들고 실제 존재 여부를 알려준
   assert.equal(status.error,'','준비 중 오류가 없어야 한다');
   for(const t of schema.TABLES)assert.equal(status.tables[t],true,t+' 표가 만들어져야 한다');
   db.close();
+});
+
+// Cloudflare Workers 는 PBKDF2 반복을 10만 회로 제한한다. Node 는 제한이 없어
+// 이 값을 넘겨도 로컬에서는 통과한다. 그래서 상한 자체를 테스트로 고정한다.
+test('비밀번호 해시는 Workers 반복 상한을 넘지 않고 작업량을 유지한다',async()=>{
+  assert.equal(auth.ROUND_ITERATIONS,100000,'Workers 상한을 넘기면 배포 환경에서 거부된다');
+  const stored=await auth.hashPassword('teamkick-1234');
+  const [scheme,work,salt,hash]=stored.split('$');
+  assert.equal(scheme,'pbkdf2');
+  const [iterations,rounds]=work.split('x').map(Number);
+  assert.ok(iterations<=auth.ROUND_ITERATIONS,'회차당 반복이 상한을 넘으면 안 된다');
+  assert.ok(iterations*rounds>=600000,'전체 작업량은 OWASP 권고(60만) 이상을 유지한다');
+  assert.ok(salt&&hash);
+  assert.equal(await auth.verifyPassword('teamkick-1234',stored),true);
+  assert.equal(await auth.verifyPassword('틀린비밀번호',stored),false);
+  assert.equal(stored.includes('teamkick-1234'),false,'원문이 저장되면 안 된다');
 });

@@ -3,8 +3,12 @@ import {AppError,ensure,iso,id} from "./model";
 import {sendMail,mailReady} from "./mail";
 
 // 자체 회원가입 인증. 비밀번호는 PBKDF2-HMAC-SHA256으로만 저장하고 원문은 남기지 않는다.
-// 반복 횟수는 OWASP Password Storage Cheat Sheet 권고(600,000)를 따른다.
-const ITERATIONS=600000;
+// Cloudflare Workers 는 PBKDF2 반복을 10만 회로 제한한다(초과하면 NotSupportedError).
+// Node 는 제한이 없어 로컬 테스트만으로는 이 문제를 잡지 못한다.
+// 그래서 10만 회를 여러 번 이어 붙여 OWASP 권고 작업량(600,000)을 맞춘다.
+// 각 회차의 결과를 다음 회차의 입력으로 넣으므로 병렬로 줄일 수 없다.
+export const ROUND_ITERATIONS=100000; // Workers 상한. 넘기지 않는다.
+const ROUNDS=6;
 const SESSION_DAYS=30;
 export const COOKIE="teamkick_session";
 const LOCK_AFTER=10,LOCK_MINUTES=15;
@@ -16,20 +20,29 @@ const toBase64=(b:Uint8Array)=>btoa(String.fromCharCode(...b));
 const fromBase64=(v:string)=>Uint8Array.from(atob(v),c=>c.charCodeAt(0));
 const toHex=(b:ArrayBuffer)=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
 
-async function derive(password:string,salt:Uint8Array<ArrayBuffer>,iterations:number){
- const key=await crypto.subtle.importKey("raw",encode(password),"PBKDF2",false,["deriveBits"]);
- return new Uint8Array(await crypto.subtle.deriveBits({name:"PBKDF2",salt,iterations,hash:"SHA-256"},key,256));
+async function derive(password:Uint8Array<ArrayBuffer>|string,salt:Uint8Array<ArrayBuffer>,iterations:number,rounds:number){
+ let material:Uint8Array<ArrayBuffer>=typeof password==="string"?encode(password) as Uint8Array<ArrayBuffer>:password;
+ for(let round=0;round<rounds;round++){
+  const key=await crypto.subtle.importKey("raw",material,"PBKDF2",false,["deriveBits"]);
+  material=new Uint8Array(await crypto.subtle.deriveBits({name:"PBKDF2",salt,iterations,hash:"SHA-256"},key,256));
+ }
+ return material;
 }
 
+// 저장 형식: pbkdf2$<회차당 반복>x<회차 수>$<소금>$<해시>
+// 예전 형식(pbkdf2$<반복>$...)도 계속 확인할 수 있게 둔다.
 export async function hashPassword(password:string){
  const salt=crypto.getRandomValues(new Uint8Array(16));
- return "pbkdf2$"+ITERATIONS+"$"+toBase64(salt)+"$"+toBase64(await derive(password,salt,ITERATIONS));
+ return "pbkdf2$"+ROUND_ITERATIONS+"x"+ROUNDS+"$"+toBase64(salt)+"$"+toBase64(await derive(password,salt,ROUND_ITERATIONS,ROUNDS));
 }
 
 export async function verifyPassword(password:string,stored:string){
- const [scheme,iterations,salt,expected]=String(stored).split("$");
+ const [scheme,work,salt,expected]=String(stored).split("$");
  if(scheme!=="pbkdf2"||!salt||!expected)return false;
- const actual=await derive(password,fromBase64(salt),Number(iterations));
+ const [iterationText,roundText]=String(work).split("x");
+ const iterations=Number(iterationText),rounds=roundText?Number(roundText):1;
+ if(!Number.isFinite(iterations)||!Number.isFinite(rounds))return false;
+ const actual=await derive(password,fromBase64(salt),iterations,rounds);
  const target=fromBase64(expected);
  if(actual.length!==target.length)return false;
  let diff=0;for(let i=0;i<actual.length;i++)diff|=actual[i]^target[i];

@@ -189,12 +189,19 @@ type VerifyRow={id:string;account_id:string;expires:string;used:number;at:string
 
 async function sendVerification(accountId:string,email:string,name:string,origin:string,now:number){
  const token=toBase64(crypto.getRandomValues(new Uint8Array(32))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+ const id=await hashToken(token);
  await db().prepare("INSERT INTO email_verifications(id,account_id,expires,used,at) VALUES(?,?,?,0,?)")
-  .bind(await hashToken(token),accountId,iso(now+VERIFY_HOURS*3600000),iso(now)).run();
+  .bind(id,accountId,iso(now+VERIFY_HOURS*3600000),iso(now)).run();
  const link=origin+"/?verify="+encodeURIComponent(token);
- await sendMail(email,"팀킥 이메일 확인",
-  name+"님, 아래 주소를 눌러 이메일을 확인해주세요.\n\n"+link+
-  "\n\n이 주소는 "+VERIFY_HOURS+"시간 동안만, 한 번만 쓸 수 있어요.\n본인이 가입한 것이 아니면 이 메일은 무시해주세요.");
+ try{
+  await sendMail(email,"팀킥 이메일 확인",
+   name+"님, 아래 주소를 눌러 이메일을 확인해주세요.\n\n"+link+
+   "\n\n이 주소는 "+VERIFY_HOURS+"시간 동안만, 한 번만 쓸 수 있어요.\n본인이 가입한 것이 아니면 이 메일은 무시해주세요.");
+ }catch(e){
+  // 보내지 못한 토큰을 남겨두면 재발송 간격 제한에 걸려 다시 보낼 수 없게 된다.
+  await db().prepare("DELETE FROM email_verifications WHERE id=?").bind(id).run();
+  throw e;
+ }
 }
 
 // 확인 메일 다시 보내기. 이미 확인했거나 없는 계정이면 조용히 끝낸다.

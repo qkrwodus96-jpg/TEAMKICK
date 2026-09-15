@@ -1,7 +1,7 @@
 import {schemaStatus,BUILD} from "@/lib/schema";
 import {storageReady} from "@/lib/images";
 import {placeSearchReady} from "@/lib/places";
-import {mailReady} from "@/lib/mail";
+import {mailReady,mailAccount,fromDomain} from "@/lib/mail";
 import {hashPassword} from "@/lib/auth";
 export const dynamic="force-dynamic";
 // 배포·설정 상태를 눈으로 확인하기 위한 진단 경로. 개인정보와 키는 담지 않는다.
@@ -19,6 +19,8 @@ export async function GET(){
   setupError:schema.error||null,
   passwordHashing,
   mailReady:mailReady(),
+  mailAccount:await mailAccount(),
+  mailFromDomain:fromDomain(),
   storageReady:storageReady(),
   placeSearchReady:placeSearchReady(),
  },{headers:{"Cache-Control":"no-store"}});

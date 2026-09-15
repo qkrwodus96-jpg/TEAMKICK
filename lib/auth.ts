@@ -209,9 +209,9 @@ async function sendVerification(accountId:string,email:string,name:string,origin
 // 확인 메일 다시 보내기. 이미 확인했거나 없는 계정이면 조용히 끝낸다.
 export async function resendVerification(accountId:string,origin:string,now=Date.now()){
  ensure(mailReady(),"메일 발송이 아직 설정되지 않았어요. 관리자에게 문의해주세요.",503);
- const account=await db().prepare("SELECT id,email,name,verified_at FROM accounts WHERE id=?")
-  .bind(accountId).first<{id:string;email:string;name:string;verified_at:string|null}>();
- if(!account||account.verified_at)return false;
+ const account=await db().prepare("SELECT id,email,name,verified_at,provider FROM accounts WHERE id=?")
+  .bind(accountId).first<{id:string;email:string;name:string;verified_at:string|null;provider:string}>();
+ if(!account||account.verified_at||account.provider==="kakao")return false;
  const recent=await db().prepare("SELECT at FROM email_verifications WHERE account_id=? AND used=0 AND expires>? ORDER BY at DESC")
   .bind(account.id,iso(now)).first<{at:string}>();
  if(recent&&now-Date.parse(recent.at)<VERIFY_COOLDOWN_MINUTES*60000)return false; // 연달아 보내지 않는다
@@ -230,6 +230,32 @@ export async function verifyEmail(input:{token?:unknown},now=Date.now()){
  await db().prepare("UPDATE email_verifications SET used=1 WHERE id=?").bind(row!.id).run();
 }
 
+// 카카오 로그인으로 들어온 사람. 이메일과 비밀번호를 쓰지 않는다.
+// 이메일 열은 비울 수 없으므로 배달되지 않는 주소(.invalid)를 넣어 자리만 채우고,
+// provider 로 구분해 그 주소로는 어떤 메일도 보내지 않는다.
+// 이 주소가 카카오 아이디마다 하나씩만 나오기 때문에, 같은 사람이 두 계정을 갖는 일을
+// email 의 UNIQUE 제약이 막아준다. 형식을 바꿀 때 이 성질을 함께 지켜야 한다.
+const kakaoPlaceholder=(kakaoId:string)=>"kakao-"+kakaoId+"@teamkick.invalid";
+
+export async function signInWithKakao(kakaoId:string,nickname:string,now=Date.now()){
+ ensure(kakaoId,"카카오 정보를 가져오지 못했어요. 다시 시도해주세요.",503);
+ const existing=await db().prepare("SELECT id,name FROM accounts WHERE kakao_id=?").bind(kakaoId).first<{id:string;name:string}>();
+ if(existing)return {user:{userId:existing.id,fullName:existing.name},token:await startSession(existing.id,now)};
+ const account={id:id(),email:kakaoPlaceholder(kakaoId),name:checkName(nickname)};
+ try{
+  // 카카오가 이미 본인을 확인했으므로 확인 완료로 둔다. 비밀번호는 비워 어떤 값과도 맞지 않는다.
+  await db().prepare("INSERT INTO accounts(id,email,name,password,failures,locked_until,agreed_at,verified_at,provider,kakao_id,at) VALUES(?,?,?,'',0,NULL,?,?, 'kakao',?,?)")
+   .bind(account.id,account.email,account.name,iso(now),iso(now),kakaoId,iso(now)).run();
+ }catch(e){
+  if(String(e).includes("UNIQUE")){
+   const again=await db().prepare("SELECT id,name FROM accounts WHERE kakao_id=?").bind(kakaoId).first<{id:string;name:string}>();
+   if(again)return {user:{userId:again.id,fullName:again.name},token:await startSession(again.id,now)};
+  }
+  throw e;
+ }
+ return {user:{userId:account.id,fullName:account.name},token:await startSession(account.id,now)};
+}
+
 // 비밀번호 재설정. 토큰 원문은 메일로만 나가고 서버에는 해시만 남긴다.
 const RESET_MINUTES=60,RESET_COOLDOWN_MINUTES=3;
 type ResetRow={id:string;account_id:string;expires:string;used:number;at:string};
@@ -237,9 +263,10 @@ type ResetRow={id:string;account_id:string;expires:string;used:number;at:string}
 export async function requestPasswordReset(input:{email?:unknown},origin:string,now=Date.now()){
  const email=normalizeEmail(input.email);
  ensure(mailReady(),"메일 발송이 아직 설정되지 않았어요. 관리자에게 문의해주세요.",503);
- const account=await db().prepare("SELECT id,name FROM accounts WHERE email=?").bind(email).first<{id:string;name:string}>();
+ const account=await db().prepare("SELECT id,name,provider FROM accounts WHERE email=?").bind(email).first<{id:string;name:string;provider:string}>();
  // 가입 여부를 응답으로 알려주지 않는다. 없는 주소면 조용히 끝낸다.
- if(!account)return;
+ // 카카오로 들어온 계정은 실제 메일 주소가 없으므로 보내지 않는다.
+ if(!account||account.provider==="kakao")return;
  const recent=await db().prepare("SELECT at FROM password_resets WHERE account_id=? AND used=0 AND expires>? ORDER BY at DESC")
   .bind(account.id,iso(now)).first<{at:string}>();
  if(recent&&now-Date.parse(recent.at)<RESET_COOLDOWN_MINUTES*60000)return; // 연달아 보내지 않는다

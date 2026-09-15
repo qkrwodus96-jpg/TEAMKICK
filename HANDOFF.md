@@ -3,7 +3,8 @@
 최종 갱신: 2026-09-15
 작업 폴더: `/home/user/TEAMKICK`
 브랜치: `claude/teamkick-setup-baseline-lwntca`
-Pull Request: https://github.com/qkrwodus96-jpg/TEAMKICK/pull/1 (열림, 충돌 없음)
+Pull Request: https://github.com/qkrwodus96-jpg/TEAMKICK/pull/1 (**병합 완료** 2026-09-15)
+`main` 이 최신이다. 이후 작업은 `main` 에서 새로 시작한다.
 현재 커밋: T14 이메일 실재 확인
 미커밋 변경: 없음
 현재 작업 ID: T14 완료 / 다음은 T08 기기 푸시 또는 T11 출시 준비
@@ -431,9 +432,14 @@ Pull Request: https://github.com/qkrwodus96-jpg/TEAMKICK/pull/1 (열림, 충돌 
 
 지금 당장 필요한 것은 없다. 아래는 나중에 필요해지는 시점에 요청한다.
 
-0. **배포와 migration** — 지금 배포된 사이트에는 이 브랜치의 기능이 하나도 없다.
-   `main` 병합·배포와 migration `0001`~`0005` 적용이 되어야 실제 동작을 확인할 수 있다.
-   이것이 현재 가장 큰 공백이다.
+0. **배포와 migration** — `main` 병합은 끝났다(PR #1). 남은 것은 **배포**와
+   **migration `0001`~`0005` 적용**이다. 이것이 끝나야 지금까지 만든 기능의
+   실제 동작을 처음으로 확인할 수 있다. 현재 가장 큰 공백이다.
+   - 저장소에는 migration 을 돌리는 스크립트가 없다. 원본 앱이 `0000` 이 적용된
+     상태로 동작했으므로 **배포 과정이 `drizzle/` 를 자동 적용할 가능성이 높지만
+     확인하지 못했다** — **미검증**.
+   - 자동 적용되지 않으면 `scripts/manual-migrate.sql` 을 운영 D1 에 한 문장씩
+     실행한다. 0000 만 적용된 DB 에서 실제로 돌려 결과 스키마를 확인했다.
 1. **R2 켜기** — 이미지 업로드를 실제 서비스에 올릴 때 필요하다.
    ChatGPT Sites는 공개 베타 동안 저장소가 플랜 한도 안에서 포함되므로 별도 결제
    없이 켤 수 있을 가능성이 높지만, **한도는 제품 화면에서 확인**해야 한다.

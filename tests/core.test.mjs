@@ -535,3 +535,26 @@ test('메일 요청 본문에 보내는 주소·받는 주소·회신 주소를 
     for(const k of Object.keys(env))delete env[k];Object.assign(env,keep);
   }
 });
+
+test('같은 접속 주소에서 반복되는 가입·로그인·비밀번호 찾기를 막는다',async()=>{
+  const db=localDatabase();
+  const one='203.0.113.7',two='203.0.113.8';
+  for(let i=0;i<10;i++)await auth.limit('signup',one,NOW);
+  await assert.rejects(()=>auth.limit('signup',one,NOW),/요청이 너무 잦아요/,'한 시간에 정해진 횟수를 넘기면 막는다');
+  await auth.limit('signup',two,NOW); // 다른 접속 주소는 영향을 받지 않는다
+  await auth.limit('login',one,NOW);  // 작업마다 따로 센다
+  await auth.limit('signup',one,NOW+61*60000); // 시간이 지나면 다시 열린다
+  for(let i=0;i<30;i++)await auth.limit('signup','',NOW); // 주소를 모르면 계정 단위 보호에 맡긴다
+  const rows=db.prepare('SELECT id FROM rate_limits').all();
+  assert.ok(rows.length>0,'기록이 남아야 제한이 동작한다');
+  assert.ok(rows.every(r=>!r.id.includes('203.0.113')),'접속 주소 원문을 저장하지 않는다');
+});
+
+test('제한 기록은 시간이 지나면 지운다',async()=>{
+  const db=localDatabase();
+  await auth.limit('login','203.0.113.9',NOW);
+  assert.equal(db.prepare('SELECT count(*) AS n FROM rate_limits').get().n,1);
+  await auth.limit('login','203.0.113.10',NOW+16*60000); // 새 구간을 열 때 지난 기록을 함께 지운다
+  const rows=db.prepare('SELECT id FROM rate_limits').all();
+  assert.equal(rows.length,1,'만료된 기록은 남기지 않는다');
+});

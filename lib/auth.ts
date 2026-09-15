@@ -41,6 +41,30 @@ type AccountRow={id:string;name:string;password:string;failures:number;locked_un
 type SessionRow={id:string;name:string;expires:string};
 const hashToken=async(token:string)=>toHex(await crypto.subtle.digest("SHA-256",encode(token)));
 
+// 남용 제한. 같은 접속 주소에서 짧은 시간에 반복되는 요청을 막는다.
+// 접속 주소 원문은 저장하지 않고 해시만 두며, 제한 시간이 지나면 지운다.
+// 값은 실사용을 보고 조정할 수 있게 한곳에 모아 둔다.
+const LIMITS={signup:{max:10,minutes:60},login:{max:20,minutes:15},forgot:{max:5,minutes:60}};
+export type LimitName=keyof typeof LIMITS;
+// Cloudflare 가 넣어주는 접속 주소. 클라이언트가 보낸 헤더는 믿지 않는다.
+export const clientKey=(req:Request)=>req.headers.get("cf-connecting-ip")??"";
+
+export async function limit(name:LimitName,client:string,now=Date.now()){
+ if(!client)return; // 주소를 알 수 없으면 계정 단위 보호(잠금·재발송 제한)에 맡긴다
+ const {max,minutes}=LIMITS[name];
+ const key=name+":"+await hashToken(client);
+ const row=await db().prepare("SELECT count,reset_at FROM rate_limits WHERE id=?").bind(key).first<{count:number;reset_at:string}>();
+ if(row&&Date.parse(row.reset_at)>now){
+  ensure(Number(row.count)<max,"요청이 너무 잦아요. 잠시 후 다시 시도해주세요.",429);
+  await db().prepare("UPDATE rate_limits SET count=count+1 WHERE id=?").bind(key).run();
+  return;
+ }
+ // 새 구간을 열 때 지난 기록을 함께 지운다. 오래된 접속 주소 해시를 남겨두지 않는다.
+ await db().prepare("DELETE FROM rate_limits WHERE reset_at<=?").bind(iso(now)).run();
+ await db().prepare("INSERT INTO rate_limits(id,count,reset_at) VALUES(?,1,?) ON CONFLICT(id) DO UPDATE SET count=1,reset_at=excluded.reset_at")
+  .bind(key,iso(now+minutes*60000)).run();
+}
+
 export const normalizeEmail=(v:unknown)=>String(v??"").trim().toLowerCase();
 export function checkEmail(v:unknown){
  const email=normalizeEmail(v);

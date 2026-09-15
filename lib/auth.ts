@@ -38,13 +38,13 @@ export async function verifyPassword(password:string,stored:string){
 
 type Credentials={email?:unknown;password?:unknown;name?:unknown;agree?:unknown;adult?:unknown};
 type AccountRow={id:string;name:string;password:string;failures:number;locked_until:string|null};
-type SessionRow={id:string;name:string;expires:string};
+type SessionRow={id:string;name:string;expires:string;verified_at:string|null};
 const hashToken=async(token:string)=>toHex(await crypto.subtle.digest("SHA-256",encode(token)));
 
 // 남용 제한. 같은 접속 주소에서 짧은 시간에 반복되는 요청을 막는다.
 // 접속 주소 원문은 저장하지 않고 해시만 두며, 제한 시간이 지나면 지운다.
 // 값은 실사용을 보고 조정할 수 있게 한곳에 모아 둔다.
-const LIMITS={signup:{max:10,minutes:60},login:{max:20,minutes:15},forgot:{max:5,minutes:60}};
+const LIMITS={signup:{max:10,minutes:60},login:{max:20,minutes:15},forgot:{max:5,minutes:60},verify:{max:5,minutes:60}};
 export type LimitName=keyof typeof LIMITS;
 // Cloudflare 가 넣어주는 접속 주소. 클라이언트가 보낸 헤더는 믿지 않는다.
 export const clientKey=(req:Request)=>req.headers.get("cf-connecting-ip")??"";
@@ -101,7 +101,7 @@ async function startSession(accountId:string,now=Date.now()){
  return token;
 }
 
-export async function signUp(input:Credentials,now=Date.now()){
+export async function signUp(input:Credentials,origin="",now=Date.now()){
  const email=checkEmail(input.email),name=checkName(input.name),password=checkPassword(input.password);
  ensure(input.agree===true,"이용약관과 개인정보 수집·이용에 동의해주세요.");
  ensure(input.adult===true,"만 14세 이상만 가입할 수 있어요.");
@@ -115,7 +115,14 @@ export async function signUp(input:Credentials,now=Date.now()){
   if(String(e).includes("UNIQUE"))throw new AppError("이미 가입된 이메일이에요. 로그인해주세요.",409);
   throw e;
  }
- return {user:{userId:account.id,fullName:account.name},token:await startSession(account.id,now)};
+ // 메일 발송이 준비되어 있을 때만 확인 메일을 보낸다. 보내지 못해도 가입은 되돌리지 않고,
+ // 보냈는지 여부를 그대로 돌려줘 화면이 사실과 다르게 안내하지 않도록 한다.
+ let verificationSent=false;
+ if(origin&&mailReady()){
+  try{await sendVerification(account.id,account.email,account.name,origin,now);verificationSent=true}
+  catch(e){console.error("TeamKick verify mail",e instanceof AppError?e.message:e)}
+ }
+ return {user:{userId:account.id,fullName:account.name},token:await startSession(account.id,now),verificationSent};
 }
 
 export async function signIn(input:Credentials,now=Date.now()){
@@ -145,11 +152,11 @@ export async function currentUser(req:Request,now=Date.now()){
  const token=cookieValue(req.headers.get("cookie"),COOKIE);
  if(!token)return null;
  const row=await db().prepare(
-  "SELECT a.id AS id, a.name AS name, s.expires AS expires FROM sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=?"
+  "SELECT a.id AS id, a.name AS name, a.verified_at AS verified_at, s.expires AS expires FROM sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=?"
  ).bind(await hashToken(token)).first<SessionRow>();
  if(!row)return null;
  if(Date.parse(row.expires)<=now){await db().prepare("DELETE FROM sessions WHERE id=?").bind(await hashToken(token)).run();return null}
- return {userId:row.id,fullName:row.name};
+ return {userId:row.id,fullName:row.name,verified:!!row.verified_at};
 }
 
 export async function accountExists(accountId:string){
@@ -159,7 +166,46 @@ export async function accountExists(accountId:string){
 // 탈퇴. 로그인 수단과 세션을 지운다. 팀 활동 기록은 model 의 closeAccount 가 먼저 정리한다.
 export async function closeAccount(accountId:string){
  await db().prepare("DELETE FROM sessions WHERE account_id=?").bind(accountId).run();
+ await db().prepare("DELETE FROM email_verifications WHERE account_id=?").bind(accountId).run();
  await db().prepare("DELETE FROM accounts WHERE id=?").bind(accountId).run();
+}
+
+// 이메일 실재 확인. 토큰 원문은 메일로만 나가고 서버에는 해시만 남긴다.
+const VERIFY_HOURS=24,VERIFY_COOLDOWN_MINUTES=3;
+type VerifyRow={id:string;account_id:string;expires:string;used:number;at:string};
+
+async function sendVerification(accountId:string,email:string,name:string,origin:string,now:number){
+ const token=toBase64(crypto.getRandomValues(new Uint8Array(32))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+ await db().prepare("INSERT INTO email_verifications(id,account_id,expires,used,at) VALUES(?,?,?,0,?)")
+  .bind(await hashToken(token),accountId,iso(now+VERIFY_HOURS*3600000),iso(now)).run();
+ const link=origin+"/?verify="+encodeURIComponent(token);
+ await sendMail(email,"팀킥 이메일 확인",
+  name+"님, 아래 주소를 눌러 이메일을 확인해주세요.\n\n"+link+
+  "\n\n이 주소는 "+VERIFY_HOURS+"시간 동안만, 한 번만 쓸 수 있어요.\n본인이 가입한 것이 아니면 이 메일은 무시해주세요.");
+}
+
+// 확인 메일 다시 보내기. 이미 확인했거나 없는 계정이면 조용히 끝낸다.
+export async function resendVerification(accountId:string,origin:string,now=Date.now()){
+ ensure(mailReady(),"메일 발송이 아직 설정되지 않았어요. 관리자에게 문의해주세요.",503);
+ const account=await db().prepare("SELECT id,email,name,verified_at FROM accounts WHERE id=?")
+  .bind(accountId).first<{id:string;email:string;name:string;verified_at:string|null}>();
+ if(!account||account.verified_at)return false;
+ const recent=await db().prepare("SELECT at FROM email_verifications WHERE account_id=? AND used=0 AND expires>? ORDER BY at DESC")
+  .bind(account.id,iso(now)).first<{at:string}>();
+ if(recent&&now-Date.parse(recent.at)<VERIFY_COOLDOWN_MINUTES*60000)return false; // 연달아 보내지 않는다
+ await sendVerification(account.id,account.email,account.name,origin,now);
+ return true;
+}
+
+export async function verifyEmail(input:{token?:unknown},now=Date.now()){
+ const token=String(input.token??"");
+ const expired="확인 링크가 만료되었거나 이미 사용되었어요. 다시 받아주세요.";
+ ensure(token,expired,400);
+ const row=await db().prepare("SELECT id,account_id,expires,used,at FROM email_verifications WHERE id=?")
+  .bind(await hashToken(token)).first<VerifyRow>();
+ ensure(row&&!row.used&&Date.parse(row.expires)>now,expired,400);
+ await db().prepare("UPDATE accounts SET verified_at=? WHERE id=?").bind(iso(now),row!.account_id).run();
+ await db().prepare("UPDATE email_verifications SET used=1 WHERE id=?").bind(row!.id).run();
 }
 
 // 비밀번호 재설정. 토큰 원문은 메일로만 나가고 서버에는 해시만 남긴다.

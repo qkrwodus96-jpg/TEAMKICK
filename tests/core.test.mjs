@@ -279,7 +279,7 @@ test('자체 회원가입은 비밀번호를 해시로만 저장하고 세션으
   assert.equal(row.password.includes('teamkick-1234'),false,'비밀번호 원문이 저장되면 안 된다');
   const stored=db.prepare('SELECT id FROM sessions').get();
   assert.notEqual(stored.id,token,'세션 토큰 원문이 저장되면 안 된다');
-  assert.deepEqual(await auth.currentUser(cookieRequest(token)),{userId:user.userId,fullName:'박재연'});
+  assert.deepEqual(await auth.currentUser(cookieRequest(token)),{userId:user.userId,fullName:'박재연',verified:false},'확인 메일을 거치지 않은 계정은 미확인 상태다');
   assert.equal(await auth.currentUser(cookieRequest('')),null);
   assert.equal(await auth.currentUser(cookieRequest('not-a-real-token')),null);
   db.close();
@@ -557,4 +557,45 @@ test('제한 기록은 시간이 지나면 지운다',async()=>{
   await auth.limit('login','203.0.113.10',NOW+16*60000); // 새 구간을 열 때 지난 기록을 함께 지운다
   const rows=db.prepare('SELECT id FROM rate_limits').all();
   assert.equal(rows.length,1,'만료된 기록은 남기지 않는다');
+});
+
+test('가입하면 확인 메일을 보내고, 확인 전에는 팀을 만들거나 가입 신청할 수 없다',async()=>{
+  const db=localDatabase();globalThis.__teamkickTestMail=[];
+  const {user}=await auth.signUp({email:'new@t.com',name:'새사람',password:'teamkick-1234',agree:true,adult:true},'https://teamkick.test');
+  assert.equal(globalThis.__teamkickTestMail.length,1,'가입하면 확인 메일이 나간다');
+  const link=globalThis.__teamkickTestMail[0].text.match(/https:\/\/teamkick\.test\/\?verify=([^\s]+)/);
+  assert.ok(link,'메일에 확인 주소가 들어 있다');
+  assert.equal(db.prepare('SELECT verified_at FROM accounts WHERE id=?').get(user.userId).verified_at,null,'아직 확인 전이다');
+
+  const unverified={id:user.userId,name:'새사람',verified:false};
+  assert.throws(()=>applyCommand(blank(),unverified,{type:'createTeam',name:'새 팀',region:'서울',description:'설명'}),/이메일 확인/);
+  const f=fixture();
+  assert.throws(()=>applyCommand(f.s,unverified,{type:'joinTeam',teamId:f.a,name:'새사람'}),/이메일 확인/);
+
+  await auth.verifyEmail({token:decodeURIComponent(link[1])});
+  assert.ok(db.prepare('SELECT verified_at FROM accounts WHERE id=?').get(user.userId).verified_at,'확인 시각이 남는다');
+  applyCommand(f.s,{id:user.userId,name:'새사람',verified:true},{type:'joinTeam',teamId:f.a,name:'새사람'});
+  await assert.rejects(()=>auth.verifyEmail({token:decodeURIComponent(link[1])}),/만료되었거나 이미 사용/,'한 번만 쓸 수 있다');
+
+  // 메일 발송이 준비되지 않았으면 가입은 되되 확인 메일은 나가지 않는다.
+  globalThis.__teamkickTestMailReady=false;
+  await auth.signUp({email:'nomail@t.com',name:'메일없음',password:'teamkick-1234',agree:true,adult:true},'https://teamkick.test');
+  globalThis.__teamkickTestMailReady=undefined;
+  assert.equal(globalThis.__teamkickTestMail.length,1,'설정이 없으면 보내지 않는다');
+});
+
+test('확인 메일 재발송은 간격을 두고, 이미 확인한 계정에는 보내지 않는다',async()=>{
+  localDatabase();globalThis.__teamkickTestMail=[];
+  const origin='https://teamkick.test';
+  const {user}=await auth.signUp({email:'again@t.com',name:'다시',password:'teamkick-1234',agree:true,adult:true},origin);
+  assert.equal(await auth.resendVerification(user.userId,origin),false,'연달아 보내지 않는다');
+  assert.equal(globalThis.__teamkickTestMail.length,1);
+  assert.equal(await auth.resendVerification(user.userId,origin,Date.now()+4*60000),true,'간격이 지나면 다시 보낸다');
+  assert.equal(globalThis.__teamkickTestMail.length,2);
+  const first=globalThis.__teamkickTestMail[0].text.match(/verify=([^\s]+)/)[1];
+  await assert.rejects(()=>auth.verifyEmail({token:decodeURIComponent(first)},Date.now()+25*3600e3),/만료되었거나 이미 사용/,'24시간이 지나면 못 쓴다');
+  const second=globalThis.__teamkickTestMail[1].text.match(/verify=([^\s]+)/)[1];
+  await auth.verifyEmail({token:decodeURIComponent(second)});
+  assert.equal(await auth.resendVerification(user.userId,origin,Date.now()+60*60000),false,'이미 확인한 계정에는 보내지 않는다');
+  assert.equal(globalThis.__teamkickTestMail.length,2);
 });

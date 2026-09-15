@@ -7,7 +7,7 @@ import {applyCommand,visibleState,AppError,iso,id} from "@/lib/model";
 import {OWNER_SETUP_HASH} from "@/lib/owner-config";
 export const dynamic="force-dynamic";
 const json=(x:any,status=200,cookie?:string)=>Response.json(x,{status,headers:cookie?{"Cache-Control":"no-store","Set-Cookie":cookie}:{"Cache-Control":"no-store"}});
-export async function GET(req:Request){try{const user=await currentUser(req);if(!user)return json({user:null,mailReady:mailReady()});const {state}=await load();const teamId=new URL(req.url).searchParams.get("team")??undefined;const token=new URL(req.url).searchParams.get("invite");const invite=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());return json({storageReady:storageReady(),placeSearchReady:placeSearchReady(),mailReady:mailReady(),invitedTeam:invite?.teamId??null,user:{id:user.userId,name:state.users.find(x=>x.id===user.userId)?.name??user.fullName??"팀원"},...visibleState(state,user.userId,teamId)});}catch(e){console.error("TeamKick load",e);return json({error:e instanceof AppError?e.message:"데이터를 불러오지 못했어요. 다시 시도해주세요."},e instanceof AppError?e.status:503)}}
+export async function GET(req:Request){try{const user=await currentUser(req);if(!user)return json({user:null,mailReady:mailReady()});const {state}=await load();const teamId=new URL(req.url).searchParams.get("team")??undefined;const token=new URL(req.url).searchParams.get("invite");const invite=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());return json({storageReady:storageReady(),placeSearchReady:placeSearchReady(),mailReady:mailReady(),needsVerification:mailReady()&&!user.verified,invitedTeam:invite?.teamId??null,user:{id:user.userId,name:state.users.find(x=>x.id===user.userId)?.name??user.fullName??"팀원"},...visibleState(state,user.userId,teamId)});}catch(e){console.error("TeamKick load",e);return json({error:e instanceof AppError?e.message:"데이터를 불러오지 못했어요. 다시 시도해주세요."},e instanceof AppError?e.status:503)}}
 export async function POST(req:Request){
  try{
   const user=await currentUser(req);if(!user)throw new AppError("먼저 로그인해주세요.",401);
@@ -20,7 +20,7 @@ export async function POST(req:Request){
    if(state.audit.filter(x=>x.actor===user.userId&&Date.parse(x.at)>Date.now()-60000).length>=40)throw new AppError("잠시 후 다시 시도해주세요.",429);
    const ownerId=state.settings.find(x=>x.id==="owner")?.userId;
    const ownerReset=c.type==="setupOwner"&&!!ownerId&&ownerId!==user.userId&&!(await accountExists(ownerId));
-   const after=structuredClone(state);const output=applyCommand(after,{id:user.userId,name:user.fullName??state.users.find(x=>x.id===user.userId)?.name??"팀원",ownerSetup:setup,ownerReset},c);
+   const after=structuredClone(state);const output=applyCommand(after,{id:user.userId,name:user.fullName??state.users.find(x=>x.id===user.userId)?.name??"팀원",ownerSetup:setup,ownerReset,verified:!mailReady()||!!user.verified},c);
    after.receipts.push({id:user.userId+":"+c.mutationId,output,at:iso()});after.receipts=after.receipts.filter(x=>Date.parse(x.at)>Date.now()-7*864e5);
    try{await commit(state,after,version);if(c.type==="closeAccount"){await closeAccount(user.userId);return json({ok:true,closed:true},200,clearedCookie())}return json({ok:true,output,...visibleState(after,user.userId,c.teamId)});}catch(e){if(String(e).includes("revision_matches")||String(e).includes("CHECK constraint")){if(attempt<3)continue;throw new AppError("다른 변경이 먼저 저장되었어요. 새로고침 후 다시 시도해주세요.",409)}throw e}
   }

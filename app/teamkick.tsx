@@ -33,8 +33,9 @@ export function Calendar({month,setMonth,selected,onSelect,games,large=false}:an
 }
 export function Fixture({g,v,onClick}:any){const z=v.sides?.find((x:Row)=>x.gameId===g.id);return <div role="button" tabIndex={0} onKeyDown={e=>e.key==="Enter"&&onClick()} className="fixture-row" onClick={onClick}><div className="fixture-date"><b>{new Date(new Date(g.start).getTime()+9*3600e3).getUTCDate()}</b><span>{days[new Date(new Date(g.start).getTime()+9*3600e3).getUTCDay()]}요일</span></div><div className="fixture-info"><strong>{v.teams.find((t:Row)=>t.id===v.teamId)?.name} <span className="muted" style={{fontWeight:400}}>vs</span> {opponent(v,g)||"상대팀 미정"}</strong><p>{time(g.start)} · {g.venue}</p></div>{g.result?.status==="confirmed"?<span className="mini-result">{g.home===v.teamId?g.result.a:g.result.b} : {g.home===v.teamId?g.result.b:g.result.a}</span>:<GameBadge g={g}/>}<GuestBadge z={z}/><ChevronRight/></div>}
 const nav=[{id:"home",label:"홈",icon:Home},{id:"schedule",label:"일정",icon:CalendarDays},{id:"matching",label:"매칭",icon:Handshake},{id:"records",label:"기록",icon:ChartNoAxesCombined},{id:"team",label:"우리팀",icon:Users}];
-export default function TeamKick({resetToken=""}:{resetToken?:string}){
+export default function TeamKick({resetToken="",verifyToken=""}:{resetToken?:string;verifyToken?:string}){
  const [samples,setSamples]=useState(demoState),[demo,setDemo]=useState(true),[demoActor,setDemoActor]=useState("demo-a"),[demoTeam,setDemoTeam]=useState("team-a");
+ const [verifyNote,setVerifyNote]=useState("");
  const [real,setReal]=useState<any>(null),[view,setView]=useState("home"),[modal,setModal]=useState<any>(null),[busy,setBusy]=useState(false),[error,setError]=useState(""),[loading,setLoading]=useState(true);
  const today=localDay(new Date().toISOString()),[month,setMonth]=useState(today.slice(0,7)),[selected,setSelected]=useState(today),[scheduleMode,setScheduleMode]=useState("calendar"),[dateFilter,setDateFilter]=useState(false);
  const toolState=useRef<any>(null);
@@ -43,6 +44,20 @@ export default function TeamKick({resetToken=""}:{resetToken?:string}){
  const team=v.teams?.find((t:Row)=>t.id===v.teamId),manager=["captain","manager"].includes(v.role),captain=v.role==="captain";
  async function refresh(teamId?:string){const params=new URLSearchParams();if(teamId)params.set("team",teamId);const invite=new URLSearchParams(window.location.search).get("invite");if(invite)params.set("invite",invite);const r=await fetch("/api/app?"+params,{cache:"no-store"});const data:any=await r.json();if(!r.ok)throw Error(data.error);setReal(data);return data}
  useEffect(()=>{refresh().then(r=>{if(r.teamId||r.invitedTeam)setDemo(false);if(r.invitedTeam&&!r.mine?.some((m:Row)=>m.teamId===r.invitedTeam&&["active","pending"].includes(m.status)))setModal({kind:"joinTeam",team:r.teams.find((t:Row)=>t.id===r.invitedTeam)})}).catch(e=>setError(e.message)).finally(()=>setLoading(false));if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{});},[]);
+ // 메일의 확인 링크로 들어온 경우. 링크는 한 번만 쓰이므로 주소에서 바로 지운다.
+ useEffect(()=>{if(!verifyToken)return;
+  fetch("/api/auth",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"verify",token:verifyToken})})
+   .then(async r=>{const d=await r.json().catch(()=>({})) as {error?:string};if(!r.ok)throw Error(d.error||"확인하지 못했어요.");setVerifyNote("이메일을 확인했어요. 이제 팀을 만들거나 가입을 신청할 수 있어요.");await refresh().catch(()=>{})})
+   .catch(e=>setVerifyNote(e instanceof Error?e.message:"확인하지 못했어요."))
+   .finally(()=>window.history.replaceState(null,"","/"));
+ },[verifyToken]);
+ async function resendVerify(){
+  try{
+   const r=await fetch("/api/auth",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"resendVerify"})});
+   const d=await r.json().catch(()=>({})) as {error?:string;sent?:boolean};if(!r.ok)throw Error(d.error||"보내지 못했어요.");
+   toast[d.sent?"success":"info"](d.sent?"확인 메일을 다시 보냈어요.":"조금 전에 보낸 메일을 먼저 확인해주세요.");
+  }catch(e){toast.error(e instanceof Error?e.message:"보내지 못했어요.")}
+ }
  async function action(c:any){if(busy)return;setBusy(true);setError("");try{
    let output:any;if(demo){const copy=structuredClone(samples);output=applyCommand(copy,{id:demoActor,name:"샘플 주장"},c);setSamples(copy);toast.success("샘플에 반영했어요.");}
    else{const r=await fetch("/api/app",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...c,mutationId:crypto.randomUUID()})});const data:any=await r.json();if(!r.ok)throw Error(data.error);output=data.output;await refresh(c.teamId||v.teamId);toast.success("저장했어요.");}
@@ -63,6 +78,8 @@ export default function TeamKick({resetToken=""}:{resetToken?:string}){
  const goDate=(day:string)=>{setSelected(day);setMonth(day.slice(0,7));setDateFilter(true);setView("schedule")};
  return <SidebarProvider style={{"--sidebar-width":"232px"} as React.CSSProperties}><Sidebar collapsible="none" className="nav-side hidden md:flex sticky top-0 h-svh"><div className="brand"><span className="brand-mark">K</span>TEAMKICK</div><div className="team-select"><div className="nav-label" style={{padding:"0 0 10px"}}>MY TEAM</div>{teamPicker}</div><SidebarContent><div><div className="nav-label">TEAM SPACE</div><SidebarMenu>{nav.map(n=><SidebarMenuItem key={n.id}><SidebarMenuButton className="nav-item" isActive={view===n.id} onClick={()=>setView(n.id)}><n.icon/><span>{n.label}</span>{n.id==="matching"&&v.requests?.some((r:Row)=>r.status==="pending")&&<span className="badge badge-green">N</span>}</SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></div></SidebarContent><div className="side-note"><ShieldCheck size={19} style={{color:"#45955e",marginBottom:8}}/><strong>함께 뛰는 우리 팀</strong><p className="muted">경기 일정부터 기록까지<br/>한 곳에서 이어가세요.</p></div><div className="nav-bottom">{v.isOwner&&<button className="btn btn-ghost" onClick={()=>setView("admin")}><ShieldCheck/>서비스 관리</button>}<button className="btn btn-ghost" onClick={()=>setModal({kind:"settings"})}><Settings/>설정</button></div></Sidebar><div className="workspace"><header className="topbar"><div className="breadcrumb"><Home size={15}/><ChevronRight size={13}/><span>{team?.name??"팀 공간"}</span><ChevronRight size={13}/><strong>{nav.find(n=>n.id===view)?.label??"서비스 관리"}</strong></div><div className="brand mobile-brand"><span className="brand-mark">K</span>팀킥</div><div className="top-actions"><span className="small muted desktop-only">{koreanDate(new Date().toISOString())}</span><button className="icon-button" aria-label="알림" onClick={()=>{setModal({kind:"notifications"});if(v.notifications?.length)run({type:"readNotifications"})}}><Bell size={20}/>{v.notifications?.some((n:Row)=>!n.read)&&<i className="notification-dot"/>}</button><button className="row" onClick={()=>setModal({kind:"settings"})}><span className="avatar">{demo?"샘플":v.user?.name?.slice(-2)||"MY"}</span><span className="small top-user-name">{demo?"샘플 주장":v.user?.name||"내 계정"}</span></button></div></header><main className="page-content">
  {error&&<div className="error-bar">{error} <button onClick={()=>refresh(v.teamId).then(()=>setError("")).catch(e=>setError(e.message))}>다시 시도</button></div>}
+ {verifyNote&&<div className="data-note" role="status" style={{marginBottom:14}}>{verifyNote}</div>}
+ {!demo&&v.user&&real?.needsVerification&&<div className="error-bar">이메일 확인이 아직 안 됐어요. 확인해야 팀을 만들거나 가입을 신청할 수 있어요. <button onClick={resendVerify}>확인 메일 다시 보내기</button></div>}
  {demo&&<div className="demo-strip"><span>샘플 팀 둘러보기 · 변경 사항은 실제 팀에 저장되지 않아요.</span><button onClick={toActual}>우리 팀 시작하기 <span aria-hidden>↗</span></button></div>}
  <div className="md:hidden" style={{marginBottom:20}}>{teamPicker}</div>
  {!demo&&!v.user?<AuthPanel onDemo={()=>setDemo(true)} mailReady={real?.mailReady!==false} resetToken={resetToken}/>:

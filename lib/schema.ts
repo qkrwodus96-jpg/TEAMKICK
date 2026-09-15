@@ -22,11 +22,14 @@ export const STATEMENTS=[
  // SQLite 의 ADD COLUMN 에는 IF NOT EXISTS 가 없다. 이미 있으면 나는 오류만 넘긴다.
  `ALTER TABLE accounts ADD COLUMN agreed_at text`,
  `ALTER TABLE accounts ADD COLUMN verified_at text`,
+ `ALTER TABLE accounts ADD COLUMN provider text DEFAULT 'local' NOT NULL`,
+ `ALTER TABLE accounts ADD COLUMN kakao_id text`,
+ `CREATE INDEX IF NOT EXISTS idx_accounts_kakao ON accounts (kakao_id)`,
 ];
 
 // 배포된 코드가 어느 시점 것인지 화면으로 확인하기 위한 표시.
 // 스키마나 진단에 영향을 주는 변경을 할 때 함께 올린다.
-export const BUILD="2026-09-15-limits";
+export const BUILD="2026-09-15-kakao";
 
 export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications"];
 

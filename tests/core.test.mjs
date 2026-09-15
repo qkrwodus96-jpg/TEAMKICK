@@ -16,10 +16,11 @@ compile('lib/model.ts','model.mjs');
 compile('lib/store.ts','store.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/owner-config.ts','owner-config.mjs');
 compile('lib/legal.ts','legal.mjs');
+compile('lib/kakao.ts','kakao.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/schema.ts','schema.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/mail.ts','mail.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./legal"','"./legal.mjs"'));
 compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('import {sendMail,mailReady} from "./mail";','const sendMail=async(to,subject,text)=>{if(globalThis.__teamkickTestMailFail)throw new AppError("메일을 보내지 못했어요. 잠시 후 다시 시도해주세요.",503);(globalThis.__teamkickTestMail??=[]).push({to,subject,text})};const mailReady=()=>globalThis.__teamkickTestMailReady!==false;').replace('"./model"','"./model.mjs"'));
-compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
+compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
 const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,iso}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
@@ -27,6 +28,7 @@ const auth=await import(path.join(runtime,'auth.mjs'));
 const mail=await import(path.join(runtime,'mail.mjs'));
 const legal=await import(path.join(runtime,'legal.mjs'));
 const schema=await import(path.join(runtime,'schema.mjs'));
+const kakao=await import(path.join(runtime,'kakao.mjs'));
 const api=await import(path.join(runtime,'api.mjs'));
 const NOW=Date.now(),DAY=864e5;
 const owner={id:'owner',name:'운영자',ownerSetup:true},A={id:'a',name:'A 주장'},B={id:'b',name:'B 주장'},C={id:'c',name:'C 주장'},member={id:'player',name:'선수'};
@@ -711,4 +713,70 @@ test('확인 메일 발송이 실패하면 토큰을 남기지 않아 곧바로 
   assert.equal(db.prepare('SELECT count(*) AS n FROM email_verifications').get().n,0,'실패한 토큰은 남지 않는다');
   assert.equal(await auth.resendVerification(user.userId,origin),true,'간격 제한에 걸리지 않고 바로 다시 보낸다');
   db.close();
+});
+
+test('카카오 로그인은 메일 없이 계정을 만들고 같은 사람을 다시 만들지 않는다',async()=>{
+  const db=localDatabase();globalThis.__teamkickTestMail=[];
+  const first=await auth.signInWithKakao('kakao-9001','재연');
+  const row=db.prepare('SELECT id,email,password,provider,verified_at,kakao_id,name FROM accounts').get();
+  assert.equal(row.provider,'kakao');
+  assert.equal(row.kakao_id,'kakao-9001');
+  assert.equal(row.name,'재연');
+  assert.equal(row.password,'','비밀번호를 두지 않는다');
+  assert.match(row.email,/@teamkick\.invalid$/,'배달되지 않는 자리표시 주소를 쓴다');
+  assert.ok(row.verified_at,'카카오가 본인을 확인했으므로 확인 완료로 둔다');
+
+  const again=await auth.signInWithKakao('kakao-9001','재연');
+  assert.equal(db.prepare('SELECT count(*) AS n FROM accounts').get().n,1,'같은 사람을 다시 만들지 않는다');
+  // 조회로도 막고 email 의 UNIQUE 제약으로도 막는다. 한쪽을 지워도 결과는 같다(의도한 이중 방어).
+  assert.equal(db.prepare('SELECT count(*) AS n FROM accounts WHERE kakao_id=?').get('kakao-9001').n,1);
+  assert.equal(again.user.userId,first.user.userId);
+  assert.notEqual(again.token,first.token,'로그인할 때마다 새 세션을 만든다');
+
+  // 비밀번호로는 들어올 수 없다.
+  await assert.rejects(()=>auth.signIn({email:row.email,password:''}),/이메일 또는 비밀번호/);
+  await assert.rejects(()=>auth.signIn({email:row.email,password:'teamkick-1234'}),/이메일 또는 비밀번호/);
+
+  // 실제 주소가 아니므로 어떤 메일도 보내지 않는다.
+  await auth.requestPasswordReset({email:row.email},'https://teamkick.test');
+  assert.equal(await auth.resendVerification(first.user.userId,'https://teamkick.test'),false);
+  assert.equal(globalThis.__teamkickTestMail.length,0,'자리표시 주소로는 메일을 보내지 않는다');
+
+  // 확인된 상태이므로 팀 활동이 막히지 않는다.
+  const f=fixture();
+  applyCommand(f.s,{id:first.user.userId,name:'재연',verified:true},{type:'joinTeam',teamId:f.a,name:'재연'});
+  assert.equal(f.s.members.find(m=>m.userId===first.user.userId)?.status,'pending');
+  db.close();
+});
+
+test('카카오 인증 주소는 키와 콜백 주소와 상태값을 담는다',()=>{
+  const env=globalThis.__teamkickTestEnv,keep={...env};
+  try{
+    for(const k of Object.keys(env))delete env[k];
+    assert.equal(kakao.kakaoReady(),false);
+    assert.throws(()=>kakao.authorizeUrl('https://teamkick.test','s1'),/설정되지 않았어요/);
+    env.KAKAO_REST_KEY='kakao-test-key';
+    assert.equal(kakao.kakaoReady(),true);
+    assert.equal(kakao.redirectUri('https://teamkick.test'),'https://teamkick.test/api/kakao');
+    const url=new URL(kakao.authorizeUrl('https://teamkick.test','s1'));
+    assert.equal(url.origin+url.pathname,'https://kauth.kakao.com/oauth/authorize');
+    assert.equal(url.searchParams.get('client_id'),'kakao-test-key');
+    assert.equal(url.searchParams.get('redirect_uri'),'https://teamkick.test/api/kakao');
+    assert.equal(url.searchParams.get('state'),'s1','우리가 시작한 요청인지 확인할 값을 함께 보낸다');
+    assert.equal(url.searchParams.get('response_type'),'code');
+  }finally{for(const k of Object.keys(env))delete env[k];Object.assign(env,keep)}
+});
+
+test('카카오 프로필에서 아이디와 닉네임을 읽고 없으면 기본 이름을 쓴다',async()=>{
+  const realFetch=globalThis.fetch;
+  try{
+    globalThis.fetch=async()=>({ok:true,status:200,json:async()=>({id:9002,kakao_account:{profile:{nickname:'박재연'}}})});
+    assert.deepEqual(await kakao.profile('t'),{id:'9002',nickname:'박재연'});
+    globalThis.fetch=async()=>({ok:true,status:200,json:async()=>({id:9003})});
+    assert.deepEqual(await kakao.profile('t'),{id:'9003',nickname:'팀원'},'닉네임 동의를 받지 않아도 막히지 않는다');
+    globalThis.fetch=async()=>({ok:true,status:200,json:async()=>({})});
+    await assert.rejects(()=>kakao.profile('t'),/가져오지 못했어요/,'아이디가 없으면 진행하지 않는다');
+    globalThis.fetch=async()=>({ok:false,status:401});
+    await assert.rejects(()=>kakao.profile('t'),/가져오지 못했어요/);
+  }finally{globalThis.fetch=realFetch}
 });

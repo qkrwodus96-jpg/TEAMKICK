@@ -82,7 +82,7 @@ export default function TeamKick({resetToken="",verifyToken=""}:{resetToken?:str
  {!demo&&v.user&&real?.needsVerification&&<div className="error-bar">이메일 확인이 아직 안 됐어요. 확인해야 팀을 만들거나 가입을 신청할 수 있어요. <button onClick={resendVerify}>확인 메일 다시 보내기</button></div>}
  {demo&&<div className="demo-strip"><span>샘플 팀 둘러보기 · 변경 사항은 실제 팀에 저장되지 않아요.</span><button onClick={toActual}>우리 팀 시작하기 <span aria-hidden>↗</span></button></div>}
  <div className="md:hidden" style={{marginBottom:20}}>{teamPicker}</div>
- {!demo&&!v.user?<AuthPanel onDemo={()=>setDemo(true)} mailReady={real?.mailReady!==false} resetToken={resetToken}/>:
+ {!demo&&!v.user?<AuthPanel onDemo={()=>setDemo(true)} mailReady={real?.mailReady!==false} kakaoReady={real?.kakaoReady===true} resetToken={resetToken}/>:
  !team&&view!=="admin"&&view!=="matching"?<Management {...common} onboarding/>:
  <>
  <div className="page-title"><div><h1>{view==="home"?"우리 팀의 매치데이":view==="schedule"?"경기 일정":view==="matching"?"함께 뛸 팀을 찾아요":view==="records"?"우리 팀의 기록":view==="admin"?"서비스 관리":"우리팀"}</h1><p>{view==="home"?"함께 뛰는 순간, 하나씩 쌓이는 기록.":view==="schedule"?"다가오는 경기를 확인하고 참여 여부를 알려주세요.":view==="matching"?"우리 팀에 맞는 상대와 다음 경기를 준비하세요.":view==="records"?"함께 만든 결과를 기간별로 확인하세요.":view==="admin"?"팀 등록 요청과 서비스 이용 상태를 관리하세요.":"팀원들과 함께 다음 경기를 준비하세요."}</p></div>{manager&&["home","schedule","matching"].includes(view)&&<button disabled={busy||team?.status!=="active"} className="btn btn-green" onClick={()=>setModal({kind:"createGame",listing:view==="matching"&&captain})}><Plus/>경기 만들기</button>}</div>

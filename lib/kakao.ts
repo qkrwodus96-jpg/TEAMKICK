@@ -7,8 +7,13 @@ import {AppError,ensure} from "./model";
 const AUTHORIZE="https://kauth.kakao.com/oauth/authorize";
 const TOKEN="https://kauth.kakao.com/oauth/token";
 const PROFILE="https://kapi.kakao.com/v2/user/me";
-const key=()=>(env as unknown as {KAKAO_REST_KEY?:string}).KAKAO_REST_KEY??"";
+const setting=(name:string)=>(env as unknown as Record<string,string|undefined>)[name]??"";
+const key=()=>setting("KAKAO_REST_KEY");
+// 카카오는 앱을 만들면 Client Secret 이 기본으로 켜져 있다. 켜져 있으면 토큰 요청에
+// 이 값을 함께 보내야 하고, 빠지면 401(KOE010)이 난다.
+const secret=()=>setting("KAKAO_CLIENT_SECRET");
 export const kakaoReady=()=>!!key();
+export const kakaoSecretSet=()=>!!secret();
 
 // 콜백 주소는 카카오 개발자 콘솔에 그대로 등록해야 한다.
 export const redirectUri=(origin:string)=>origin+"/api/kakao";
@@ -27,12 +32,15 @@ export async function exchange(code:string,origin:string){
  const res=await fetch(TOKEN,{
   method:"POST",
   headers:{"Content-Type":"application/x-www-form-urlencoded;charset=utf-8"},
-  body:new URLSearchParams({grant_type:"authorization_code",client_id:key(),redirect_uri:redirectUri(origin),code}).toString(),
+  body:new URLSearchParams({grant_type:"authorization_code",client_id:key(),redirect_uri:redirectUri(origin),code,
+   ...(secret()?{client_secret:secret()}:{})}).toString(),
  });
  if(!res.ok){
   // 본문에 코드가 들어갈 수 있어 상태 코드만 남긴다.
-  console.error("TeamKick kakao token",res.status);
-  throw new AppError("카카오 로그인에 실패했어요. 다시 시도해주세요.",503);
+  console.error("TeamKick kakao token",res.status,secret()?"with-secret":"no-secret");
+  throw new AppError(res.status===401&&!secret()
+   ?"카카오 로그인 설정이 끝나지 않았어요. 관리자에게 문의해주세요. (client secret 없음)"
+   :"카카오 로그인에 실패했어요. 다시 시도해주세요.",503);
  }
  const body=await res.json() as TokenReply;
  ensure(body.access_token,"카카오 로그인에 실패했어요. 다시 시도해주세요.",503);

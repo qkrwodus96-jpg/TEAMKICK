@@ -780,3 +780,40 @@ test('카카오 프로필에서 아이디와 닉네임을 읽고 없으면 기�
     await assert.rejects(()=>kakao.profile('t'),/가져오지 못했어요/);
   }finally{globalThis.fetch=realFetch}
 });
+
+// 카카오는 앱 생성 시 Client Secret 이 기본으로 켜져 있다. 빠뜨리면 토큰 요청이 401 이 된다.
+test('카카오 토큰 요청은 설정된 client secret 을 함께 보낸다',async()=>{
+  const env=globalThis.__teamkickTestEnv,keep={...env};
+  const realFetch=globalThis.fetch;
+  try{
+    for(const k of Object.keys(env))delete env[k];
+    env.KAKAO_REST_KEY='kakao-test-key';
+    assert.equal(kakao.kakaoSecretSet(),false);
+    let seen;
+    globalThis.fetch=async(url,init)=>{seen={url,init};return {ok:true,status:200,json:async()=>({access_token:'t'})}};
+    await kakao.exchange('code-1','https://teamkick.test');
+    let body=new URLSearchParams(seen.init.body);
+    assert.equal(seen.url,'https://kauth.kakao.com/oauth/token');
+    assert.equal(body.get('grant_type'),'authorization_code');
+    assert.equal(body.get('client_id'),'kakao-test-key');
+    assert.equal(body.get('redirect_uri'),'https://teamkick.test/api/kakao');
+    assert.equal(body.get('code'),'code-1');
+    assert.equal(body.get('client_secret'),null,'설정이 없으면 보내지 않는다');
+
+    env.KAKAO_CLIENT_SECRET='kakao-test-secret';
+    assert.equal(kakao.kakaoSecretSet(),true);
+    await kakao.exchange('code-2','https://teamkick.test');
+    body=new URLSearchParams(seen.init.body);
+    assert.equal(body.get('client_secret'),'kakao-test-secret','설정이 있으면 반드시 함께 보낸다');
+
+    // 시크릿 없이 401 이면 원인을 짚어 안내한다.
+    delete env.KAKAO_CLIENT_SECRET;
+    globalThis.fetch=async()=>({ok:false,status:401});
+    await assert.rejects(()=>kakao.exchange('code-3','https://teamkick.test'),/client secret 없음/);
+    env.KAKAO_CLIENT_SECRET='kakao-test-secret';
+    await assert.rejects(()=>kakao.exchange('code-4','https://teamkick.test'),/다시 시도해주세요/);
+  }finally{
+    globalThis.fetch=realFetch;
+    for(const k of Object.keys(env))delete env[k];Object.assign(env,keep);
+  }
+});

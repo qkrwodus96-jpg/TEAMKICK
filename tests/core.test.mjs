@@ -20,6 +20,7 @@ compile('lib/kakao.ts','kakao.mjs',s=>s.replace('import {env} from "cloudflare:w
 compile('lib/schema.ts','schema.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/mail.ts','mail.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./legal"','"./legal.mjs"'));
 compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('import {sendMail,mailReady} from "./mail";','const sendMail=async(to,subject,text)=>{if(globalThis.__teamkickTestMailFail)throw new AppError("메일을 보내지 못했어요. 잠시 후 다시 시도해주세요.",503);(globalThis.__teamkickTestMail??=[]).push({to,subject,text})};const mailReady=()=>globalThis.__teamkickTestMailReady!==false;').replace('"./model"','"./model.mjs"'));
+compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {schemaStatus,BUILD} from "@/lib/schema";','const schemaStatus=async()=>globalThis.__teamkickTestSchema??{db:true,tables:{},error:""};const BUILD="test";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady,mailAccount,fromDomain} from "@/lib/mail";','const mailReady=()=>true;const mailAccount=async()=>"ok";const fromDomain=()=>"teamkick.co.kr";').replace('import {hashPassword,currentUser} from "@/lib/auth";','const hashPassword=async()=>"";const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";','const kakaoReady=()=>true;const kakaoSecretSet=()=>true;').replace('import {ownerCodeFromEnv} from "@/lib/owner-config";','const ownerCodeFromEnv=()=>true;').replace('"@/lib/store"','"./store.mjs"'));
 compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./schema"','"./schema.mjs"').replace('"./store"','"./store.mjs"'));
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
 compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
@@ -34,6 +35,7 @@ const kakao=await import(path.join(runtime,'kakao.mjs'));
 const ownerConfig=await import(path.join(runtime,'owner-config.mjs'));
 const backup=await import(path.join(runtime,'backup.mjs'));
 const backupApi=await import(path.join(runtime,'backup-api.mjs'));
+const health=await import(path.join(runtime,'health.mjs'));
 const api=await import(path.join(runtime,'api.mjs'));
 const NOW=Date.now(),DAY=864e5;
 const owner={id:'owner',name:'운영자',ownerSetup:true},A={id:'a',name:'A 주장'},B={id:'b',name:'B 주장'},C={id:'c',name:'C 주장'},member={id:'player',name:'선수'};
@@ -1049,5 +1051,62 @@ test('정리는 실제 저장 경로에서 함께 돌아간다',async()=>{
   assert.ok(!after.audit.some(x=>x.id==='a-ancient'),'요청 한 번으로 오래된 운영 이력이 정리되어야 한다');
   assert.ok(!after.notifications.some(x=>x.id==='n-read-old'),'읽은 지 오래된 알림도 정리되어야 한다');
   assert.equal(after.teams.length,3,'팀은 그대로여야 한다');
+  globalThis.__teamkickTestIdentity=null;db.close();
+});
+
+// --- 진단 경로(/api/health) 노출 범위 ---
+// 공개 전환 후에는 누구나 열 수 있다. 무엇이 설정되어 있는지는 그 자체가
+// 공격자에게 쓸모 있는 지도가 되므로 운영자에게만 보여준다.
+
+const healthOf=async()=>(await health.GET(new Request('https://teamkick.co.kr/api/health'))).json();
+
+test('운영자가 없는 처음 설치 상태에서는 진단 정보를 다 보여준다',async()=>{
+  const db=localDatabase();
+  globalThis.__teamkickTestIdentity=null;
+  const out=await healthOf();
+  assert.equal(out.ownerSetupCode,'env','운영자 등록에 필요한 정보를 볼 수 있어야 한다');
+  assert.ok('mailReady' in out);
+  db.close();
+});
+
+test('운영자가 정해진 뒤에는 남에게 설정 상태를 보여주지 않는다',async()=>{
+  const db=localDatabase();
+  const f=fixture();
+  await repository.commit(blank(),f.s,(await repository.load()).version);
+
+  globalThis.__teamkickTestIdentity=null;
+  const anon=await healthOf();
+  assert.deepEqual(Object.keys(anon).sort(),['build','database'],'배포 확인에 필요한 것만 남긴다');
+
+  globalThis.__teamkickTestIdentity={userId:'a',fullName:'A 주장'};
+  const captain=await healthOf();
+  assert.deepEqual(Object.keys(captain).sort(),['build','database'],'주장이어도 운영자가 아니면 못 본다');
+
+  globalThis.__teamkickTestIdentity={userId:'owner',fullName:'운영자'};
+  const owner=await healthOf();
+  assert.ok(owner.mailReady!==undefined&&owner.kakaoSecret!==undefined&&owner.tables!==undefined,
+    '운영자는 전부 볼 수 있어야 한다');
+  globalThis.__teamkickTestIdentity=null;db.close();
+});
+
+test('실패 응답에 내부 오류 원문을 담지 않는다',async()=>{
+  const db=localDatabase();
+  const secret='D1_ERROR: connection to 10.0.0.7 lost near "entities"';
+  const post=(n)=>api.POST(new Request('https://teamkick.co.kr/api/app',{method:'POST',
+    body:JSON.stringify({mutationId:'leak-'+n,type:'createTeam',name:'팀',region:'서울',description:'설명'})}));
+  globalThis.__teamkickTestIdentity={userId:'a',fullName:'A 주장'};
+
+  // ① 표가 없는 경우 — 안내 문구로 바꿔 보여준다
+  db.exec('DROP TABLE entities');
+  const missing=JSON.stringify(await (await post(1)).json());
+  assert.ok(!/no such table|SQLITE|SqliteError/i.test(missing),'표 이름이 새어 나가면 안 된다: '+missing);
+
+  // ② 그 밖의 오류 — 원문이 한 글자도 나가면 안 된다
+  const broken=()=>{throw new Error(secret)};
+  globalThis.__teamkickTestEnv.DB={prepare(){return {bind(){return this},first:broken,all:broken,run:broken}},batch:broken};
+  const other=JSON.stringify(await (await post(2)).json());
+  assert.ok(!other.includes('D1_ERROR')&&!other.includes('10.0.0.7')&&!other.includes('entities'),
+    '내부 오류 원문이 사용자에게 가면 안 된다: '+other);
+
   globalThis.__teamkickTestIdentity=null;db.close();
 });

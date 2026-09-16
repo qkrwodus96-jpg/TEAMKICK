@@ -1,5 +1,5 @@
 import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword,limit,clientKey,verifyEmail,resendVerification,currentUser} from "@/lib/auth";
-import {AppError,setupIncomplete,SETUP_MESSAGE,errorHint} from "@/lib/model";
+import {AppError,setupIncomplete,SETUP_MESSAGE} from "@/lib/model";
 import {ensureSchema} from "@/lib/schema";
 export const dynamic="force-dynamic";
 const json=(x:unknown,status=200,cookie?:string)=>Response.json(x,{status,headers:cookie?{"Cache-Control":"no-store","Set-Cookie":cookie}:{"Cache-Control":"no-store"}});
@@ -21,6 +21,6 @@ export async function POST(req:Request){
   throw new AppError("지원하지 않는 작업이에요.");
  }catch(e){
   console.error("TeamKick auth",e instanceof AppError?e.message:e);
-  return json({error:e instanceof AppError?e.message:setupIncomplete(e)?SETUP_MESSAGE:"처리하지 못했어요. 잠시 후 다시 시도해주세요."+errorHint(e)},e instanceof AppError?e.status:503);
+  return json({error:e instanceof AppError?e.message:setupIncomplete(e)?SETUP_MESSAGE:"처리하지 못했어요. 잠시 후 다시 시도해주세요."},e instanceof AppError?e.status:503);
  }
 }

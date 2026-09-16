@@ -5,7 +5,7 @@
 브랜치: `claude/teamkick-setup-baseline-lwntca`
 Pull Request: https://github.com/qkrwodus96-jpg/TEAMKICK/pull/1 (**병합 완료** 2026-09-15)
 `main` 이 최신이다. 이후 작업은 `main` 에서 새로 시작한다.
-현재 커밋: 백업·복원(T15) + 오래된 기록 정리(T16)
+현재 커밋: 공개 전환 준비 (T17)
 미커밋 변경: 없음
 현재 작업 ID: 활동 지역·구장 선택 완료 / 다음은 T08 기기 푸시 또는 T11 출시 준비
 
@@ -737,6 +737,28 @@ mailReady: true   storageReady: true   placeSearchReady: true
   키 두 개는 시크릿으로, `MAIL_FROM` 은 비밀값이 아니다.
 - 같은 화면에 `VAPID_*` 3개가 들어 있으나 **이 저장소에는 이를 읽는 코드가 없다.**
   기기 푸시(T08)는 미구현이므로 지금은 아무 동작도 하지 않는다.
+
+## 2026-09-16 공개 전환 준비 — 정보 노출 막기 (T17)
+
+공개하면 누구나 접근한다. `LEGAL.md` 의 "공개 전에 해야 할 것" 중 코드로 할 수 있는
+두 가지를 처리했다.
+
+- **`errorHint` 제거** (`lib/model.ts`, `app/api/app/route.ts`, `app/api/auth/route.ts`)
+  저장 실패 시 오류 원문 160자를 사용자 화면에 붙이고 있었다
+  (`...[Error: no such column: kakao_id]`). DB 구조를 남에게 알려주는 꼴이었다.
+  두 라우트 모두 이미 `console.error` 로 원문을 남기므로 진단에 잃는 것이 없다.
+- **`/api/health` 노출 제한** (`app/api/health/route.ts`)
+  - 누구나: `build`, `database` 둘뿐. 배포 확인 수단은 남겨야 한다.
+  - 운영자만: `tables`, `mailReady`, `kakaoSecret`, `ownerSetupCode` 등 전부.
+  - **운영자가 아직 없으면 전부 보여준다.** 처음 설치 때는 감출 것이 없고,
+    운영자 등록에 필요한 정보를 볼 방법이 이것뿐이다.
+  - 표가 없어 `load()` 가 실패해도 막지 않는다. 그 상태를 확인하려고 쓰는 경로다.
+
+검증(로컬): 테스트 **57/57**. 3개 추가. 변이 검사 3종 모두 테스트가 잡았다 —
+health 권한 확인 제거 / 운영자 아니어도 통과 / 오류 원문을 응답에 다시 넣음.
+
+**아직 남은 공개 전 항목(코드로 못 하는 것)**: 약관·처리방침 변호사 검토,
+개인정보 보호책임자 지정·표기, 위탁 업체 실명 기재, 백업 보관 항목 처리방침 추가.
 
 ## 2026-09-16 운영 데이터 백업·복원 (T15)
 

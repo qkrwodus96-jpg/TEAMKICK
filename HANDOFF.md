@@ -5,7 +5,7 @@
 브랜치: `claude/teamkick-setup-baseline-lwntca`
 Pull Request: https://github.com/qkrwodus96-jpg/TEAMKICK/pull/1 (**병합 완료** 2026-09-15)
 `main` 이 최신이다. 이후 작업은 `main` 에서 새로 시작한다.
-현재 커밋: 공개 전환 준비 (T17)
+현재 커밋: 홈 화면 추가 안내 (T18)
 미커밋 변경: 없음
 현재 작업 ID: 활동 지역·구장 선택 완료 / 다음은 T08 기기 푸시 또는 T11 출시 준비
 
@@ -737,6 +737,28 @@ mailReady: true   storageReady: true   placeSearchReady: true
   키 두 개는 시크릿으로, `MAIL_FROM` 은 비밀값이 아니다.
 - 같은 화면에 `VAPID_*` 3개가 들어 있으나 **이 저장소에는 이를 읽는 코드가 없다.**
   기기 푸시(T08)는 미구현이므로 지금은 아무 동작도 하지 않는다.
+
+## 2026-09-16 홈 화면 추가 안내 (T18)
+
+팀킥은 이미 PWA(`public/manifest.webmanifest`, `display: standalone`)라 홈 화면에
+추가하면 앱처럼 열린다. 그런데 **아이폰은 그 방법을 스스로 알려주지 않아서**,
+안내가 없으면 아이폰 사용자는 영영 모른다.
+
+- `app/install.tsx` 의 `InstallGuide` — `app/teamkick.tsx` 상단 띠 자리에 붙였다.
+- **아이폰**: 설치 창이 없으므로 "공유 → 홈 화면에 추가" 문구를 바로 보여준다.
+- **안드로이드**: `beforeinstallprompt` 를 가로채 두었다가 `앱 설치` 버튼으로 부른다.
+  브라우저가 설치 창을 주지 않으면 안내도 띄우지 않는다.
+- 이미 홈 화면 앱으로 열렸으면(`navigator.standalone` 또는
+  `display-mode: standalone`) 아무것도 띄우지 않는다.
+- 닫으면 `localStorage` 에 기억해 다시 띄우지 않는다. 저장소를 막아둔 브라우저에서도
+  화면은 그대로 뜨도록 읽기·쓰기를 모두 `try/catch` 로 감쌌다.
+
+검증(로컬, Playwright 11단계 전부 통과): 아이폰 UA 로 안내 표시·문구·설치 버튼 없음,
+닫으면 사라지고 새로고침해도 안 뜸, 안드로이드 UA 로 설치 창 전/후 동작,
+`앱 설치` 가 실제로 브라우저 설치 창을 부르는지, 이미 설치된 상태에서 안 뜨는지.
+
+**실기기 확인은 못 했다.** 헤드리스 Chromium 의 UA 흉내다.
+실제 아이폰 Safari·안드로이드 Chrome 확인이 필요하다.
 
 ## 2026-09-16 공개 전환 준비 — 정보 노출 막기 (T17)
 

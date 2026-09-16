@@ -1,4 +1,5 @@
 "use client";
+import {InstallGuide} from "./install";
 import {useState,useEffect,useMemo,useCallback,useRef} from "react";
 import {Home,CalendarDays,Handshake,ChartNoAxesCombined,Users,Bell,ChevronRight,ChevronLeft,Plus,MapPin,Clock,ArrowUpRight,CheckCircle2,XCircle,HelpCircle,ShieldCheck,Settings,LogOut,Goal,Flag,ClipboardCheck,TrendingUp,Pin,ArrowLeft,LoaderCircle,Search} from "lucide-react";
 import {Sidebar,SidebarProvider,SidebarContent,SidebarMenu,SidebarMenuItem,SidebarMenuButton} from "@/components/ui/sidebar";
@@ -82,6 +83,7 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote=""}:{re
  {error&&<div className="error-bar">{error} <button onClick={()=>refresh(v.teamId).then(()=>setError("")).catch(e=>setError(e.message))}>다시 시도</button></div>}
  {verifyNote&&<div className="data-note" role="status" style={{marginBottom:14}}>{verifyNote}</div>}
  {!demo&&v.user&&real?.needsVerification&&<div className="error-bar">이메일 확인이 아직 안 됐어요. 확인해야 팀을 만들거나 가입을 신청할 수 있어요. <button onClick={resendVerify}>확인 메일 다시 보내기</button></div>}
+ <InstallGuide/>
  {demo&&<div className="demo-strip"><span>샘플 팀 둘러보기 · 변경 사항은 실제 팀에 저장되지 않아요.</span><button onClick={toActual}>우리 팀 시작하기 <span aria-hidden>↗</span></button></div>}
  <div className="md:hidden" style={{marginBottom:20}}>{teamPicker}</div>
  {!demo&&!v.user?<AuthPanel onDemo={()=>setDemo(true)} mailReady={real?.mailReady!==false} kakaoReady={real?.kakaoReady===true} resetToken={resetToken}/>:

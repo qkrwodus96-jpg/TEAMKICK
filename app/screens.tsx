@@ -11,6 +11,7 @@ import {Picker,Crest,imageUrl,Empty,GameBadge,GuestBadge,PlayerPhoto,Vote,korean
 import {currentVote,guestStatusOf,REGIONS,FORMATS,LEVELS,DAYS,levelOf,type Row} from "@/lib/model";
 import {TERMS,PRIVACY} from "@/lib/legal";
 import {APP_VERSION} from "@/lib/version";
+import {NotifyToggle} from "./notify";
 export function AuthPanel({onDemo,mailReady=true,kakaoReady=false,resetToken=""}:{onDemo:()=>void;mailReady?:boolean;kakaoReady?:boolean;resetToken?:string}){
  const [mode,setMode]=useState(resetToken?"reset":"login"),[form,setForm]=useState<Record<string,string>>({email:"",password:"",password2:"",name:""});
  const [busy,setBusy]=useState(false),[failure,setFailure]=useState("");
@@ -292,6 +293,7 @@ export function MyHub({v,busy,setModal}:{v:Row;busy:boolean;setModal:(m:{kind:st
      <button className="btn" disabled={busy||!me} onClick={()=>setModal({kind:"profile",member:me})}>{me?"관리":"팀 가입 후 가능"}</button>
     </div>
    </div>
+   <NotifyToggle/>
    <div className="notice">
     <div className="row between">
      <div><p><strong>1:1 문의</strong>{open>0&&<span className="badge badge-orange" style={{marginLeft:8}}>답변 대기 {open}</span>}</p><span>운영자에게 직접 물어봐요.</span></div>

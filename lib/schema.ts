@@ -9,6 +9,11 @@ export const STATEMENTS=[
  `CREATE INDEX IF NOT EXISTS idx_entities_kind_scope ON entities (kind, scope)`,
  `CREATE TABLE IF NOT EXISTS write_guards (id text PRIMARY KEY NOT NULL, expected integer NOT NULL, actual integer NOT NULL, CONSTRAINT "revision_matches" CHECK("write_guards"."expected" = "write_guards"."actual"))`,
  `CREATE TABLE IF NOT EXISTS state_revision (id integer PRIMARY KEY NOT NULL, version integer DEFAULT 0 NOT NULL)`,
+ // 기기 푸시 구독. 기기마다 하나씩 생긴다. entities 가 아니라 따로 두는 이유는
+ // (1) 매 요청마다 읽히면 안 되고 (2) 기기 자격증명이라 백업에 담지 않기 위해서다.
+ `CREATE TABLE IF NOT EXISTS push_subs (id text PRIMARY KEY NOT NULL, account_id text NOT NULL, endpoint text NOT NULL, p256dh text NOT NULL, auth text NOT NULL, at text NOT NULL)`,
+ `CREATE UNIQUE INDEX IF NOT EXISTS push_subs_endpoint_unique ON push_subs (endpoint)`,
+ `CREATE INDEX IF NOT EXISTS idx_push_subs_account ON push_subs (account_id)`,
  `CREATE TABLE IF NOT EXISTS accounts (id text PRIMARY KEY NOT NULL, email text NOT NULL, name text NOT NULL, password text NOT NULL, failures integer DEFAULT 0 NOT NULL, locked_until text, at text NOT NULL)`,
  `CREATE UNIQUE INDEX IF NOT EXISTS accounts_email_unique ON accounts (email)`,
  `CREATE TABLE IF NOT EXISTS sessions (id text PRIMARY KEY NOT NULL, account_id text NOT NULL, expires text NOT NULL, at text NOT NULL)`,
@@ -29,9 +34,9 @@ export const STATEMENTS=[
 
 // 배포된 코드가 어느 시점 것인지 화면으로 확인하기 위한 표시.
 // 스키마나 진단에 영향을 주는 변경을 할 때 함께 올린다.
-export const BUILD="2026-09-16-team-info-edit";
+export const BUILD="2026-09-16-web-push";
 
-export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications"];
+export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications","push_subs"];
 
 let prepared=false;
 export async function ensureSchema(){

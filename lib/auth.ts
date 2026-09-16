@@ -182,6 +182,8 @@ export async function accountExists(accountId:string){
 export async function closeAccount(accountId:string){
  await db().prepare("DELETE FROM sessions WHERE account_id=?").bind(accountId).run();
  await db().prepare("DELETE FROM email_verifications WHERE account_id=?").bind(accountId).run();
+ // 기기 푸시 구독도 함께 지운다. 남겨두면 떠난 사람 기기로 알림이 계속 간다.
+ await db().prepare("DELETE FROM push_subs WHERE account_id=?").bind(accountId).run();
  await db().prepare("DELETE FROM accounts WHERE id=?").bind(accountId).run();
 }
 

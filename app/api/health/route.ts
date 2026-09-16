@@ -5,6 +5,7 @@ import {mailReady,mailAccount,fromDomain} from "@/lib/mail";
 import {hashPassword,currentUser} from "@/lib/auth";
 import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";
 import {ownerCodeFromEnv} from "@/lib/owner-config";
+import {pushReady} from "@/lib/push";
 import {load} from "@/lib/store";
 
 export const dynamic="force-dynamic";
@@ -53,5 +54,6 @@ export async function GET(req:Request){
   kakaoReady:kakaoReady(),
   kakaoSecret:kakaoSecretSet()?"set":"missing",
   ownerSetupCode:ownerCodeFromEnv()?"env":"built-in",
+  pushReady:pushReady(),
  });
 }

@@ -20,10 +20,11 @@ compile('lib/kakao.ts','kakao.mjs',s=>s.replace('import {env} from "cloudflare:w
 compile('lib/schema.ts','schema.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/mail.ts','mail.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./legal"','"./legal.mjs"'));
 compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('import {sendMail,mailReady} from "./mail";','const sendMail=async(to,subject,text)=>{if(globalThis.__teamkickTestMailFail)throw new AppError("메일을 보내지 못했어요. 잠시 후 다시 시도해주세요.",503);(globalThis.__teamkickTestMail??=[]).push({to,subject,text})};const mailReady=()=>globalThis.__teamkickTestMailReady!==false;').replace('"./model"','"./model.mjs"'));
-compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {schemaStatus,BUILD} from "@/lib/schema";','const schemaStatus=async()=>globalThis.__teamkickTestSchema??{db:true,tables:{},error:""};const BUILD="test";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady,mailAccount,fromDomain} from "@/lib/mail";','const mailReady=()=>true;const mailAccount=async()=>"ok";const fromDomain=()=>"teamkick.co.kr";').replace('import {hashPassword,currentUser} from "@/lib/auth";','const hashPassword=async()=>"";const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";','const kakaoReady=()=>true;const kakaoSecretSet=()=>true;').replace('import {ownerCodeFromEnv} from "@/lib/owner-config";','const ownerCodeFromEnv=()=>true;').replace('"@/lib/store"','"./store.mjs"'));
+compile('lib/push.ts','push.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
+compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {pushReady} from "@/lib/push";','const pushReady=()=>true;').replace('import {schemaStatus,BUILD} from "@/lib/schema";','const schemaStatus=async()=>globalThis.__teamkickTestSchema??{db:true,tables:{},error:""};const BUILD="test";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady,mailAccount,fromDomain} from "@/lib/mail";','const mailReady=()=>true;const mailAccount=async()=>"ok";const fromDomain=()=>"teamkick.co.kr";').replace('import {hashPassword,currentUser} from "@/lib/auth";','const hashPassword=async()=>"";const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";','const kakaoReady=()=>true;const kakaoSecretSet=()=>true;').replace('import {ownerCodeFromEnv} from "@/lib/owner-config";','const ownerCodeFromEnv=()=>true;').replace('"@/lib/store"','"./store.mjs"'));
 compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./schema"','"./schema.mjs"').replace('"./store"','"./store.mjs"'));
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
-compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
+compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {wakeDevices} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0}};').replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
 const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
@@ -36,6 +37,7 @@ const ownerConfig=await import(path.join(runtime,'owner-config.mjs'));
 const backup=await import(path.join(runtime,'backup.mjs'));
 const backupApi=await import(path.join(runtime,'backup-api.mjs'));
 const health=await import(path.join(runtime,'health.mjs'));
+const push=await import(path.join(runtime,'push.mjs'));
 const api=await import(path.join(runtime,'api.mjs'));
 const NOW=Date.now(),DAY=864e5;
 const owner={id:'owner',name:'운영자',ownerSetup:true},A={id:'a',name:'A 주장'},B={id:'b',name:'B 주장'},C={id:'c',name:'C 주장'},member={id:'player',name:'선수'};
@@ -1445,4 +1447,125 @@ test('주로 뛰는 때는 목록에 있는 값만 받고 상관없음을 고를
   assert.equal(f.s.teams.find(t=>t.id===f.a).days,'상관없음');
   assert.throws(()=>command(f.s,A,{...base,days:'아무때나'}),/주로 뛰는 때/);
   assert.equal(f.s.teams.find(t=>t.id===f.a).days,'상관없음','거절된 뒤에도 그대로');
+});
+
+// --- 기기 푸시 ---
+// 실제 푸시 서버로 보내볼 수 없는 환경이다. 그래서 보내는 쪽에서 확인할 수 있는 것만
+// 확인한다: 서명이 진짜 맞는지, 구독을 제대로 넣고 빼는지, 죽은 구독을 치우는지.
+
+async function withVapid(run){
+  const pair=await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'},true,['sign','verify']);
+  const jwk=await crypto.subtle.exportKey('jwk',pair.privateKey);
+  const raw=await crypto.subtle.exportKey('raw',pair.publicKey);
+  const b64=b=>Buffer.from(b).toString('base64url');
+  const env=globalThis.__teamkickTestEnv;
+  env.VAPID_PUBLIC_KEY=b64(raw);
+  env.VAPID_PRIVATE_KEY=jwk.d;           // 32바이트 원본(base64url)
+  env.VAPID_SUBJECT='mailto:jyp7296@naver.com';
+  try{return await run(pair)}finally{
+    delete env.VAPID_PUBLIC_KEY;delete env.VAPID_PRIVATE_KEY;delete env.VAPID_SUBJECT;
+  }
+}
+
+test('푸시 키가 없으면 켜지지 않고 아무 데도 보내지 않는다',async()=>{
+  const db=localDatabase();
+  assert.equal(push.pushReady(),false);
+  // 구독이 있어도 키가 없으면 보내면 안 된다. 구독이 없으면 이 검사는 의미가 없다.
+  await push.saveSubscription('a',{endpoint:'https://push.example/zzz',keys:{p256dh:'p',auth:'a'}});
+  assert.equal((await push.subscriptionsOf('a')).length,1);
+  let called=false;const real=globalThis.fetch;
+  globalThis.fetch=async()=>{called=true;return new Response('',{status:201})};
+  try{
+    const out=await push.wakeDevices(['a']);
+    assert.deepEqual(out,{sent:0,failed:0});
+    assert.equal(called,false,'키가 없으면 요청을 보내면 안 된다');
+  }finally{globalThis.fetch=real;db.close()}
+});
+
+test('VAPID 토큰은 진짜 서명이고 받는 주소마다 다르다',async()=>{
+  const db=localDatabase();
+  await withVapid(async pair=>{
+    assert.equal(push.pushReady(),true);
+    const token=await push.vapidToken('https://fcm.googleapis.com');
+    const [head,body,sig]=token.split('.');
+    const dec=x=>JSON.parse(Buffer.from(x,'base64url').toString());
+    assert.deepEqual(dec(head),{typ:'JWT',alg:'ES256'});
+    const claims=dec(body);
+    assert.equal(claims.aud,'https://fcm.googleapis.com','받는 주소가 들어가야 한다');
+    assert.equal(claims.sub,'mailto:jyp7296@naver.com');
+    assert.ok(claims.exp>Math.floor(Date.now()/1000),'만료가 미래여야 한다');
+    assert.ok(claims.exp-Math.floor(Date.now()/1000)<=24*3600,'만료는 24시간을 넘지 않아야 한다');
+
+    const ok=await crypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},pair.publicKey,
+      Buffer.from(sig,'base64url'),Buffer.from(head+'.'+body));
+    assert.equal(ok,true,'서명이 실제로 맞아야 한다');
+
+    const other=await push.vapidToken('https://updates.push.services.mozilla.com');
+    assert.notEqual(token,other,'받는 주소가 다르면 토큰도 달라야 한다');
+  });
+  db.close();
+});
+
+test('구독을 넣고 빼고, 같은 기기는 하나만 남는다',async()=>{
+  const db=localDatabase();
+  const sub=(e)=>({endpoint:e,keys:{p256dh:'p',auth:'a'}});
+  await push.saveSubscription('u1',sub('https://push.example/aaa'));
+  await push.saveSubscription('u1',sub('https://push.example/bbb'));
+  assert.equal((await push.subscriptionsOf('u1')).length,2);
+
+  // 같은 기기가 다시 구독하면 늘어나지 않는다
+  await push.saveSubscription('u1',sub('https://push.example/aaa'));
+  assert.equal((await push.subscriptionsOf('u1')).length,2,'같은 기기가 두 번 세어지면 안 된다');
+
+  // 기기를 물려주면 주인이 바뀐다
+  await push.saveSubscription('u2',sub('https://push.example/aaa'));
+  assert.equal((await push.subscriptionsOf('u1')).length,1);
+  assert.equal((await push.subscriptionsOf('u2')).length,1);
+
+  await push.removeSubscription('u1','https://push.example/bbb');
+  assert.equal((await push.subscriptionsOf('u1')).length,0);
+
+  for(const bad of [{endpoint:'http://push.example/x',keys:{p256dh:'p',auth:'a'}},
+                    {endpoint:'https://push.example/y',keys:{p256dh:'',auth:'a'}},
+                    {endpoint:'',keys:{p256dh:'p',auth:'a'}}])
+    await assert.rejects(()=>push.saveSubscription('u3',bad),/구독 정보를 확인/);
+  db.close();
+});
+
+test('죽은 구독(410)은 치우고 나머지에는 계속 보낸다',async()=>{
+  const db=localDatabase();
+  await withVapid(async()=>{
+    await push.saveSubscription('u1',{endpoint:'https://push.example/dead',keys:{p256dh:'p',auth:'a'}});
+    await push.saveSubscription('u1',{endpoint:'https://push.example/live',keys:{p256dh:'p',auth:'a'}});
+    const seen=[];const real=globalThis.fetch;
+    globalThis.fetch=async(url,init)=>{
+      seen.push({url,auth:init.headers.Authorization,ttl:init.headers.TTL,method:init.method});
+      return new Response('',{status:url.includes('dead')?410:201});
+    };
+    try{
+      const out=await push.wakeDevices(['u1','u1']);
+      assert.equal(seen.length,2,'같은 사람을 두 번 넣어도 기기 수만큼만 보낸다');
+      assert.ok(seen.every(x=>x.method==='POST'&&/^vapid t=.+, k=.+/.test(x.auth)),'VAPID 헤더가 붙어야 한다');
+      assert.ok(seen.every(x=>x.ttl==='86400'));
+      assert.equal(out.sent,1);assert.equal(out.failed,1);
+    }finally{globalThis.fetch=real}
+    assert.deepEqual((await push.subscriptionsOf('u1')).map(x=>x.endpoint),['https://push.example/live'],
+      '죽은 구독은 지워져야 한다');
+  });
+  db.close();
+});
+
+test('알림을 받은 사람만 깨우고 본인은 깨우지 않는다',async()=>{
+  const db=localDatabase();
+  const f=teamWithRoles();
+  await repository.commit(blank(),f.s,(await repository.load()).version);
+  globalThis.__teamkickTestWoken=[];
+  globalThis.__teamkickTestIdentity={userId:'a',fullName:'A 주장'};
+  const res=await api.POST(new Request('https://teamkick.co.kr/api/app',{method:'POST',
+    body:JSON.stringify({mutationId:'push-1',...gameArgs(f.a)})}));
+  assert.equal(res.status,200,JSON.stringify(await res.clone().json()).slice(0,200));
+  const woken=globalThis.__teamkickTestWoken;
+  assert.ok(woken.includes('mgr')&&woken.includes('mem'),'팀원들을 깨워야 한다: '+JSON.stringify(woken));
+  assert.ok(!woken.includes('a'),'명령을 실행한 본인은 깨우지 않는다');
+  globalThis.__teamkickTestIdentity=null;db.close();
 });

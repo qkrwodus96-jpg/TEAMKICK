@@ -7,7 +7,7 @@ import {Checkbox} from "@/components/ui/checkbox";
 import {Table,TableHeader,TableHead,TableBody,TableRow,TableCell} from "@/components/ui/table";
 import {toast} from "sonner";
 import {Upload,Plus,Search,MapPin,CalendarDays,Clock,Users,ShieldCheck,Copy,ExternalLink,Settings,Check,CheckCircle2,X,ArrowLeft,LogOut,Download,Pin,LoaderCircle,Goal,Handshake} from "lucide-react";
-import {Picker,Crest,imageUrl,Empty,Fixture,GameBadge,GuestBadge,PlayerPhoto,Vote,koreanDate,time,localDay,inputTime,fromInput,opponent} from "./teamkick";
+import {Picker,Crest,imageUrl,Empty,GameBadge,GuestBadge,PlayerPhoto,Vote,koreanDate,time,localDay,inputTime,fromInput,opponent} from "./teamkick";
 import {currentVote,guestStatusOf,REGIONS,type Row} from "@/lib/model";
 import {TERMS,PRIVACY} from "@/lib/legal";
 export function AuthPanel({onDemo,mailReady=true,kakaoReady=false,resetToken=""}:{onDemo:()=>void;mailReady?:boolean;kakaoReady?:boolean;resetToken?:string}){
@@ -217,7 +217,25 @@ export function Matching(p:any){
  {!!(v.myGuests??[]).length&&<section className="panel" style={{marginTop:18}}><h2 className="view-heading">내 용병 신청</h2>{v.myGuests.map((r:Row)=><div className="notice" key={r.id}><div className="row between"><strong>{r.teamName}</strong><span className={"badge "+(r.status==="approved"?"badge-green":r.status==="pending"?"badge-orange":"")}>{guestLabel[r.status]??r.status}</span></div><p className="data-note">{r.start?koreanDate(r.start)+" · "+r.venue:"경기 정보를 확인할 수 없어요"}</p>{r.status==="pending"&&<div className="action-strip"><button className="btn" disabled={busy} onClick={()=>run({type:"withdrawGuest",teamId:r.teamId,gameId:r.gameId,guestId:r.id})}>신청 철회</button></div>}</div>)}</section>}
  {manager&&!!teamGuests.length&&<section className="panel" style={{marginTop:18}}><h2 className="view-heading">우리 팀 용병 신청</h2>{teamGuests.map((x:Row)=>{const gm=v.games.find((y:Row)=>y.id===x.gameId);return <div className="attendance-item" key={x.id}><div><strong>{x.name}</strong><p className="data-note">{x.position} · 등번호 {x.number}{gm?" · "+koreanDate(gm.start)+" "+gm.venue:""}{x.message?" · "+x.message:""}</p></div><div className="row">{x.status==="pending"?<><button className="btn btn-green" disabled={busy} onClick={()=>run({type:"approveGuest",teamId:v.teamId,gameId:x.gameId,guestId:x.id})}>승인</button><button className="btn" disabled={busy} onClick={()=>run({type:"rejectGuest",teamId:v.teamId,gameId:x.gameId,guestId:x.id})}>거절</button></>:<><span className="badge badge-green">용병 확정</span><button className="btn" disabled={busy} onClick={()=>run({type:"cancelGuest",teamId:v.teamId,gameId:x.gameId,guestId:x.id})}>취소</button></>}</div></div>})}</section>}
  </>}
- {tab==="confirmed"&&<section className="panel">{v.games.filter((g:Row)=>g.away&&g.status!=="cancelled").map((g:Row)=><Fixture g={g} v={v} key={g.id} onClick={()=>setModal({kind:"game",id:g.id})}/>)}{!v.games.some((g:Row)=>g.away&&g.status!=="cancelled")&&<Empty title="확정된 매칭이 없어요"/>}</section>}</>
+ {tab==="confirmed"&&(()=>{
+  // 모집 중 탭과 같은 카드 모양으로 맞춘다. 예전에는 일정 화면용 줄 컴포넌트를
+  // 그대로 가져다 써서 같은 화면 안에서 생김새가 따로 놀았다.
+  const done=v.games.filter((g:Row)=>g.away&&g.status!=="cancelled")
+   .sort((a:Row,b:Row)=>String(a.start).localeCompare(String(b.start)));
+  if(!done.length)return <section className="panel"><Empty title="확정된 매칭이 없어요" description="모집글에 신청하거나 받은 신청을 수락하면 여기에서 확인할 수 있어요."/></section>;
+  return <div className="match-list-grid">{done.map((g:Row)=>{
+   const us=v.teams.find((t:Row)=>t.id===v.teamId)?.name??"우리 팀",them=opponent(v,g)||"상대팀 미정";
+   const score=g.result?.status==="confirmed"?(g.home===v.teamId?g.result.a+" : "+g.result.b:g.result.b+" : "+g.result.a):"";
+   return <article key={g.id} className="panel listing">
+    <div className="row between"><GameBadge g={g}/><span className="small muted">{g.format}</span></div>
+    <h3>{us} <span className="muted" style={{fontWeight:400}}>vs</span> {them}</h3>
+    <span className="meta-pair"><CalendarDays/>{koreanDate(g.start)} {time(g.start)} – {time(g.end)}</span>
+    <span className="meta-pair"><MapPin/>{g.venue||"구장 미정"}</span>
+    <span className="meta-pair"><ShieldCheck/>{g.secured?"구장 확보 완료":"구장 협의 중"}{Number(g.cost)>0?" · 비용 안내 "+Number(g.cost).toLocaleString()+"원":""}</span>
+    {score&&<p className="data-note">최종 스코어 {score}</p>}
+    <button className="btn" onClick={()=>setModal({kind:"game",id:g.id})}>경기 상세 보기</button>
+   </article>})}</div>;
+ })()}</>
 }
 export function Management(p:any){
  const {v,team,onboarding,admin,busy,setModal,run,captain}=p,[query,setQuery]=useState("");

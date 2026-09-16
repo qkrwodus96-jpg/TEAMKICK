@@ -20,9 +20,11 @@ compile('lib/kakao.ts','kakao.mjs',s=>s.replace('import {env} from "cloudflare:w
 compile('lib/schema.ts','schema.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/mail.ts','mail.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./legal"','"./legal.mjs"'));
 compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('import {sendMail,mailReady} from "./mail";','const sendMail=async(to,subject,text)=>{if(globalThis.__teamkickTestMailFail)throw new AppError("메일을 보내지 못했어요. 잠시 후 다시 시도해주세요.",503);(globalThis.__teamkickTestMail??=[]).push({to,subject,text})};const mailReady=()=>globalThis.__teamkickTestMailReady!==false;').replace('"./model"','"./model.mjs"'));
+compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./schema"','"./schema.mjs"').replace('"./store"','"./store.mjs"'));
+compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
 compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
-const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso}=await import(path.join(runtime,'model.mjs'));
+const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
 const auth=await import(path.join(runtime,'auth.mjs'));
 const mail=await import(path.join(runtime,'mail.mjs'));
@@ -30,6 +32,8 @@ const legal=await import(path.join(runtime,'legal.mjs'));
 const schema=await import(path.join(runtime,'schema.mjs'));
 const kakao=await import(path.join(runtime,'kakao.mjs'));
 const ownerConfig=await import(path.join(runtime,'owner-config.mjs'));
+const backup=await import(path.join(runtime,'backup.mjs'));
+const backupApi=await import(path.join(runtime,'backup-api.mjs'));
 const api=await import(path.join(runtime,'api.mjs'));
 const NOW=Date.now(),DAY=864e5;
 const owner={id:'owner',name:'운영자',ownerSetup:true},A={id:'a',name:'A 주장'},B={id:'b',name:'B 주장'},C={id:'c',name:'C 주장'},member={id:'player',name:'선수'};
@@ -64,7 +68,7 @@ function applyGuest(s,teamId,gameId,actor){return command(s,actor,{type:'applyGu
 function localDatabase(){
   const db=new DatabaseSync(':memory:');
   for(const name of fs.readdirSync('drizzle').filter(x=>x.endsWith('.sql')).sort())db.exec(fs.readFileSync(path.join('drizzle',name),'utf8'));
-  const api={prepare(sql){return {sql,args:[],bind(...args){this.args=args;return this},async first(){return db.prepare(this.sql).get(...this.args)??null},async run(){db.prepare(this.sql).run(...this.args);return {success:true}},async all(){return {results:db.prepare(this.sql).all(...this.args)}}}},async batch(statements){db.exec('BEGIN IMMEDIATE');try{const out=statements.map(x=>({success:true,results:db.prepare(x.sql).all(...x.args)}));db.exec('COMMIT');return out}catch(e){db.exec('ROLLBACK');throw e}}};
+  const api={prepare(sql){return {sql,args:[],bind(...args){this.args=args;return this},async first(){return db.prepare(this.sql).get(...this.args)??null},async run(){const r=db.prepare(this.sql).run(...this.args);return {success:true,meta:{changes:Number(r.changes??0)}}},async all(){return {results:db.prepare(this.sql).all(...this.args)}}}},async batch(statements){db.exec('BEGIN IMMEDIATE');try{const out=statements.map(x=>({success:true,results:db.prepare(x.sql).all(...x.args)}));db.exec('COMMIT');return out}catch(e){db.exec('ROLLBACK');throw e}}};
   globalThis.__teamkickTestEnv.DB=api;return db;
 }
 
@@ -855,4 +859,195 @@ test('활동 지역은 목록에 있는 값만 받는다',()=>{
   assert.throws(()=>command(s,A,{type:'editTeam',teamId,name:'한강 FC',region:'서울 강서구',description:'설명'}),/활동 지역/);
   command(s,A,{type:'editTeam',teamId,name:'한강 FC',region:'경기 남부',description:'설명'});
   assert.equal(s.teams.find(t=>t.id===teamId).region,'경기 남부');
+});
+
+// --- 데이터 백업 ---
+// D1 이 사라지면 복구할 다른 수단이 없다. 그래서 백업 파일이 (1) 비밀값을 흘리지 않고
+// (2) 손상된 파일로 기존 데이터를 지우지 않고 (3) 실제로 되살리는지 확인한다.
+
+async function seedForBackup(){
+  const db=localDatabase();
+  const f=fixture();
+  const {state,version}=await repository.load();
+  await repository.commit(state,f.s,version);
+  await auth.signUp({email:'keeper@teamkick.test',name:'보관자',password:'teamkick-1234',agree:true,adult:true});
+  return {db,f};
+}
+
+test('백업 파일에는 비밀번호와 로그인 정보가 담기지 않는다',async()=>{
+  const {db}=await seedForBackup();
+  const file=await backup.exportAll();
+  const text=JSON.stringify(file);
+  assert.ok(file.data.teams.length>0,'팀이 담겨야 한다');
+  assert.equal(file.accounts.length,1);
+  assert.equal(file.accounts[0].email,'keeper@teamkick.test','계정을 되살리려면 이메일은 있어야 한다');
+  assert.equal(file.accounts[0].password,undefined,'비밀번호 해시가 담기면 안 된다');
+  assert.ok(!text.includes('pbkdf2'),'어디에도 비밀번호 해시가 남으면 안 된다');
+  const stored=db.prepare('SELECT password FROM accounts').get().password;
+  assert.ok(stored.startsWith('pbkdf2'),'실제 계정에는 해시가 저장되어 있다');
+  assert.ok(!text.includes(stored),'저장된 해시가 파일에 새어 나가면 안 된다');
+  db.close();
+});
+
+test('손상된 백업 파일은 거절하고 기존 데이터를 건드리지 않는다',async()=>{
+  const {db}=await seedForBackup();
+  const before=(await repository.load()).state;
+  const good=await backup.exportAll();
+  const bad=[
+    {...good,format:99},
+    {...good,data:undefined},
+    {...good,data:{...good.data,teams:'팀 아님'}},
+    {...good,data:{...good.data,games:[{name:'아이디 없음'}]}},
+    {...good,accounts:[{id:'x'}]},
+    null,
+  ];
+  for(const file of bad){
+    await assert.rejects(()=>backup.restoreAll(file),/백업 파일|형식|손상|데이터가 없어요/,'거절해야 한다: '+JSON.stringify(file).slice(0,40));
+  }
+  const after=(await repository.load()).state;
+  assert.deepEqual(after.teams,before.teams,'거절된 뒤에도 팀이 그대로여야 한다');
+  assert.deepEqual(after.games,before.games,'거절된 뒤에도 경기가 그대로여야 한다');
+  db.close();
+});
+
+test('백업 파일로 팀과 경기를 되살리고, 계정은 비밀번호 없이 되살아난다',async()=>{
+  const {db,f}=await seedForBackup();
+  command(f.s,A,{type:'createGame',teamId:f.a,start:iso(NOW+2*DAY),end:iso(NOW+2*DAY+7200000),venue:'수지체육공원',address:'경기 용인시 수지구 포은대로 435',region:'경기 남부',format:'11인제',needed:14,cost:0});
+  const {state,version}=await repository.load();
+  await repository.commit(state,f.s,version);
+  const file=await backup.exportAll();
+  assert.equal(file.data.games.length,1);
+
+  // 모든 것을 잃은 상황을 만든다.
+  db.exec('DELETE FROM entities');db.exec('DELETE FROM accounts');
+  assert.equal((await repository.load()).state.teams.length,0,'비워졌는지 확인');
+
+  const out=await backup.restoreAll(file);
+  assert.equal(out.accounts,1,'계정 1개를 되살려야 한다');
+  const back=(await repository.load()).state;
+  assert.equal(back.teams.length,file.data.teams.length,'팀이 돌아와야 한다');
+  assert.equal(back.games.length,1,'경기가 돌아와야 한다');
+  assert.equal(back.games[0].venue,'수지체육공원');
+  assert.equal(back.settings.find(x=>x.id==='owner')?.userId,'owner','운영자 설정도 돌아와야 한다');
+
+  // 비밀번호는 담기지 않았으므로 예전 비밀번호로는 못 들어간다.
+  await assert.rejects(()=>auth.signIn({email:'keeper@teamkick.test',password:'teamkick-1234'}),/이메일 또는 비밀번호/,'복원된 계정으로 로그인되면 안 된다');
+  db.close();
+});
+
+test('복원은 이미 있는 계정을 덮어쓰지 않는다',async()=>{
+  const {db}=await seedForBackup();
+  const file=await backup.exportAll();
+  // 백업을 받은 뒤 비밀번호를 바꾼 상황.
+  db.prepare('UPDATE accounts SET name=?').run('이름 바꿈');
+  const out=await backup.restoreAll(file);
+  assert.equal(out.accounts,0,'이미 있는 계정은 되살리지 않는다');
+  assert.equal(db.prepare('SELECT name FROM accounts').get().name,'이름 바꿈','지금 계정을 백업 시점으로 되돌리면 안 된다');
+  db.close();
+});
+
+test('백업은 서비스 운영자만 받을 수 있다',async()=>{
+  const {db}=await seedForBackup();
+  const url='https://teamkick.co.kr/api/backup';
+
+  globalThis.__teamkickTestIdentity=null;
+  assert.equal((await backupApi.GET(new Request(url))).status,401,'로그인하지 않으면 거절');
+
+  globalThis.__teamkickTestIdentity={userId:'a',fullName:'A 주장'};
+  assert.equal((await backupApi.GET(new Request(url))).status,403,'주장이어도 운영자가 아니면 거절');
+  const stolen=await backupApi.POST(new Request(url,{method:'POST',body:JSON.stringify({confirm:'복원합니다',file:await backup.exportAll()})}));
+  assert.equal(stolen.status,403,'운영자가 아니면 복원도 거절');
+
+  globalThis.__teamkickTestIdentity={userId:'owner',fullName:'운영자'};
+  const ok=await backupApi.GET(new Request(url));
+  assert.equal(ok.status,200);
+  assert.match(ok.headers.get('content-disposition')??'',/attachment; filename="teamkick-backup-.*\.json"/);
+  assert.ok((await ok.json()).data.teams.length>0);
+
+  // 확인 문구가 없으면 복원하지 않는다.
+  const noConfirm=await backupApi.POST(new Request(url,{method:'POST',body:JSON.stringify({confirm:'네',file:await backup.exportAll()})}));
+  assert.equal(noConfirm.status,400);
+  assert.match((await noConfirm.json()).error,/복원합니다/);
+
+  globalThis.__teamkickTestIdentity=null;db.close();
+});
+
+// --- 오래된 기록 정리 ---
+// load() 가 매 요청마다 entities 전체를 읽으므로 끝없이 쌓이는 표가 있으면 안 된다.
+// 다만 경기·출석·기록은 팀킥의 존재 이유라 한 건도 지워지면 안 된다.
+
+test('정리는 운영 이력과 알림만 건드리고 경기 기록은 한 건도 지우지 않는다',()=>{
+  const s=blank();
+  const old=iso(NOW-3*365*DAY),recent=iso(NOW-DAY);
+  // 3년 된 경기와 출석 — 지워지면 안 된다.
+  s.games.push({id:'g1',at:old,start:old,venue:'수지체육공원',goals:[{userId:'p1'}]});
+  s.sides.push({id:'s1',at:old,gameId:'g1',attended:['p1']});
+  s.teams.push({id:'t1',at:old,name:'팀킥 FC'});
+  s.members.push({id:'m1',at:old,teamId:'t1',userId:'p1'});
+  s.users.push({id:'p1',at:old,name:'선수'});
+  s.notices.push({id:'n1',at:old,title:'3년 전 공지'});
+  // 지워져야 하는 것들.
+  s.audit.push({id:'a-old',at:old,type:'setTeamLogo'},{id:'a-new',at:recent,type:'approveTeam'});
+  s.receipts.push({id:'r-old',at:old},{id:'r-new',at:recent});
+  s.notifications.push(
+    {id:'read-old',at:iso(NOW-60*DAY),read:true},
+    {id:'read-new',at:iso(NOW-10*DAY),read:true},
+    {id:'unread-mid',at:iso(NOW-60*DAY),read:false},   // 안 읽었으면 60일은 남긴다
+    {id:'unread-ancient',at:old,read:false});
+
+  // 기준 값이 바뀌면 이 테스트가 먼저 알려주도록 묶어 둔다.
+  assert.deepEqual(KEEP,{receipts:7,audit:90,readNotice:30,unreadNotice:180},
+    '보관 기간을 바꾸려면 이 기대값과 안내 문구도 함께 고쳐야 한다');
+
+  const removed=prune(s,NOW);
+
+  assert.equal(s.games.length,1,'3년 된 경기가 남아야 한다');
+  assert.equal(s.games[0].goals.length,1,'골 기록이 남아야 한다');
+  assert.equal(s.sides.length,1,'출석이 남아야 한다');
+  assert.equal(s.teams.length,1);assert.equal(s.members.length,1);
+  assert.equal(s.users.length,1);assert.equal(s.notices.length,1,'공지는 정리 대상이 아니다');
+
+  assert.deepEqual(s.audit.map(x=>x.id),['a-new'],'90일 지난 운영 이력만 지운다');
+  assert.deepEqual(s.receipts.map(x=>x.id),['r-new']);
+  assert.deepEqual(s.notifications.map(x=>x.id).sort(),['read-new','unread-mid'],
+    '읽은 알림은 30일, 안 읽은 알림은 180일 기준이어야 한다');
+  assert.equal(removed,4,'지운 건수를 돌려줘야 한다');
+});
+
+test('날짜를 읽을 수 없는 줄은 지우지 않는다',()=>{
+  const s=blank();
+  s.audit.push({id:'a1',at:'날짜아님',type:'x'},{id:'a2',type:'열이없음'},{id:'a3',at:null});
+  assert.equal(prune(s,NOW),0);
+  assert.equal(s.audit.length,3,'판단할 수 없는 줄은 남긴다');
+});
+
+test('한 요청에서 지우는 양을 제한한다',()=>{
+  const s=blank();
+  const old=iso(NOW-365*DAY);
+  for(let i=0;i<PRUNE_LIMIT*3;i++)s.audit.push({id:'a'+i,at:old,type:'createTeam'});
+  assert.equal(prune(s,NOW),PRUNE_LIMIT,'한 번에 상한까지만 지운다');
+  assert.equal(s.audit.length,PRUNE_LIMIT*2,'나머지는 다음 요청에서 지운다');
+  prune(s,NOW);prune(s,NOW);
+  assert.equal(s.audit.length,0,'여러 번 거치면 결국 다 지워진다');
+});
+
+test('정리는 실제 저장 경로에서 함께 돌아간다',async()=>{
+  const db=localDatabase();
+  const f=fixture();
+  f.s.audit.push({id:'a-ancient',at:iso(NOW-365*DAY),actor:'owner',type:'setTeamLogo'});
+  f.s.notifications.push({id:'n-read-old',at:iso(NOW-90*DAY),userId:'a',read:true,title:'옛 알림'});
+  const seeded=(await repository.load()).version;
+  await repository.commit(blank(),f.s,seeded);
+  assert.ok((await repository.load()).state.audit.some(x=>x.id==='a-ancient'),'정리 전에는 남아 있다');
+
+  globalThis.__teamkickTestIdentity={userId:'a',fullName:'A 주장'};
+  const res=await api.POST(new Request('https://teamkick.co.kr/api/app',{method:'POST',
+    body:JSON.stringify({mutationId:'prune-1',type:'editTeam',teamId:f.a,name:'이름 바꿈',region:'서울',description:'설명'})}));
+  assert.equal(res.status,200,JSON.stringify(await res.clone().json()).slice(0,200));
+
+  const after=(await repository.load()).state;
+  assert.ok(!after.audit.some(x=>x.id==='a-ancient'),'요청 한 번으로 오래된 운영 이력이 정리되어야 한다');
+  assert.ok(!after.notifications.some(x=>x.id==='n-read-old'),'읽은 지 오래된 알림도 정리되어야 한다');
+  assert.equal(after.teams.length,3,'팀은 그대로여야 한다');
+  globalThis.__teamkickTestIdentity=null;db.close();
 });

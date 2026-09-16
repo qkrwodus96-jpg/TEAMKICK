@@ -5,6 +5,35 @@ export const blank=():State=>({users:[],teams:[],members:[],games:[],sides:[],re
 // 배포 후 migration 이 적용되지 않으면 테이블이나 열이 없어 SQLite 오류가 난다.
 // 그대로 두면 사용자에게 원인 모를 실패로 보이므로 구분해서 안내한다.
 // 스키마 내용은 응답에 담지 않고 서버 로그에만 남긴다.
+// 오래된 기록을 정리한다.
+// load() 가 매 요청마다 entities 전체를 읽으므로, 끝없이 쌓이는 표가 하나라도
+// 있으면 서비스 전체가 같이 느려진다. audit 과 notifications 는 지금까지
+// 지우는 코드가 없어 영원히 쌓였다.
+//
+// 경기·출석·골 기록(games·sides)과 팀·팀원은 팀킥의 존재 이유라 **절대 지우지 않는다.**
+// 여기서 지우는 것은 "누가 무슨 버튼을 눌렀는지"(audit)와 알림뿐이다.
+// 안 읽은 알림은 오래 남긴다. 사용자가 아직 보지 못한 소식이기 때문이다.
+export const KEEP={receipts:7,audit:90,readNotice:30,unreadNotice:180};
+// 한 요청에서 지우는 양을 제한한다. 오래 쌓인 상태에서 배포하면 첫 요청이
+// 수만 건을 한꺼번에 지우려 들어 저장이 실패할 수 있다. 여러 요청에 나눠 지운다.
+export const PRUNE_LIMIT=200;
+export function prune(s:State,now=Date.now()){
+ let budget=PRUNE_LIMIT;
+ const sweep=(rows:Row[],days:(r:Row)=>number)=>{
+  const kept:Row[]=[];
+  for(const r of rows){
+   const at=Date.parse(String(r.at));
+   // 날짜를 읽을 수 없는 줄은 남긴다. 판단할 수 없는 것을 지우지 않는다.
+   if(budget>0&&Number.isFinite(at)&&at<=now-days(r)*864e5){budget--;continue}
+   kept.push(r);
+  }
+  return kept;
+ };
+ s.receipts=sweep(s.receipts,()=>KEEP.receipts);
+ s.audit=sweep(s.audit,()=>KEEP.audit);
+ s.notifications=sweep(s.notifications,r=>r.read?KEEP.readNotice:KEEP.unreadNotice);
+ return PRUNE_LIMIT-budget;
+}
 export const setupIncomplete=(e:unknown)=>/no such table|no such column/i.test(String(e));
 export const SETUP_MESSAGE="데이터베이스 준비가 아직 끝나지 않았어요. 관리자에게 문의해주세요.";
 

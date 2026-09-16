@@ -27,6 +27,7 @@
 | 프로젝트 ID | `appgprj_6aa6c615232c8191833b52f2e9f2cf49` |
 | 제목 | 팀킥 · 우리 팀의 모든 경기 |
 | 기존 URL | https://teamkick-jaeyeon.qkrwodus96.chatgpt.site |
+| 연결 중인 주소 | `teamkick.co.kr` (Sites 맞춤 도메인, DNS 확인 대기 2026-09-15) |
 | 저장 버전 | v1 (73개 파일 소스 보관본) |
 | 참고 커밋 | `2f899fe373d2d7ee447739b1f650dd52e386aa4d` |
 

@@ -3,7 +3,7 @@ import {storageReady} from "@/lib/images";
 import {placeSearchReady} from "@/lib/places";
 import {mailReady} from "@/lib/mail";
 import {load,commit} from "@/lib/store";
-import {applyCommand,visibleState,AppError,iso,id,setupIncomplete,SETUP_MESSAGE,errorHint} from "@/lib/model";
+import {applyCommand,visibleState,AppError,iso,id,prune,setupIncomplete,SETUP_MESSAGE,errorHint} from "@/lib/model";
 import {checkOwnerCode} from "@/lib/owner-config";
 import {ensureSchema} from "@/lib/schema";
 import {kakaoReady} from "@/lib/kakao";
@@ -28,7 +28,7 @@ export async function POST(req:Request){
    const ownerId=state.settings.find(x=>x.id==="owner")?.userId;
    const ownerReset=c.type==="setupOwner"&&!!ownerId&&ownerId!==user.userId&&!(await accountExists(ownerId));
    const after=structuredClone(state);const output=applyCommand(after,{id:user.userId,name:user.fullName??state.users.find(x=>x.id===user.userId)?.name??"팀원",ownerSetup:setup,ownerReset,verified:!mailReady()||!!user.verified},c);
-   after.receipts.push({id:user.userId+":"+c.mutationId,output,at:iso()});after.receipts=after.receipts.filter(x=>Date.parse(x.at)>Date.now()-7*864e5);
+   after.receipts.push({id:user.userId+":"+c.mutationId,output,at:iso()});prune(after);
    try{await commit(state,after,version);if(c.type==="closeAccount"){await closeAccount(user.userId);return json({ok:true,closed:true},200,clearedCookie())}return json({ok:true,output,...visibleState(after,user.userId,c.teamId)});}catch(e){if(String(e).includes("revision_matches")||String(e).includes("CHECK constraint")){if(attempt<3)continue;throw new AppError("다른 변경이 먼저 저장되었어요. 새로고침 후 다시 시도해주세요.",409)}throw e}
   }
  }catch(e){console.error("TeamKick mutation",e instanceof AppError?e.message:e);return json({error:e instanceof AppError?e.message:setupIncomplete(e)?SETUP_MESSAGE:"저장하지 못했어요. 입력 내용을 유지한 채 다시 시도해주세요."+errorHint(e)},e instanceof AppError?e.status:503)}

@@ -998,7 +998,7 @@ test('정리는 운영 이력과 알림만 건드리고 경기 기록은 한 건
     {id:'unread-ancient',at:old,read:false});
 
   // 기준 값이 바뀌면 이 테스트가 먼저 알려주도록 묶어 둔다.
-  assert.deepEqual(KEEP,{receipts:7,audit:90,readNotice:30,unreadNotice:180},
+  assert.deepEqual(KEEP,{receipts:7,audit:90,readNotice:30,unreadNotice:180,inquiry:365},
     '보관 기간을 바꾸려면 이 기대값과 안내 문구도 함께 고쳐야 한다');
 
   const removed=prune(s,NOW);
@@ -1299,4 +1299,26 @@ test('나중에 생긴 표가 없는 옛 백업도 되살릴 수 있다',async()
   const broken=await backup.exportAll();delete broken.data.teams;
   await assert.rejects(()=>backup.restoreAll(broken),/teams 항목을 찾지 못했/);
   db.close();
+});
+
+test('문의는 1년 뒤에 정리하되 답변 대기 중인 것은 남긴다',()=>{
+  const s=blank();
+  const old=iso(NOW-400*DAY);
+  s.inquiries.push(
+    {id:'q-answered-old',userId:'a',status:'answered',message:'오래된 답변 완료',at:old},
+    {id:'q-answered-new',userId:'a',status:'answered',message:'최근 답변 완료',at:iso(NOW-100*DAY)},
+    {id:'q-open-old',userId:'a',status:'open',message:'오래됐지만 답변 대기',at:old});
+  prune(s,NOW);
+  assert.deepEqual(s.inquiries.map(x=>x.id).sort(),['q-answered-new','q-open-old'],
+    '답변 대기 중인 문의는 오래돼도 지우지 않는다');
+});
+
+test('탈퇴하면 내 문의도 함께 지운다',()=>{
+  const f=fixture();
+  f.s.users.push({id:'quitter',name:'박재연',at:iso(NOW-20*DAY)});
+  command(f.s,{id:'quitter',name:'박재연'},{type:'askSupport',message:'문의합니다'});
+  command(f.s,A,{type:'askSupport',message:'남의 문의'});
+  assert.equal(f.s.inquiries.length,2);
+  command(f.s,{id:'quitter',name:'박재연'},{type:'closeAccount'},NOW);
+  assert.deepEqual(f.s.inquiries.map(x=>x.userId),['a'],'탈퇴한 사람 문의만 사라져야 한다');
 });

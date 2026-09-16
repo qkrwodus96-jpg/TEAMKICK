@@ -13,7 +13,8 @@ export const blank=():State=>({users:[],teams:[],members:[],games:[],sides:[],re
 // 경기·출석·골 기록(games·sides)과 팀·팀원은 팀킥의 존재 이유라 **절대 지우지 않는다.**
 // 여기서 지우는 것은 "누가 무슨 버튼을 눌렀는지"(audit)와 알림뿐이다.
 // 안 읽은 알림은 오래 남긴다. 사용자가 아직 보지 못한 소식이기 때문이다.
-export const KEEP={receipts:7,audit:90,readNotice:30,unreadNotice:180};
+// 문의는 분쟁 기록이라 운영 이력(90일)보다 길게 둔다. 1년(사용자 결정 2026-09-16).
+export const KEEP={receipts:7,audit:90,readNotice:30,unreadNotice:180,inquiry:365};
 // 한 요청에서 지우는 양을 제한한다. 오래 쌓인 상태에서 배포하면 첫 요청이
 // 수만 건을 한꺼번에 지우려 들어 저장이 실패할 수 있다. 여러 요청에 나눠 지운다.
 export const PRUNE_LIMIT=200;
@@ -32,6 +33,8 @@ export function prune(s:State,now=Date.now()){
  s.receipts=sweep(s.receipts,()=>KEEP.receipts);
  s.audit=sweep(s.audit,()=>KEEP.audit);
  s.notifications=sweep(s.notifications,r=>r.read?KEEP.readNotice:KEEP.unreadNotice);
+ // 답변을 기다리는 문의는 지우지 않는다. 오래됐다고 못 본 채로 사라지면 안 된다.
+ s.inquiries=sweep(s.inquiries,r=>r.status==="open"?Infinity:KEEP.inquiry);
  return PRUNE_LIMIT-budget;
 }
 export const setupIncomplete=(e:unknown)=>/no such table|no such column/i.test(String(e));
@@ -277,6 +280,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   // 남는 기록에서 개인 식별 정보를 지운다. 과거 경기·출석·기록의 선수 표시 이름은 그대로 둔다.
   s.users=s.users.filter(x=>x.id!==a.id);
   s.notifications=s.notifications.filter(x=>x.userId!==a.id);
+  s.inquiries=s.inquiries.filter(x=>x.userId!==a.id);
   for(const x of s.members.filter(y=>y.userId===a.id))x.photo="";
  }
  // --- 1:1 문의 ---

@@ -1,7 +1,7 @@
 export type Row={id:string;[key:string]:any};
-export type State={users:Row[];teams:Row[];members:Row[];games:Row[];sides:Row[];requests:Row[];guests:Row[];notices:Row[];notifications:Row[];invites:Row[];audit:Row[];receipts:Row[];settings:Row[]};
-export const collections=["users","teams","members","games","sides","requests","guests","notices","notifications","invites","audit","receipts","settings"] as const;
-export const blank=():State=>({users:[],teams:[],members:[],games:[],sides:[],requests:[],guests:[],notices:[],notifications:[],invites:[],audit:[],receipts:[],settings:[]});
+export type State={users:Row[];teams:Row[];members:Row[];games:Row[];sides:Row[];requests:Row[];guests:Row[];notices:Row[];notifications:Row[];invites:Row[];audit:Row[];receipts:Row[];settings:Row[];inquiries:Row[];announcements:Row[]};
+export const collections=["users","teams","members","games","sides","requests","guests","notices","notifications","invites","audit","receipts","settings","inquiries","announcements"] as const;
+export const blank=():State=>({users:[],teams:[],members:[],games:[],sides:[],requests:[],guests:[],notices:[],notifications:[],invites:[],audit:[],receipts:[],settings:[],inquiries:[],announcements:[]});
 // 배포 후 migration 이 적용되지 않으면 테이블이나 열이 없어 SQLite 오류가 난다.
 // 그대로 두면 사용자에게 원인 모를 실패로 보이므로 구분해서 안내한다.
 // 스키마 내용은 응답에 담지 않고 서버 로그에만 남긴다.
@@ -279,6 +279,36 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   s.notifications=s.notifications.filter(x=>x.userId!==a.id);
   for(const x of s.members.filter(y=>y.userId===a.id))x.photo="";
  }
+ // --- 1:1 문의 ---
+ // 팀 안이 아니라 서비스 운영자에게 직접 보내는 창구. 팀에 속하지 않아도 쓸 수 있다.
+ else if(type==="askSupport"){
+  const text=textValue(c.message,1000);
+  // 답변을 기다리는 문의가 쌓이면 더 받지 않는다. 한 사람이 창구를 막지 않게 한다.
+  ensure(s.inquiries.filter(x=>x.userId===a.id&&x.status==="open").length<3,"답변을 기다리는 문의가 있어요. 답변을 받은 뒤에 다시 보내주세요.",429);
+  const row={id:id(),userId:a.id,name:a.name,message:text,status:"open",replies:[] as Row[],at:stamp};
+  s.inquiries.push(row);output={inquiryId:row.id};
+ }
+ else if(type==="replySupport"){
+  ensure(owner,"서비스 운영자만 답변할 수 있어요.",403);
+  const row=s.inquiries.find(x=>x.id===String(c.inquiryId??""));
+  ensure(row,"문의를 찾을 수 없어요.",404);
+  const text=textValue(c.message,1000);
+  row!.replies=[...(row!.replies??[]),{at:stamp,message:text}];
+  row!.status="answered";
+  userNotice(s,row!.userId,"문의에 답변이 등록되었어요",text.slice(0,120));
+ }
+ // --- 서비스 공지 (팀 공지와 다르다. 모든 사용자에게 보인다) ---
+ else if(type==="postAnnouncement"){
+  ensure(owner,"서비스 운영자만 올릴 수 있어요.",403);
+  s.announcements.push({id:id(),title:textValue(c.title,80),body:textValue(c.body,2000),
+   version:textValue(c.version,20,false),at:stamp});
+ }
+ else if(type==="removeAnnouncement"){
+  ensure(owner,"서비스 운영자만 지울 수 있어요.",403);
+  const before=s.announcements.length;
+  s.announcements=s.announcements.filter(x=>x.id!==String(c.noticeId??""));
+  ensure(s.announcements.length<before,"공지를 찾을 수 없어요.",404);
+ }
  else if(type==="anonymizeMember"){
   ensure(owner,"서비스 운영자만 처리할 수 있어요.",403);
   const target=String(c.userId??"").trim();
@@ -302,7 +332,12 @@ export function visibleState(s:State,userId:string,selected?:string){
  const games=s.games.filter(g=>tid&&containsTeam(g,tid));const listings=activeAccess?s.games.filter(g=>g.listing==="open"&&g.status==="scheduled"&&Date.parse(g.start)>Date.now()&&teamOf(s,g.home)?.status==="active"):[];
  const members=tid?s.members.filter(m=>m.teamId===tid&&(m.status==="active"||m.status==="left"||m.status==="removed"||team.role==="captain")):[];
  const myGuestRows=s.guests.filter(x=>x.userId===userId);const guestGame=(gid:string)=>s.games.find(y=>y.id===gid);
- return {teams:publicTeams,members,mine:my,ownTeams,teamId:tid??"",role:team?.role??"",isOwner:owner,retired:owner?retiredPeople(s):[],setupNeeded:!s.settings.some(x=>x.id==="owner"),games,sides:s.sides.filter(x=>x.teamId===tid).map(z=>({...z,roster:rosterFor(s,z,s.games.find(g=>g.id===z.gameId)!),draft:attendanceDraft(s,z,s.games.find(g=>g.id===z.gameId)!)})),listings,
+ return {teams:publicTeams,members,mine:my,ownTeams,teamId:tid??"",role:team?.role??"",isOwner:owner,retired:owner?retiredPeople(s):[],
+  myTotals:myTotals(s,userId),
+  // 문의는 본인 것만 본다. 운영자는 답변해야 하므로 전부 본다.
+  inquiries:s.inquiries.filter(x=>owner||x.userId===userId).sort((x,y)=>String(y.at).localeCompare(String(x.at))).map(x=>({...x,mine:x.userId===userId})),
+  announcements:[...s.announcements].sort((x,y)=>String(y.at).localeCompare(String(x.at))),
+  setupNeeded:!s.settings.some(x=>x.id==="owner"),games,sides:s.sides.filter(x=>x.teamId===tid).map(z=>({...z,roster:rosterFor(s,z,s.games.find(g=>g.id===z.gameId)!),draft:attendanceDraft(s,z,s.games.find(g=>g.id===z.gameId)!)})),listings,
  requests:s.requests.filter(r=>r.teamId===tid||(tid&&isCaptain(s,tid,userId)&&s.games.some(g=>g.id===r.gameId&&g.home===tid))),
  notices:s.notices.filter(x=>x.teamId===tid),notifications:s.notifications.filter(n=>n.userId===userId&&(!n.teamId||active.some(m=>m.teamId===n.teamId)||my.some(m=>m.teamId===n.teamId))),
  guests:tid?s.guests.filter(x=>x.teamId===tid):[],
@@ -310,6 +345,25 @@ export function visibleState(s:State,userId:string,selected?:string){
  guestListings:s.sides.filter(z=>{const gm=guestGame(z.gameId);return guestStatusOf(z)==="open"&&!!gm&&gm.status==="scheduled"&&Date.parse(gm.start)>Date.now()&&teamOf(s,z.teamId)?.status==="active"}).map(z=>{const gm=guestGame(z.gameId)!;return {id:z.id,gameId:gm.id,teamId:z.teamId,teamName:teamOf(s,z.teamId)?.name??"",start:gm.start,end:gm.end,venue:gm.venue,address:gm.address,region:gm.region,format:gm.format,cost:gm.cost,secured:gm.secured,needed:z.guestNeeded??0,approved:approvedGuests(s,gm.id,z.teamId),applied:myGuestRows.find(x=>x.gameId===gm.id&&x.teamId===z.teamId&&["pending","approved"].includes(x.status))?.status??""}}),
  invites:s.invites.filter(x=>x.teamId===tid&&team?.role==="captain"),audit:owner?s.audit.slice(-100).reverse():[]};
 }
+// 내가 뛴 모든 팀의 기록을 합산한다. 팀별 화면(summaries)과 달리 팀 경계를 넘는다.
+// 팀을 옮기거나 여러 팀에서 뛰어도 "내가 쌓은 것"은 하나로 보여야 한다.
+export function myTotals(s:State,userId:string){
+ const mine=s.members.filter(m=>m.userId===userId&&m.status!=="rejected");
+ const ids=new Set(mine.map(m=>m.id));
+ let played=0,attend=0,eligible=0,goals=0,assists=0;
+ for(const side of s.sides){
+  const game=s.games.find(g=>g.id===side.gameId);
+  if(!game||game.status!=="completed")continue;
+  const me=rosterFor(s,side,game).find((r:Row)=>ids.has(r.id));
+  if(!me)continue;
+  played++;
+  if(side.attendanceFinal){eligible++;if(side.attendance?.[me.id])attend++}
+  if(side.recordsFinal){goals+=side.records?.[me.id]?.goals??0;assists+=side.records?.[me.id]?.assists??0}
+ }
+ return {teams:new Set(mine.map(m=>m.teamId)).size,played,attend,eligible,
+  rate:eligible?Math.round(attend/eligible*100):null,goals,assists,points:goals+assists};
+}
+
 export function summaries(v:any,from:string,to:string){
  const games=v.games.filter((g:Row)=>g.status==="completed"&&g.start>=from&&g.start<to);const scored=games.filter((g:Row)=>g.result?.status==="confirmed");let wins=0,draws=0,losses=0,goals=0,against=0;
  for(const g of scored){const own=g.home===v.teamId?g.result.a:g.result.b,other=g.home===v.teamId?g.result.b:g.result.a;goals+=own;against+=other;if(own>other)wins++;else if(own===other)draws++;else losses++;}

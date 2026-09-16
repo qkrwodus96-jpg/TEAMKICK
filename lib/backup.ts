@@ -12,6 +12,8 @@ import {load,commit} from "./store";
 // 카카오로 가입한 계정은 원래 비밀번호가 없으므로 복원 즉시 그대로 로그인된다.
 export const FORMAT=1;
 export const CONFIRM="복원합니다";
+// 이것들이 빠진 파일은 백업이 아니라고 본다.
+const CORE:readonly string[]=["users","teams","members","games","sides","settings"];
 
 type AccountRow={id:string;email:string;name:string;provider:string|null;kakao_id:string|null;verified_at:string|null;at:string};
 export type Backup={format:number;build:string;exportedAt:string;version:number;counts:Record<string,number>;accounts:AccountRow[];data:Record<string,unknown[]>};
@@ -35,18 +37,26 @@ export function readBackup(input:unknown):Backup{
  const file=input as Partial<Backup>|null;
  if(!file||typeof file!=="object")throw new AppError("백업 파일을 읽지 못했어요.");
  if(file.format!==FORMAT)throw new AppError("이 백업 파일의 형식("+String(file.format)+")은 지원하지 않아요.");
- const data=file.data;
+ const data=file.data as Record<string,unknown>|undefined;
  if(!data||typeof data!=="object")throw new AppError("백업 파일에 데이터가 없어요.");
+ const filled:Record<string,unknown[]>={};
  for(const kind of collections){
-  const rows=(data as Record<string,unknown>)[kind];
-  if(!Array.isArray(rows))throw new AppError("백업 파일에서 "+kind+" 항목을 찾지 못했어요.");
+  const rows=data[kind];
+  // 나중에 추가된 표는 옛 백업 파일에 없다. 그건 "비어 있었다"는 뜻이므로 받아준다.
+  // 다만 서비스의 뼈대가 통째로 빠진 파일은 받지 않는다. 손상된 파일로 다 지우면 안 된다.
+  if(rows===undefined){
+   if(CORE.includes(kind))throw new AppError("백업 파일에서 "+kind+" 항목을 찾지 못했어요.");
+   filled[kind]=[];continue;
+  }
+  if(!Array.isArray(rows))throw new AppError("백업 파일의 "+kind+" 항목이 손상되었어요.");
   for(const row of rows)if(!row||typeof row!=="object"||typeof (row as {id?:unknown}).id!=="string"||!(row as {id:string}).id)
    throw new AppError("백업 파일의 "+kind+" 항목이 손상되었어요.");
+  filled[kind]=rows;
  }
  const accounts=Array.isArray(file.accounts)?file.accounts:[];
  for(const a of accounts)if(!a||typeof a!=="object"||typeof a.id!=="string"||typeof a.email!=="string"||typeof a.name!=="string")
   throw new AppError("백업 파일의 계정 정보가 손상되었어요.");
- return {...file,accounts,data}as Backup;
+ return {...file,accounts,data:filled}as Backup;
 }
 
 export async function restoreAll(input:unknown){

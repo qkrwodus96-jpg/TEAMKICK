@@ -1190,3 +1190,113 @@ test('탈퇴자 목록은 운영자에게만 보낸다',()=>{
   command(f.s,owner,{type:'anonymizeMember',userId:'quitter'});
   assert.equal(visibleState(f.s,'owner').retired[0].hidden,true,'가린 뒤에는 완료로 표시된다');
 });
+
+// --- MY 화면: 내 전체 기록 / 1:1 문의 / 서비스 공지 ---
+
+test('내 전체 기록은 여러 팀을 합산한다',()=>{
+  const f=fixture();
+  // 같은 사람이 두 팀에서 뛴다.
+  for(const [team,mid] of [[f.a,'m-a'],[f.b,'m-b']])
+    f.s.members.push({id:mid,teamId:team,userId:'runner',name:'선수',role:'player',status:'active',number:9,position:'FW',periods:[{start:iso(NOW-30*DAY)}],at:iso(NOW-30*DAY)});
+  f.s.users.push({id:'runner',name:'선수',at:iso(NOW-30*DAY)});
+  let n=0;
+  for(const [team,mid] of [[f.a,'m-a'],[f.b,'m-b']]){
+    const gid='g'+(++n);
+    f.s.games.push({id:gid,teamId:team,home:team,status:'completed',start:iso(NOW-10*DAY),end:iso(NOW-10*DAY+7200000),venue:'구장',at:iso(NOW-30*DAY)});
+    f.s.sides.push({id:'s'+n,teamId:team,gameId:gid,attendanceFinal:true,recordsFinal:true,
+      attendance:{[mid]:true},records:{[mid]:{goals:2,assists:1}},deadline:iso(NOW-11*DAY),at:iso(NOW-30*DAY)});
+  }
+  const t=visibleState(f.s,'runner',f.a).myTotals;
+  assert.equal(t.teams,2,'두 팀이 잡혀야 한다');
+  assert.equal(t.played,2,'두 경기');
+  assert.equal(t.goals,4,'골이 합산되어야 한다');
+  assert.equal(t.assists,2);
+  assert.equal(t.rate,100,'출석률');
+
+  // 남의 기록이 섞이면 안 된다
+  assert.equal(visibleState(f.s,'a',f.a).myTotals.goals,0,'다른 사람 기록이 섞이면 안 된다');
+});
+
+test('확정되지 않은 기록은 내 전체 기록에 들어가지 않는다',()=>{
+  const f=fixture();
+  f.s.users.push({id:'runner',name:'선수',at:iso(NOW-30*DAY)});
+  f.s.members.push({id:'m1',teamId:f.a,userId:'runner',name:'선수',role:'player',status:'active',number:9,position:'FW',periods:[{start:iso(NOW-30*DAY)}],at:iso(NOW-30*DAY)});
+  f.s.games.push({id:'g1',teamId:f.a,home:f.a,status:'completed',start:iso(NOW-10*DAY),end:iso(NOW-10*DAY+7200000),venue:'구장',at:iso(NOW-30*DAY)});
+  f.s.sides.push({id:'s1',teamId:f.a,gameId:'g1',attendanceFinal:false,recordsFinal:false,
+    attendance:{m1:true},records:{m1:{goals:3,assists:3}},deadline:iso(NOW-11*DAY),at:iso(NOW-30*DAY)});
+  const t=visibleState(f.s,'runner',f.a).myTotals;
+  assert.equal(t.played,1,'경기는 센다');
+  assert.equal(t.goals,0,'확정 전 골은 세지 않는다');
+  assert.equal(t.rate,null,'확정 전 출석은 출석률에 넣지 않는다');
+});
+
+test('1:1 문의는 본인과 운영자만 보고, 운영자만 답변한다',()=>{
+  const f=fixture();
+  const out=command(f.s,A,{type:'askSupport',message:'구장 검색이 안 돼요'});
+  assert.ok(out.inquiryId);
+  command(f.s,B,{type:'askSupport',message:'다른 사람 문의'});
+
+  assert.equal(visibleState(f.s,'a',f.a).inquiries.length,1,'본인 것만 보여야 한다');
+  assert.equal(visibleState(f.s,'a',f.a).inquiries[0].message,'구장 검색이 안 돼요');
+  assert.equal(visibleState(f.s,'owner').inquiries.length,2,'운영자는 전부 본다');
+  assert.equal(visibleState(f.s,'stranger').inquiries.length,0,'남의 문의는 안 보인다');
+
+  // 주장은 답변할 수 없다
+  assert.throws(()=>command(f.s,B,{type:'replySupport',inquiryId:out.inquiryId,message:'제가 답할게요'}),/운영자/);
+  assert.equal(f.s.inquiries.find(x=>x.id===out.inquiryId).status,'open');
+
+  command(f.s,owner,{type:'replySupport',inquiryId:out.inquiryId,message:'카카오 키를 확인해주세요'});
+  const row=f.s.inquiries.find(x=>x.id===out.inquiryId);
+  assert.equal(row.status,'answered');
+  assert.equal(row.replies[0].message,'카카오 키를 확인해주세요');
+  assert.ok(f.s.notifications.some(n=>n.userId==='a'&&n.title.includes('답변')),'문의한 사람에게 알려야 한다');
+
+  assert.throws(()=>command(f.s,owner,{type:'replySupport',inquiryId:'없음',message:'ㅇㅇ'}),/찾을 수 없어요/);
+  assert.throws(()=>command(f.s,A,{type:'askSupport',message:'   '}),/입력|적어|확인/);
+});
+
+test('답변을 기다리는 문의가 쌓이면 더 받지 않는다',()=>{
+  const f=fixture();
+  for(let i=0;i<3;i++)command(f.s,A,{type:'askSupport',message:'문의 '+i});
+  assert.throws(()=>command(f.s,A,{type:'askSupport',message:'네 번째'}),/답변을 기다리는/);
+  // 답변이 오면 다시 보낼 수 있다
+  command(f.s,owner,{type:'replySupport',inquiryId:f.s.inquiries[0].id,message:'답변'});
+  command(f.s,A,{type:'askSupport',message:'다시 문의'});
+  assert.equal(f.s.inquiries.filter(x=>x.userId==='a').length,4);
+});
+
+test('서비스 공지는 운영자만 올리고 지우며 모두에게 보인다',()=>{
+  const f=fixture();
+  assert.throws(()=>command(f.s,A,{type:'postAnnouncement',title:'제목',body:'내용'}),/운영자/);
+  command(f.s,owner,{type:'postAnnouncement',title:'구장 검색 추가',body:'수지체육공원도 찾을 수 있어요',version:'1.1.0'});
+  assert.equal(f.s.announcements.length,1);
+  assert.equal(f.s.announcements[0].version,'1.1.0');
+
+  for(const who of ['a','stranger','owner'])
+    assert.equal(visibleState(f.s,who).announcements.length,1,who+' 에게도 보여야 한다');
+
+  const nid=f.s.announcements[0].id;
+  assert.throws(()=>command(f.s,A,{type:'removeAnnouncement',noticeId:nid}),/운영자/);
+  assert.equal(f.s.announcements.length,1,'거절 뒤에도 남아 있어야 한다');
+  command(f.s,owner,{type:'removeAnnouncement',noticeId:nid});
+  assert.equal(f.s.announcements.length,0);
+  assert.throws(()=>command(f.s,owner,{type:'removeAnnouncement',noticeId:nid}),/찾을 수 없어요/);
+});
+
+test('나중에 생긴 표가 없는 옛 백업도 되살릴 수 있다',async()=>{
+  const db=localDatabase();
+  const f=fixture();
+  await repository.commit(blank(),f.s,(await repository.load()).version);
+  const file=await backup.exportAll();
+  // 문의·공지가 없던 시절의 파일을 흉내 낸다.
+  delete file.data.inquiries;delete file.data.announcements;
+  const out=await backup.restoreAll(file);
+  assert.ok(out);
+  assert.equal((await repository.load()).state.teams.length,3,'팀은 살아나야 한다');
+  assert.deepEqual((await repository.load()).state.inquiries,[],'없던 표는 비어 있는 것으로 본다');
+
+  // 뼈대가 빠진 파일은 받지 않는다
+  const broken=await backup.exportAll();delete broken.data.teams;
+  await assert.rejects(()=>backup.restoreAll(broken),/teams 항목을 찾지 못했/);
+  db.close();
+});

@@ -25,7 +25,7 @@ compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
 compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
-const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME}=await import(path.join(runtime,'model.mjs'));
+const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,levelOf}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
 const auth=await import(path.join(runtime,'auth.mjs'));
 const mail=await import(path.join(runtime,'mail.mjs'));
@@ -1321,4 +1321,66 @@ test('탈퇴하면 내 문의도 함께 지운다',()=>{
   assert.equal(f.s.inquiries.length,2);
   command(f.s,{id:'quitter',name:'박재연'},{type:'closeAccount'},NOW);
   assert.deepEqual(f.s.inquiries.map(x=>x.userId),['a'],'탈퇴한 사람 문의만 사라져야 한다');
+});
+
+// --- 팀 정보 수정: 경기 형식·활동 요일·실력 ---
+// 팀을 만들 때만 정할 수 있고 나중에 고칠 수 없었다. 팀 사정은 바뀐다.
+
+test('팀 정보 수정에서 경기 형식·활동 요일·실력을 고칠 수 있다',()=>{
+  const f=fixture();
+  const before=f.s.teams.find(t=>t.id===f.a);
+  assert.equal(before.format,'11인제');
+  assert.equal(before.level,'중급','기본값');
+
+  command(f.s,A,{type:'editTeam',teamId:f.a,name:'팀킥 FC',region:'경기 남부',description:'소개',
+    format:'8인제',days:'토요일 저녁',level:'상급'});
+  const after=f.s.teams.find(t=>t.id===f.a);
+  assert.equal(after.format,'8인제');
+  assert.equal(after.days,'토요일 저녁');
+  assert.equal(after.level,'상급');
+  assert.equal(after.name,'팀킥 FC','기존 항목도 그대로 저장돼야 한다');
+});
+
+test('경기 형식과 실력은 목록에 있는 값만 받는다',()=>{
+  const f=fixture();
+  const base={type:'editTeam',teamId:f.a,name:'팀',region:'서울',description:'',days:'일요일 오전'};
+  assert.throws(()=>command(f.s,A,{...base,format:'22인제',level:'상급'}),/주 경기 형식/);
+  assert.throws(()=>command(f.s,A,{...base,format:'11인제',level:'신급'}),/팀 실력/);
+  assert.throws(()=>command(f.s,A,{...base,format:'11인제',level:''}),/팀 실력/);
+  assert.equal(f.s.teams.find(t=>t.id===f.a).format,'11인제','거절된 뒤에도 그대로여야 한다');
+
+  // 만들 때도 마찬가지
+  assert.throws(()=>command(f.s,{id:'x',name:'새 주장',verified:true},
+    {type:'createTeam',name:'새 팀',region:'서울',description:'',format:'3인제'}),/주 경기 형식/);
+});
+
+test('값을 보내지 않으면 지금 값을 지킨다',()=>{
+  // 배포 중에 예전 화면을 열어둔 사람이 이름만 보낼 수 있다. 그때 형식·실력이
+  // 빈 값으로 덮이면 안 된다.
+  const f=fixture();
+  command(f.s,A,{type:'editTeam',teamId:f.a,name:'새 이름',region:'서울',description:'소개'});
+  const after=f.s.teams.find(t=>t.id===f.a);
+  assert.equal(after.name,'새 이름');
+  assert.equal(after.format,'11인제','보내지 않은 형식은 그대로');
+  assert.equal(after.level,'중급','보내지 않은 실력은 그대로');
+});
+
+test('주장만 팀 정보를 고칠 수 있다',()=>{
+  const f=fixture();
+  const cmd={type:'editTeam',teamId:f.a,name:'바꾼 이름',region:'서울',description:'',
+    format:'8인제',days:'토요일',level:'상급'};
+  assert.throws(()=>command(f.s,B,cmd),/팀|권한|주장/);
+  assert.throws(()=>command(f.s,owner,cmd),/팀|권한|주장/);
+  assert.equal(f.s.teams.find(t=>t.id===f.a).name,'팀 0','거절된 뒤에도 그대로여야 한다');
+});
+
+test('목록을 만들기 전에 저장된 실력 값도 화면에서 다듬어 보여준다',()=>{
+  assert.equal(levelOf('중'),'중급');
+  assert.equal(levelOf('하'),'초급');
+  assert.equal(levelOf('상'),'상급');
+  assert.equal(levelOf('상급'),'상급','이미 맞는 값은 그대로');
+  assert.equal(levelOf(''),'중급','알 수 없으면 기본값');
+  assert.equal(levelOf(undefined),'중급');
+  for(const x of LEVELS)assert.equal(levelOf(x),x);
+  assert.ok(FORMATS.includes('11인제'));
 });

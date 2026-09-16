@@ -47,6 +47,21 @@ export const iso=(ms=Date.now())=>new Date(ms).toISOString();
 export const id=()=>crypto.randomUUID();
 export const teamOf=(s:State,t:string)=>s.teams.find(x=>x.id===t);
 export const membership=(s:State,t:string,u:string)=>s.members.find(x=>x.teamId===t&&x.userId===u&&x.status==="active");
+// 탈퇴한 사람이 "내 이름을 지워달라"고 요구하면(개인정보보호법 제36조) 운영자가
+// 과거 기록의 표시 이름만 이 값으로 바꾼다. 골·출석 같은 팀의 공동 기록은 남는다.
+// 탈퇴했지만 과거 기록에 표시 이름이 남아 있는 사람들. 삭제 요청이 오면
+// 운영자가 이 목록에서 찾아 가린다. 운영자에게만 보낸다.
+export function retiredPeople(s:State){
+ const out=new Map<string,{userId:string;name:string;teams:number;hidden:boolean}>();
+ for(const m of s.members){
+  if(!m.userId||s.users.some(u=>u.id===m.userId))continue;
+  const seen=out.get(m.userId);
+  if(seen){seen.teams++;if(m.name!==ANON_NAME)seen.hidden=false;continue}
+  out.set(m.userId,{userId:m.userId,name:String(m.name??""),teams:1,hidden:m.name===ANON_NAME});
+ }
+ return [...out.values()];
+}
+export const ANON_NAME="탈퇴한 선수";
 export const isOwner=(s:State,u:string)=>s.settings.find(x=>x.id==="owner")?.userId===u;
 export const isManager=(s:State,t:string,u:string)=>["captain","manager"].includes(membership(s,t,u)?.role);
 export const isCaptain=(s:State,t:string,u:string)=>membership(s,t,u)?.role==="captain";
@@ -264,6 +279,17 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   s.notifications=s.notifications.filter(x=>x.userId!==a.id);
   for(const x of s.members.filter(y=>y.userId===a.id))x.photo="";
  }
+ else if(type==="anonymizeMember"){
+  ensure(owner,"서비스 운영자만 처리할 수 있어요.",403);
+  const target=String(c.userId??"").trim();
+  ensure(target,"어떤 사람의 기록인지 알려주세요.");
+  // 아직 쓰고 있는 계정은 가리지 않는다. 탈퇴한 사람의 요청만 처리한다.
+  ensure(!s.users.some(x=>x.id===target),"아직 탈퇴하지 않은 계정이에요. 탈퇴한 뒤에 처리할 수 있어요.",409);
+  const rows=s.members.filter(x=>x.userId===target&&x.name!==ANON_NAME);
+  ensure(rows.length,"바꿀 기록을 찾지 못했어요.",404);
+  for(const x of rows){x.name=ANON_NAME;x.photo="";}
+  output={changed:rows.length};
+ }
  else if(type==="readNotifications"){for(const n of s.notifications.filter(x=>x.userId===a.id))n.read=true;}
  else if(type==="correctRequest"){requireTeam(s,t,a.id);for(const m of s.members.filter(x=>x.teamId===t&&["captain","manager"].includes(x.role)&&x.status==="active"))userNotice(s,m.userId,"기록 정정 요청",a.name+": "+textValue(c.message,500),t);}
  else throw new AppError("지원하지 않는 작업이에요.");
@@ -276,7 +302,7 @@ export function visibleState(s:State,userId:string,selected?:string){
  const games=s.games.filter(g=>tid&&containsTeam(g,tid));const listings=activeAccess?s.games.filter(g=>g.listing==="open"&&g.status==="scheduled"&&Date.parse(g.start)>Date.now()&&teamOf(s,g.home)?.status==="active"):[];
  const members=tid?s.members.filter(m=>m.teamId===tid&&(m.status==="active"||m.status==="left"||m.status==="removed"||team.role==="captain")):[];
  const myGuestRows=s.guests.filter(x=>x.userId===userId);const guestGame=(gid:string)=>s.games.find(y=>y.id===gid);
- return {teams:publicTeams,members,mine:my,ownTeams,teamId:tid??"",role:team?.role??"",isOwner:owner,setupNeeded:!s.settings.some(x=>x.id==="owner"),games,sides:s.sides.filter(x=>x.teamId===tid).map(z=>({...z,roster:rosterFor(s,z,s.games.find(g=>g.id===z.gameId)!),draft:attendanceDraft(s,z,s.games.find(g=>g.id===z.gameId)!)})),listings,
+ return {teams:publicTeams,members,mine:my,ownTeams,teamId:tid??"",role:team?.role??"",isOwner:owner,retired:owner?retiredPeople(s):[],setupNeeded:!s.settings.some(x=>x.id==="owner"),games,sides:s.sides.filter(x=>x.teamId===tid).map(z=>({...z,roster:rosterFor(s,z,s.games.find(g=>g.id===z.gameId)!),draft:attendanceDraft(s,z,s.games.find(g=>g.id===z.gameId)!)})),listings,
  requests:s.requests.filter(r=>r.teamId===tid||(tid&&isCaptain(s,tid,userId)&&s.games.some(g=>g.id===r.gameId&&g.home===tid))),
  notices:s.notices.filter(x=>x.teamId===tid),notifications:s.notifications.filter(n=>n.userId===userId&&(!n.teamId||active.some(m=>m.teamId===n.teamId)||my.some(m=>m.teamId===n.teamId))),
  guests:tid?s.guests.filter(x=>x.teamId===tid):[],

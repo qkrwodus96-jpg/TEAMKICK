@@ -25,7 +25,7 @@ compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
 compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
-const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT}=await import(path.join(runtime,'model.mjs'));
+const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
 const auth=await import(path.join(runtime,'auth.mjs'));
 const mail=await import(path.join(runtime,'mail.mjs'));
@@ -1109,4 +1109,84 @@ test('실패 응답에 내부 오류 원문을 담지 않는다',async()=>{
     '내부 오류 원문이 사용자에게 가면 안 된다: '+other);
 
   globalThis.__teamkickTestIdentity=null;db.close();
+});
+
+// --- 탈퇴한 사람의 표시 이름 가리기 ---
+// 기본은 남긴다(팀의 공동 기록). 다만 본인이 삭제를 요구하면(개인정보보호법 제36조)
+// 운영자가 이름만 가릴 수 있어야 한다. 방법이 아예 없으면 그게 문제가 된다.
+
+
+test('탈퇴해도 과거 기록의 표시 이름은 그대로 남는다',()=>{
+  const f=fixture();
+  const quitter={id:'quitter',name:'박재연'};
+  f.s.users.push({id:'quitter',name:'박재연',at:iso(NOW-20*DAY)});
+  f.s.members.push({id:'m-q',teamId:f.a,userId:'quitter',name:'박재연',role:'player',status:'active',number:7,position:'FW',periods:[{start:iso(NOW-20*DAY)}],photo:'p.jpg',at:iso(NOW-20*DAY)});
+
+  command(f.s,quitter,{type:'closeAccount'},NOW);
+
+  assert.ok(!f.s.users.some(x=>x.id==='quitter'),'계정은 지워진다');
+  assert.equal(f.s.members.find(x=>x.id==='m-q').name,'박재연','과거 기록의 이름은 남는다');
+  assert.equal(f.s.members.find(x=>x.id==='m-q').photo,'','사진은 지운다');
+});
+
+test('운영자만 탈퇴한 사람의 이름을 가릴 수 있다',()=>{
+  const f=fixture();
+  f.s.users.push({id:'quitter',name:'박재연',at:iso(NOW-20*DAY)});
+  f.s.members.push({id:'m1',teamId:f.a,userId:'quitter',name:'박재연',role:'player',status:'left',number:7,position:'FW',periods:[],at:iso(NOW-20*DAY)});
+  f.s.members.push({id:'m2',teamId:f.b,userId:'quitter',name:'박재연',role:'player',status:'left',number:9,position:'MF',periods:[],at:iso(NOW-20*DAY)});
+
+  // 아직 탈퇴하지 않았으면 못 가린다
+  assert.throws(()=>command(f.s,owner,{type:'anonymizeMember',userId:'quitter'}),/탈퇴하지 않은/);
+
+  command(f.s,{id:'quitter',name:'박재연'},{type:'closeAccount'},NOW);
+
+  // 주장도, 남도 못 한다
+  assert.throws(()=>command(f.s,A,{type:'anonymizeMember',userId:'quitter'}),/운영자/);
+  assert.throws(()=>command(f.s,{id:'stranger',name:'남'},{type:'anonymizeMember',userId:'quitter'}),/운영자/);
+  assert.equal(f.s.members.find(x=>x.id==='m1').name,'박재연','거절된 뒤에도 그대로여야 한다');
+
+  // 운영자는 할 수 있고, 여러 팀의 기록이 한 번에 바뀐다
+  const out=command(f.s,owner,{type:'anonymizeMember',userId:'quitter'});
+  assert.equal(out.changed,2);
+  assert.equal(f.s.members.find(x=>x.id==='m1').name,ANON_NAME);
+  assert.equal(f.s.members.find(x=>x.id==='m2').name,ANON_NAME);
+
+  // 두 번은 안 된다
+  assert.throws(()=>command(f.s,owner,{type:'anonymizeMember',userId:'quitter'}),/찾지 못했/);
+  // 대상이 없으면 거절
+  assert.throws(()=>command(f.s,owner,{type:'anonymizeMember',userId:''}),/알려주세요/);
+});
+
+test('이름을 가려도 경기 기록은 한 건도 사라지지 않는다',()=>{
+  const f=fixture();
+  f.s.users.push({id:'quitter',name:'박재연',at:iso(NOW-20*DAY)});
+  f.s.members.push({id:'m1',teamId:f.a,userId:'quitter',name:'박재연',role:'player',status:'left',number:7,position:'FW',periods:[],at:iso(NOW-20*DAY)});
+  const {gameId}=command(f.s,A,{type:'createGame',teamId:f.a,start:iso(NOW+2*DAY),end:iso(NOW+2*DAY+7200000),venue:'수지체육공원',address:'경기 용인시 수지구 포은대로 435',region:'경기 남부',format:'11인제',needed:14,cost:0});
+  const game=f.s.games.find(g=>g.id===gameId);
+  game.goals=[{userId:'quitter',assist:''}];
+
+  command(f.s,{id:'quitter',name:'박재연'},{type:'closeAccount'},NOW);
+  command(f.s,owner,{type:'anonymizeMember',userId:'quitter'});
+
+  assert.equal(f.s.games.find(g=>g.id===gameId).goals.length,1,'골 기록은 남아야 한다');
+  assert.equal(f.s.games.find(g=>g.id===gameId).goals[0].userId,'quitter','누구의 골인지도 남는다');
+  assert.equal(f.s.members.find(x=>x.id==='m1').name,ANON_NAME,'표시 이름만 바뀐다');
+});
+
+test('탈퇴자 목록은 운영자에게만 보낸다',()=>{
+  const f=fixture();
+  f.s.users.push({id:'quitter',name:'박재연',at:iso(NOW-20*DAY)});
+  f.s.members.push({id:'m1',teamId:f.a,userId:'quitter',name:'박재연',role:'player',status:'left',number:7,position:'FW',periods:[],at:iso(NOW-20*DAY)});
+  command(f.s,{id:'quitter',name:'박재연'},{type:'closeAccount'},NOW);
+
+  assert.deepEqual(visibleState(f.s,'a',f.a).retired,[],'주장에게는 보내지 않는다');
+  assert.deepEqual(visibleState(f.s,'stranger').retired,[],'남에게는 보내지 않는다');
+
+  const seen=visibleState(f.s,'owner').retired;
+  assert.equal(seen.length,1);
+  assert.equal(seen[0].name,'박재연');
+  assert.equal(seen[0].hidden,false);
+
+  command(f.s,owner,{type:'anonymizeMember',userId:'quitter'});
+  assert.equal(visibleState(f.s,'owner').retired[0].hidden,true,'가린 뒤에는 완료로 표시된다');
 });

@@ -25,7 +25,7 @@ compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
 compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
-const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,levelOf}=await import(path.join(runtime,'model.mjs'));
+const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
 const auth=await import(path.join(runtime,'auth.mjs'));
 const mail=await import(path.join(runtime,'mail.mjs'));
@@ -1383,4 +1383,66 @@ test('목록을 만들기 전에 저장된 실력 값도 화면에서 다듬어 
   assert.equal(levelOf(undefined),'중급');
   for(const x of LEVELS)assert.equal(levelOf(x),x);
   assert.ok(FORMATS.includes('11인제'));
+});
+
+// --- 역할: 주장 / 운영진 / 팀원 ---
+// 운영진까지 경기를 만들고 참여 알림을 보낼 수 있어야 한다.
+// 팀 해체급 동작(결과 확정, 일정 변경, 모집 여닫기)은 주장만 한다.
+
+function teamWithRoles(){
+  const f=fixture();
+  const add=(userId,name,role)=>{
+    f.s.users.push({id:userId,name,at:iso(NOW-20*DAY)});
+    f.s.members.push({id:'m-'+userId,teamId:f.a,userId,name,role,status:'active',
+      number:7,position:'MF',periods:[{start:iso(NOW-20*DAY)}],at:iso(NOW-20*DAY)});
+  };
+  add('mgr','운영진','manager');
+  add('mem','팀원','member');
+  return f;
+}
+const gameArgs=(teamId)=>({type:'createGame',teamId,start:iso(NOW+2*DAY),end:iso(NOW+2*DAY+7200000),
+  venue:'수지체육공원',address:'경기 용인시 수지구 포은대로 435',region:'경기 남부',format:'11인제',needed:14,cost:0});
+
+test('운영진은 경기를 만들 수 있고 팀원은 만들 수 없다',()=>{
+  const f=teamWithRoles();
+  const out=command(f.s,{id:'mgr',name:'운영진'},gameArgs(f.a));
+  assert.ok(out.gameId,'운영진은 만들 수 있어야 한다');
+  assert.throws(()=>command(f.s,{id:'mem',name:'팀원'},gameArgs(f.a)),/권한/);
+  assert.throws(()=>command(f.s,{id:'stranger',name:'남'},gameArgs(f.a)),/권한|팀/);
+});
+
+test('운영진은 참여 알림을 보낼 수 있고 팀원은 보낼 수 없다',()=>{
+  const f=teamWithRoles();
+  const {gameId}=command(f.s,A,gameArgs(f.a));
+  assert.throws(()=>command(f.s,{id:'mem',name:'팀원'},{type:'remindVote',teamId:f.a,gameId}),/권한/);
+  command(f.s,{id:'mgr',name:'운영진'},{type:'remindVote',teamId:f.a,gameId});
+  assert.ok(f.s.notifications.some(n=>n.teamId===f.a),'알림이 만들어져야 한다');
+});
+
+test('결과 확정 같은 동작은 주장만 한다',()=>{
+  const f=teamWithRoles();
+  const {gameId}=command(f.s,A,gameArgs(f.a));
+  for(const who of [{id:'mgr',name:'운영진'},{id:'mem',name:'팀원'}])
+    assert.throws(()=>command(f.s,who,{type:'openListing',teamId:f.a,gameId}),/권한/,
+      who.name+' 은(는) 모집을 열 수 없어야 한다');
+});
+
+test('주장만 운영진을 임명하고 주장 자신은 바꿀 수 없다',()=>{
+  const f=teamWithRoles();
+  assert.throws(()=>command(f.s,{id:'mgr',name:'운영진'},{type:'setRole',teamId:f.a,memberId:'m-mem',role:'manager'}),/권한/);
+  command(f.s,A,{type:'setRole',teamId:f.a,memberId:'m-mem',role:'manager'});
+  assert.equal(f.s.members.find(m=>m.id==='m-mem').role,'manager');
+  const captain=f.s.members.find(m=>m.teamId===f.a&&m.role==='captain');
+  assert.throws(()=>command(f.s,A,{type:'setRole',teamId:f.a,memberId:captain.id,role:'member'}),/변경할 수 없어요/);
+  assert.throws(()=>command(f.s,A,{type:'setRole',teamId:f.a,memberId:'m-mem',role:'captain'}),/역할을 확인/);
+});
+
+test('주로 뛰는 때는 목록에 있는 값만 받고 상관없음을 고를 수 있다',()=>{
+  const f=fixture();
+  assert.ok(DAYS.includes('상관없음'));
+  const base={type:'editTeam',teamId:f.a,name:'팀',region:'서울',description:'',format:'11인제',level:'중급'};
+  command(f.s,A,{...base,days:'상관없음'});
+  assert.equal(f.s.teams.find(t=>t.id===f.a).days,'상관없음');
+  assert.throws(()=>command(f.s,A,{...base,days:'아무때나'}),/주로 뛰는 때/);
+  assert.equal(f.s.teams.find(t=>t.id===f.a).days,'상관없음','거절된 뒤에도 그대로');
 });

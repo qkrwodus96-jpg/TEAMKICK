@@ -12,6 +12,6 @@ export function SplashMark(){
    <text x="118" y="236" fontSize="128" textLength="372" lengthAdjust="spacingAndGlyphs">TEAM</text>
    <text x="118" y="356" fontSize="128" textLength="372" lengthAdjust="spacingAndGlyphs">KICK</text>
   </g>
-  <polygon points="182,378 452,378 438,414 168,414" fill="#16f08a" transform="skewX(-13)"/>
+  <polygon points="150,378 480,378 466,414 136,414" fill="#16f08a" transform="skewX(-13)"/>
  </svg>;
 }

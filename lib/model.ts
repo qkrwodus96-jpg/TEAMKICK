@@ -77,6 +77,8 @@ export function requireTeam(s:State,t:string,u:string,level="member",write=true)
 // 상대팀을 고를 때 보이는 값들. 목록 밖 값이 들어오면 매칭 화면이 깨진다.
 export const FORMATS=["11인제","8인제","6인제","5인제"];
 export const LEVELS=["입문","초급","중급","상급","선수 출신 포함"];
+// 주로 뛰는 때. "주말" 은 예전 기본값이라 목록에 남겨 둔다.
+export const DAYS=["상관없음","평일 저녁","주말","토요일 오전","토요일 오후","토요일 저녁","일요일 오전","일요일 오후","일요일 저녁"];
 // 목록을 만들기 전에 저장된 값이 있다. 고르기 화면이 비어 보이지 않게 맞춰 준다.
 const OLD_LEVELS:Record<string,string>={"하":"초급","중":"중급","상":"상급"};
 export const levelOf=(v:unknown)=>{const x=String(v??"").trim();return LEVELS.includes(x)?x:(OLD_LEVELS[x]??"중급")};
@@ -108,7 +110,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  else if(type==="createTeam"){
   ensure(a.verified!==false,"이메일 확인을 먼저 해주세요. 받은 편지함에서 확인 링크를 눌러주세요.",403);
   ensure(s.teams.filter(x=>x.applicant===a.id&&x.status==="pending").length<3,"대기 중인 팀 신청을 먼저 확인해주세요.");
-  const team={id:id(),name:textValue(c.name,40),region:regionValue(c.region),description:textValue(c.description,500,false),format:pick(c.format||"11인제",FORMATS,"주 경기 형식"),days:textValue(c.days||"주말",30),level:pick(c.level||"중급",LEVELS,"팀 실력"),status:"pending",applicant:a.id,applicantName:a.name,at:stamp,reason:"",color:"green"};
+  const team={id:id(),name:textValue(c.name,40),region:regionValue(c.region),description:textValue(c.description,500,false),format:pick(c.format||"11인제",FORMATS,"주 경기 형식"),days:pick(c.days||"주말",DAYS,"주로 뛰는 때"),level:pick(c.level||"중급",LEVELS,"팀 실력"),status:"pending",applicant:a.id,applicantName:a.name,at:stamp,reason:"",color:"green"};
   s.teams.push(team);const o=s.settings.find(x=>x.id==="owner");if(o)userNotice(s,o.userId,"새로운 팀 등록 요청",team.name+"의 등록을 확인해주세요.");output={teamId:team.id};
  }
  else if(type==="approveTeam"||type==="rejectTeam"||type==="suspendTeam"||type==="restoreTeam"){
@@ -153,7 +155,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   // 팀을 만들 때만 정할 수 있고 나중에 고칠 수 없었다. 팀 사정은 바뀐다.
   // 배포 중에 예전 화면을 열어둔 사람이 보낼 수 있다. 값이 없으면 지금 것을 지킨다.
   if(c.format!==undefined)team.format=pick(c.format,FORMATS,"주 경기 형식");
-  if(c.days!==undefined)team.days=textValue(c.days,30);
+  if(c.days!==undefined)team.days=pick(c.days,DAYS,"주로 뛰는 때");
   if(c.level!==undefined)team.level=pick(c.level,LEVELS,"팀 실력");
  }
  else if(type==="createGame"){

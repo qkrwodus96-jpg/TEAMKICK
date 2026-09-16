@@ -25,3 +25,5 @@
 @keyframes splash-in{from{opacity:0}to{opacity:1}}
 html[data-splash="skip"] #teamkick-splash{display:none}
 @media(prefers-reduced-motion:reduce){#teamkick-splash{animation:none}}
+
+.app-booting{position:fixed;inset:0;background:var(--background)}

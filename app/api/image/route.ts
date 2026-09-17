@@ -55,10 +55,14 @@ export async function GET(req:Request){
   else ensure(teamOf(state,where.teamId),"팀을 찾을 수 없어요.",404);
   const image=await getImage(key);
   if(!image)return json({error:"이미지를 찾을 수 없어요."},404);
+  // 이미지 주소는 올릴 때마다 새로 만들어지고, 같은 주소의 내용은 바뀌지 않는다.
+  // 그래서 오래 보관해도 낡은 그림이 보일 일이 없다. 주소가 바뀌면 새로 받아온다.
+  // 팀 로고는 로그인한 사람이면 누구나 볼 수 있으므로 길게 보관한다.
+  // 선수 사진은 팀을 나가면 더 보이면 안 되므로 짧게만 보관한다(공용 캐시에는 넣지 않는다).
+  const cache=where.kind==="teamLogo"?"private, max-age=604800, immutable":"private, max-age=300";
   return new Response(image.body,{headers:{
    "Content-Type":image.type,
-   // 개인 사진이 공용 캐시에 남지 않도록 사용자 브라우저에만 짧게 보관한다.
-   "Cache-Control":"private, max-age=300",
+   "Cache-Control":cache,
    "Content-Security-Policy":"default-src 'none'; sandbox",
    "X-Content-Type-Options":"nosniff",
   }});

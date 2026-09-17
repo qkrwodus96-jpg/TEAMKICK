@@ -182,6 +182,8 @@ export async function accountExists(accountId:string){
 export async function closeAccount(accountId:string){
  await db().prepare("DELETE FROM sessions WHERE account_id=?").bind(accountId).run();
  await db().prepare("DELETE FROM email_verifications WHERE account_id=?").bind(accountId).run();
+ // 기기 푸시 구독도 함께 지운다. 남겨두면 떠난 사람 기기로 알림이 계속 간다.
+ await db().prepare("DELETE FROM push_subs WHERE account_id=?").bind(accountId).run();
  await db().prepare("DELETE FROM accounts WHERE id=?").bind(accountId).run();
 }
 
@@ -236,6 +238,32 @@ export async function verifyEmail(input:{token?:unknown},now=Date.now()){
 // 이 주소가 카카오 아이디마다 하나씩만 나오기 때문에, 같은 사람이 두 계정을 갖는 일을
 // email 의 UNIQUE 제약이 막아준다. 형식을 바꿀 때 이 성질을 함께 지켜야 한다.
 const kakaoPlaceholder=(kakaoId:string)=>"kakao-"+kakaoId+"@teamkick.invalid";
+
+// 소셜 로그인으로 들어온 사람을 계정에 연결한다. 제공자마다 열을 따로 만들지 않고
+// (provider, provider_id) 로 묶는다. 같은 사람이라도 제공자가 다르면 다른 계정이다.
+// 그래야 "카카오로 가입했는데 구글로 들어가니 남의 계정"이 되는 일이 없다.
+export async function signInWithSocial(provider:string,socialId:string,nickname:string,now=Date.now()){
+ const who=String(provider??"").trim(),id_=String(socialId??"").trim();
+ ensure(who&&id_,"로그인 정보를 가져오지 못했어요. 다시 시도해주세요.",503);
+ const find=()=>db().prepare("SELECT id,name FROM accounts WHERE provider=? AND provider_id=?")
+  .bind(who,id_).first<{id:string;name:string}>();
+ const existing=await find();
+ if(existing)return {user:{userId:existing.id,fullName:existing.name},token:await startSession(existing.id,now)};
+ const account={id:id(),email:who+"-"+id_+"@teamkick.invalid",name:checkName(nickname)};
+ try{
+  // 제공자가 이미 본인을 확인했으므로 확인 완료로 둔다. 비밀번호는 비워 어떤 값과도 맞지 않는다.
+  await db().prepare("INSERT INTO accounts(id,email,name,password,failures,locked_until,agreed_at,verified_at,provider,provider_id,at) VALUES(?,?,?,'',0,NULL,?,?,?,?,?)")
+   .bind(account.id,account.email,account.name,iso(now),iso(now),who,id_,iso(now)).run();
+ }catch(e){
+  // 같은 사람이 동시에 두 번 눌렀을 수 있다. 그때는 먼저 만들어진 계정을 쓴다.
+  if(String(e).includes("UNIQUE")){
+   const again=await find();
+   if(again)return {user:{userId:again.id,fullName:again.name},token:await startSession(again.id,now)};
+  }
+  throw e;
+ }
+ return {user:{userId:account.id,fullName:account.name},token:await startSession(account.id,now)};
+}
 
 export async function signInWithKakao(kakaoId:string,nickname:string,now=Date.now()){
  ensure(kakaoId,"카카오 정보를 가져오지 못했어요. 다시 시도해주세요.",503);

@@ -1,45 +1,34 @@
-"use client";
-import {useState,useEffect} from "react";
-
-// 앱을 열면 잠깐 로고를 보여준다.
-// 위쪽은 나중에 광고가 들어갈 자리로 비워 둔다. 그때 로고만 아래로 내리면 되도록
-// 지금부터 같은 구조로 만들어 둔다. 나중에 화면을 갈아엎지 않기 위해서다.
-const SHOWN="teamkick_splash_shown";
+// 첫 화면. React 가 붙기 전에 보여야 해서 layout 이 HTML 에 직접 넣고,
+// 치우는 일은 layout 의 작은 스크립트가 맡는다. 여기에는 모양과 값만 둔다.
+// 첫 화면을 보여주는 시간. 데이터가 먼저 준비돼도 줄이지 않는다.
+// 사용자 결정(2026-09-17): 나중에 이 자리에 광고를 넣을 것이라 길이를 지킨다.
+// 화면을 누르거나 키를 누르면 바로 넘어간다.
 export const SPLASH_MS=2000;
+export const SPLASH_ID="teamkick-splash";
+export const SPLASH_KEY="teamkick_splash_shown";
 
-
-// 로고. 파일로 불러오면 받는 동안 빈 화면이 보여서 직접 그린다.
-function Mark(){
+// 로고를 그림 파일로 불러오면 받는 동안 빈 화면이 보인다. 첫 화면이라 직접 그린다.
+export function SplashMark(){
  return <svg className="splash-mark" viewBox="0 0 512 512" role="img" aria-label="팀킥">
   <g transform="skewX(-13)" fontFamily="Arial Black, Arial, Helvetica, sans-serif" fontWeight="900"
      fill="#ffffff" stroke="#ffffff" strokeWidth="7" strokeLinejoin="round">
    <text x="118" y="236" fontSize="128" textLength="372" lengthAdjust="spacingAndGlyphs">TEAM</text>
    <text x="118" y="356" fontSize="128" textLength="372" lengthAdjust="spacingAndGlyphs">KICK</text>
   </g>
-  <polygon points="182,378 452,378 438,414 168,414" fill="#16f08a" transform="skewX(-13)"/>
+  <polygon points="150,378 480,378 466,414 136,414" fill="#16f08a" transform="skewX(-13)"/>
  </svg>;
 }
 
-export function Splash({ad=false}:{ad?:boolean}){
- const [show,setShow]=useState(false);
-
- useEffect(()=>{
-  // 한 번 본 사람에게 매번 2초를 쓰게 하지 않는다. 탭을 닫으면 다시 보여준다.
-  let seen=true;
-  try{seen=sessionStorage.getItem(SHOWN)==="1"}catch{seen=false}
-  if(seen)return;
-  try{sessionStorage.setItem(SHOWN,"1")}catch{}
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- 저장소는 화면을 그린 뒤에만 읽을 수 있다
-  setShow(true);
-  const t=setTimeout(()=>setShow(false),SPLASH_MS);
-  return()=>clearTimeout(t);
- },[]);
-
- if(!show)return null;
- return <div className="splash" data-ad={ad?"true":"false"} role="presentation"
-   onClick={()=>setShow(false)} onKeyDown={()=>setShow(false)}>
-  {/* 광고 자리. 지금은 비어 있고 자리만 잡는다. */}
-  <div className="splash-ad" aria-hidden/>
-  <Mark/>
- </div>;
+// 화면 위쪽 브랜드 자리에 쓰는 작은 마크. 첫 화면과 같은 모양이라 따로 그리지 않고
+// 같은 도형을 줄여 쓴다. 로고를 고치면 두 곳이 함께 바뀐다.
+export function BrandMark(){
+ return <svg className="brand-mark-svg" viewBox="88 120 400 310" role="img" aria-label="팀킥 로고">
+  <rect x="88" y="120" width="400" height="310" fill="#0b0b0b" rx="14"/>
+  <g transform="skewX(-13)" fontFamily="Arial Black, Arial, Helvetica, sans-serif" fontWeight="900"
+     fill="#ffffff" stroke="#ffffff" strokeWidth="7" strokeLinejoin="round">
+   <text x="118" y="236" fontSize="128" textLength="372" lengthAdjust="spacingAndGlyphs">TEAM</text>
+   <text x="118" y="356" fontSize="128" textLength="372" lengthAdjust="spacingAndGlyphs">KICK</text>
+  </g>
+  <polygon points="150,378 480,378 466,414 136,414" fill="#16f08a" transform="skewX(-13)"/>
+ </svg>;
 }

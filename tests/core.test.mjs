@@ -20,12 +20,24 @@ compile('lib/kakao.ts','kakao.mjs',s=>s.replace('import {env} from "cloudflare:w
 compile('lib/schema.ts','schema.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/mail.ts','mail.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./legal"','"./legal.mjs"'));
 compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('import {sendMail,mailReady} from "./mail";','const sendMail=async(to,subject,text)=>{if(globalThis.__teamkickTestMailFail)throw new AppError("메일을 보내지 못했어요. 잠시 후 다시 시도해주세요.",503);(globalThis.__teamkickTestMail??=[]).push({to,subject,text})};const mailReady=()=>globalThis.__teamkickTestMailReady!==false;').replace('"./model"','"./model.mjs"'));
-compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {schemaStatus,BUILD} from "@/lib/schema";','const schemaStatus=async()=>globalThis.__teamkickTestSchema??{db:true,tables:{},error:""};const BUILD="test";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady,mailAccount,fromDomain} from "@/lib/mail";','const mailReady=()=>true;const mailAccount=async()=>"ok";const fromDomain=()=>"teamkick.co.kr";').replace('import {hashPassword,currentUser} from "@/lib/auth";','const hashPassword=async()=>"";const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";','const kakaoReady=()=>true;const kakaoSecretSet=()=>true;').replace('import {ownerCodeFromEnv} from "@/lib/owner-config";','const ownerCodeFromEnv=()=>true;').replace('"@/lib/store"','"./store.mjs"'));
+// 화면 파일 전체는 이 환경에서 돌릴 수 없다. 검색 규칙 함수만 떼어 확인한다.
+{
+  const src=fs.readFileSync('app/screens.tsx','utf8');
+  const start=src.indexOf('export const teamMatches=');
+  const end=src.indexOf('};',start)+2;
+  if(start<0)throw new Error('teamMatches 를 찾지 못했다');
+  fs.writeFileSync(path.join(runtime,'screens-bits.mjs'),
+    ts.transpileModule(src.slice(start,end).replace('(t:Row,q:string)','(t,q)'),
+      {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText);
+}
+compile('lib/social.ts','social.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
+compile('lib/push.ts','push.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
+compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {pushReady} from "@/lib/push";','const pushReady=()=>true;').replace('import {schemaStatus,BUILD} from "@/lib/schema";','const schemaStatus=async()=>globalThis.__teamkickTestSchema??{db:true,tables:{},error:""};const BUILD="test";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady,mailAccount,fromDomain} from "@/lib/mail";','const mailReady=()=>true;const mailAccount=async()=>"ok";const fromDomain=()=>"teamkick.co.kr";').replace('import {hashPassword,currentUser} from "@/lib/auth";','const hashPassword=async()=>"";const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";','const kakaoReady=()=>true;const kakaoSecretSet=()=>true;').replace('import {ownerCodeFromEnv} from "@/lib/owner-config";','const ownerCodeFromEnv=()=>true;').replace('"@/lib/store"','"./store.mjs"'));
 compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./schema"','"./schema.mjs"').replace('"./store"','"./store.mjs"'));
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
-compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
+compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0}};').replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
-const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME}=await import(path.join(runtime,'model.mjs'));
+const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
 const auth=await import(path.join(runtime,'auth.mjs'));
 const mail=await import(path.join(runtime,'mail.mjs'));
@@ -36,6 +48,9 @@ const ownerConfig=await import(path.join(runtime,'owner-config.mjs'));
 const backup=await import(path.join(runtime,'backup.mjs'));
 const backupApi=await import(path.join(runtime,'backup-api.mjs'));
 const health=await import(path.join(runtime,'health.mjs'));
+const push=await import(path.join(runtime,'push.mjs'));
+const social=await import(path.join(runtime,'social.mjs'));
+const screens=await import(path.join(runtime,'screens-bits.mjs'));
 const api=await import(path.join(runtime,'api.mjs'));
 const NOW=Date.now(),DAY=864e5;
 const owner={id:'owner',name:'운영자',ownerSetup:true},A={id:'a',name:'A 주장'},B={id:'b',name:'B 주장'},C={id:'c',name:'C 주장'},member={id:'player',name:'선수'};
@@ -189,6 +204,62 @@ test('API는 서버 로그인 신원을 사용하고 중복 저장 요청을 다
   const final=await repository.load();assert.equal(final.state.games.length,1);assert.equal(final.state.audit.at(-1).actor,A.id);
   globalThis.__teamkickTestIdentity=null;assert.equal((await api.POST(req())).status,401);
   db.close();
+});
+
+// 저장 응답에 새 화면 상태가 들어 있어야 한다. 들어 있지 않으면 화면이 저장 뒤에
+// 한 번 더 읽어와야 해서 기다리는 시간이 두 배가 된다.
+test('저장 응답이 새 화면 상태를 그대로 담아 준다',async()=>{
+  const db=localDatabase(),{s,a,b}=fixture();
+  // A 가 두 팀에 속해야 "보던 팀"이 첫 번째 팀과 구분된다. 한 팀뿐이면 무엇을
+  // 보내도 그 팀이 나와서, 보던 팀을 무시해도 테스트가 통과해 버린다.
+  command(s,A,{type:'joinTeam',teamId:b,name:A.name,position:'MF',number:7},NOW-20*DAY);
+  const joined=s.members.find(x=>x.teamId===b&&x.userId===A.id);
+  command(s,B,{type:'approveMember',teamId:b,memberId:joined.id},NOW-20*DAY);
+  await repository.commit(blank(),s,0);
+  globalThis.__teamkickTestIdentity={userId:A.id,fullName:A.name};
+  const send=body=>api.POST(new Request('https://example.test/api/app',{method:'POST',
+    headers:{'content-type':'application/json',origin:'https://example.test'},body:JSON.stringify(body)}));
+
+  const res=await send({type:'createGame',teamId:a,mutationId:'m-state-1',
+    start:iso(NOW+8*DAY),end:iso(NOW+8*DAY+7200e3),venue:'축구장',address:'서울'});
+  assert.equal(res.status,200);
+  const body=await res.json();
+  // 방금 만든 경기가 응답에 이미 있어야 한다. 다시 읽어올 필요가 없어야 한다.
+  assert.equal(body.games.length,1,'저장 응답에 새 경기가 들어 있어야 한다');
+  assert.equal(body.teamId,a,'보고 있던 팀 기준으로 와야 한다');
+  for(const key of ['teams','members','mine','games','sides','notices','notifications','requests'])
+    assert.ok(key in body,'저장 응답에 "'+key+'" 가 있어야 한다');
+
+  // 팀이 없는 명령에서도 보던 팀이 유지되어야 한다. 그렇지 않으면 저장할 때마다
+  // 선택한 팀이 멋대로 바뀐다.
+  // 두 번째 팀을 보고 있었다면 저장 뒤에도 두 번째 팀이어야 한다.
+  const kept=await send({type:'readNotifications',mutationId:'m-state-2',viewTeam:b});
+  assert.equal((await kept.json()).teamId,b,'viewTeam 으로 보던 팀이 유지되어야 한다');
+  // 보던 팀을 보내지 않으면 첫 번째 팀으로 돌아간다. 위와 값이 달라야 의미가 있다.
+  const noView=await send({type:'readNotifications',mutationId:'m-state-2b'});
+  assert.equal((await noView.json()).teamId,a);
+
+  // 명령의 대상 팀이 보던 팀보다 앞선다. 반대로 하면 방금 바꾼 팀이 아니라
+  // 엉뚱한 팀의 화면이 돌아온다.
+  const targeted=await send({type:'editProfile',teamId:b,mutationId:'m-state-2c',viewTeam:a,
+    name:A.name,position:'FW',number:7});
+  assert.equal(targeted.status,200);
+  assert.equal((await targeted.json()).teamId,b,'명령의 대상 팀이 우선이어야 한다');
+
+  // 같은 요청을 다시 보내도(재전송) 상태를 함께 줘야 한다.
+  const again=await send({type:'createGame',teamId:a,mutationId:'m-state-1',
+    start:iso(NOW+8*DAY),end:iso(NOW+8*DAY+7200e3),venue:'축구장',address:'서울'});
+  const repeat=await again.json();
+  assert.equal(repeat.games.length,1,'재전송 응답에도 상태가 있어야 한다');
+
+  // viewTeam 은 보는 기준일 뿐이라 권한을 넘겨주지 않는다.
+  globalThis.__teamkickTestIdentity={userId:'stranger',fullName:'남'};
+  const outsider=await send({type:'readNotifications',mutationId:'m-state-3',viewTeam:a});
+  const seen=await outsider.json();
+  assert.equal(seen.teamId,'','속하지 않은 팀을 viewTeam 으로 보내도 열리면 안 된다');
+  assert.equal(seen.members.length,0,'속하지 않은 팀의 팀원이 보이면 안 된다');
+
+  globalThis.__teamkickTestIdentity=null;db.close();
 });
 
 const G1={id:'guest-1',name:'용병1'},G2={id:'guest-2',name:'용병2'},G3={id:'용병3-id',name:'용병3'};
@@ -1321,4 +1392,465 @@ test('탈퇴하면 내 문의도 함께 지운다',()=>{
   assert.equal(f.s.inquiries.length,2);
   command(f.s,{id:'quitter',name:'박재연'},{type:'closeAccount'},NOW);
   assert.deepEqual(f.s.inquiries.map(x=>x.userId),['a'],'탈퇴한 사람 문의만 사라져야 한다');
+});
+
+// --- 팀 정보 수정: 경기 형식·활동 요일·실력 ---
+// 팀을 만들 때만 정할 수 있고 나중에 고칠 수 없었다. 팀 사정은 바뀐다.
+
+test('팀 정보 수정에서 경기 형식·활동 요일·실력을 고칠 수 있다',()=>{
+  const f=fixture();
+  const before=f.s.teams.find(t=>t.id===f.a);
+  assert.equal(before.format,'11인제');
+  assert.equal(before.level,'중급','기본값');
+
+  command(f.s,A,{type:'editTeam',teamId:f.a,name:'팀킥 FC',region:'경기 남부',description:'소개',
+    format:'8인제',days:'토요일 저녁',level:'상급'});
+  const after=f.s.teams.find(t=>t.id===f.a);
+  assert.equal(after.format,'8인제');
+  assert.equal(after.days,'토요일 저녁');
+  assert.equal(after.level,'상급');
+  assert.equal(after.name,'팀킥 FC','기존 항목도 그대로 저장돼야 한다');
+});
+
+test('경기 형식과 실력은 목록에 있는 값만 받는다',()=>{
+  const f=fixture();
+  const base={type:'editTeam',teamId:f.a,name:'팀',region:'서울',description:'',days:'일요일 오전'};
+  assert.throws(()=>command(f.s,A,{...base,format:'22인제',level:'상급'}),/주 경기 형식/);
+  assert.throws(()=>command(f.s,A,{...base,format:'11인제',level:'신급'}),/팀 실력/);
+  assert.throws(()=>command(f.s,A,{...base,format:'11인제',level:''}),/팀 실력/);
+  assert.equal(f.s.teams.find(t=>t.id===f.a).format,'11인제','거절된 뒤에도 그대로여야 한다');
+
+  // 만들 때도 마찬가지
+  assert.throws(()=>command(f.s,{id:'x',name:'새 주장',verified:true},
+    {type:'createTeam',name:'새 팀',region:'서울',description:'',format:'3인제'}),/주 경기 형식/);
+});
+
+test('값을 보내지 않으면 지금 값을 지킨다',()=>{
+  // 배포 중에 예전 화면을 열어둔 사람이 이름만 보낼 수 있다. 그때 형식·실력이
+  // 빈 값으로 덮이면 안 된다.
+  const f=fixture();
+  command(f.s,A,{type:'editTeam',teamId:f.a,name:'새 이름',region:'서울',description:'소개'});
+  const after=f.s.teams.find(t=>t.id===f.a);
+  assert.equal(after.name,'새 이름');
+  assert.equal(after.format,'11인제','보내지 않은 형식은 그대로');
+  assert.equal(after.level,'중급','보내지 않은 실력은 그대로');
+});
+
+test('주장만 팀 정보를 고칠 수 있다',()=>{
+  const f=fixture();
+  const cmd={type:'editTeam',teamId:f.a,name:'바꾼 이름',region:'서울',description:'',
+    format:'8인제',days:'토요일',level:'상급'};
+  assert.throws(()=>command(f.s,B,cmd),/팀|권한|주장/);
+  assert.throws(()=>command(f.s,owner,cmd),/팀|권한|주장/);
+  assert.equal(f.s.teams.find(t=>t.id===f.a).name,'팀 0','거절된 뒤에도 그대로여야 한다');
+});
+
+test('목록을 만들기 전에 저장된 실력 값도 화면에서 다듬어 보여준다',()=>{
+  assert.equal(levelOf('중'),'중급');
+  assert.equal(levelOf('하'),'초급');
+  assert.equal(levelOf('상'),'상급');
+  assert.equal(levelOf('상급'),'상급','이미 맞는 값은 그대로');
+  assert.equal(levelOf(''),'중급','알 수 없으면 기본값');
+  assert.equal(levelOf(undefined),'중급');
+  for(const x of LEVELS)assert.equal(levelOf(x),x);
+  assert.ok(FORMATS.includes('11인제'));
+});
+
+// --- 역할: 주장 / 운영진 / 팀원 ---
+// 운영진까지 경기를 만들고 참여 알림을 보낼 수 있어야 한다.
+// 팀 해체급 동작(결과 확정, 일정 변경, 모집 여닫기)은 주장만 한다.
+
+function teamWithRoles(){
+  const f=fixture();
+  const add=(userId,name,role)=>{
+    f.s.users.push({id:userId,name,at:iso(NOW-20*DAY)});
+    f.s.members.push({id:'m-'+userId,teamId:f.a,userId,name,role,status:'active',
+      number:7,position:'MF',periods:[{start:iso(NOW-20*DAY)}],at:iso(NOW-20*DAY)});
+  };
+  add('mgr','운영진','manager');
+  add('mem','팀원','member');
+  return f;
+}
+const gameArgs=(teamId)=>({type:'createGame',teamId,start:iso(NOW+2*DAY),end:iso(NOW+2*DAY+7200000),
+  venue:'수지체육공원',address:'경기 용인시 수지구 포은대로 435',region:'경기 남부',format:'11인제',needed:14,cost:0});
+
+test('운영진은 경기를 만들 수 있고 팀원은 만들 수 없다',()=>{
+  const f=teamWithRoles();
+  const out=command(f.s,{id:'mgr',name:'운영진'},gameArgs(f.a));
+  assert.ok(out.gameId,'운영진은 만들 수 있어야 한다');
+  assert.throws(()=>command(f.s,{id:'mem',name:'팀원'},gameArgs(f.a)),/권한/);
+  assert.throws(()=>command(f.s,{id:'stranger',name:'남'},gameArgs(f.a)),/권한|팀/);
+});
+
+test('운영진은 참여 알림을 보낼 수 있고 팀원은 보낼 수 없다',()=>{
+  const f=teamWithRoles();
+  const {gameId}=command(f.s,A,gameArgs(f.a));
+  assert.throws(()=>command(f.s,{id:'mem',name:'팀원'},{type:'remindVote',teamId:f.a,gameId}),/권한/);
+  command(f.s,{id:'mgr',name:'운영진'},{type:'remindVote',teamId:f.a,gameId});
+  assert.ok(f.s.notifications.some(n=>n.teamId===f.a),'알림이 만들어져야 한다');
+});
+
+test('결과 확정 같은 동작은 주장만 한다',()=>{
+  const f=teamWithRoles();
+  const {gameId}=command(f.s,A,gameArgs(f.a));
+  for(const who of [{id:'mgr',name:'운영진'},{id:'mem',name:'팀원'}])
+    assert.throws(()=>command(f.s,who,{type:'openListing',teamId:f.a,gameId}),/권한/,
+      who.name+' 은(는) 모집을 열 수 없어야 한다');
+});
+
+test('주장만 운영진을 임명하고 주장 자신은 바꿀 수 없다',()=>{
+  const f=teamWithRoles();
+  assert.throws(()=>command(f.s,{id:'mgr',name:'운영진'},{type:'setRole',teamId:f.a,memberId:'m-mem',role:'manager'}),/권한/);
+  command(f.s,A,{type:'setRole',teamId:f.a,memberId:'m-mem',role:'manager'});
+  assert.equal(f.s.members.find(m=>m.id==='m-mem').role,'manager');
+  const captain=f.s.members.find(m=>m.teamId===f.a&&m.role==='captain');
+  assert.throws(()=>command(f.s,A,{type:'setRole',teamId:f.a,memberId:captain.id,role:'member'}),/변경할 수 없어요/);
+  assert.throws(()=>command(f.s,A,{type:'setRole',teamId:f.a,memberId:'m-mem',role:'captain'}),/역할을 확인/);
+});
+
+test('주로 뛰는 때는 목록에 있는 값만 받고 상관없음을 고를 수 있다',()=>{
+  const f=fixture();
+  assert.ok(DAYS.includes('상관없음'));
+  const base={type:'editTeam',teamId:f.a,name:'팀',region:'서울',description:'',format:'11인제',level:'중급'};
+  command(f.s,A,{...base,days:'상관없음'});
+  assert.equal(f.s.teams.find(t=>t.id===f.a).days,'상관없음');
+  assert.throws(()=>command(f.s,A,{...base,days:'아무때나'}),/주로 뛰는 때/);
+  assert.equal(f.s.teams.find(t=>t.id===f.a).days,'상관없음','거절된 뒤에도 그대로');
+});
+
+// --- 기기 푸시 ---
+// 실제 푸시 서버로 보내볼 수 없는 환경이다. 그래서 보내는 쪽에서 확인할 수 있는 것만
+// 확인한다: 서명이 진짜 맞는지, 구독을 제대로 넣고 빼는지, 죽은 구독을 치우는지.
+
+async function withVapid(run){
+  const pair=await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'},true,['sign','verify']);
+  const jwk=await crypto.subtle.exportKey('jwk',pair.privateKey);
+  const raw=await crypto.subtle.exportKey('raw',pair.publicKey);
+  const b64=b=>Buffer.from(b).toString('base64url');
+  const env=globalThis.__teamkickTestEnv;
+  env.VAPID_PUBLIC_KEY=b64(raw);
+  env.VAPID_PRIVATE_KEY=jwk.d;           // 32바이트 원본(base64url)
+  env.VAPID_SUBJECT='mailto:jyp7296@naver.com';
+  try{return await run(pair)}finally{
+    delete env.VAPID_PUBLIC_KEY;delete env.VAPID_PRIVATE_KEY;delete env.VAPID_SUBJECT;
+  }
+}
+
+test('푸시 키가 없으면 켜지지 않고 아무 데도 보내지 않는다',async()=>{
+  const db=localDatabase();
+  assert.equal(push.pushReady(),false);
+  // 구독이 있어도 키가 없으면 보내면 안 된다. 구독이 없으면 이 검사는 의미가 없다.
+  await push.saveSubscription('a',{endpoint:'https://push.example/zzz',keys:{p256dh:'p',auth:'a'}});
+  assert.equal((await push.subscriptionsOf('a')).length,1);
+  let called=false;const real=globalThis.fetch;
+  globalThis.fetch=async()=>{called=true;return new Response('',{status:201})};
+  try{
+    const out=await push.wakeDevices(['a']);
+    assert.deepEqual(out,{sent:0,failed:0});
+    assert.equal(called,false,'키가 없으면 요청을 보내면 안 된다');
+  }finally{globalThis.fetch=real;db.close()}
+});
+
+test('VAPID 토큰은 진짜 서명이고 받는 주소마다 다르다',async()=>{
+  const db=localDatabase();
+  await withVapid(async pair=>{
+    assert.equal(push.pushReady(),true);
+    const token=await push.vapidToken('https://fcm.googleapis.com');
+    const [head,body,sig]=token.split('.');
+    const dec=x=>JSON.parse(Buffer.from(x,'base64url').toString());
+    assert.deepEqual(dec(head),{typ:'JWT',alg:'ES256'});
+    const claims=dec(body);
+    assert.equal(claims.aud,'https://fcm.googleapis.com','받는 주소가 들어가야 한다');
+    assert.equal(claims.sub,'mailto:jyp7296@naver.com');
+    assert.ok(claims.exp>Math.floor(Date.now()/1000),'만료가 미래여야 한다');
+    assert.ok(claims.exp-Math.floor(Date.now()/1000)<=24*3600,'만료는 24시간을 넘지 않아야 한다');
+
+    const ok=await crypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},pair.publicKey,
+      Buffer.from(sig,'base64url'),Buffer.from(head+'.'+body));
+    assert.equal(ok,true,'서명이 실제로 맞아야 한다');
+
+    const other=await push.vapidToken('https://updates.push.services.mozilla.com');
+    assert.notEqual(token,other,'받는 주소가 다르면 토큰도 달라야 한다');
+  });
+  db.close();
+});
+
+test('구독을 넣고 빼고, 같은 기기는 하나만 남는다',async()=>{
+  const db=localDatabase();
+  const sub=(e)=>({endpoint:e,keys:{p256dh:'p',auth:'a'}});
+  await push.saveSubscription('u1',sub('https://push.example/aaa'));
+  await push.saveSubscription('u1',sub('https://push.example/bbb'));
+  assert.equal((await push.subscriptionsOf('u1')).length,2);
+
+  // 같은 기기가 다시 구독하면 늘어나지 않는다
+  await push.saveSubscription('u1',sub('https://push.example/aaa'));
+  assert.equal((await push.subscriptionsOf('u1')).length,2,'같은 기기가 두 번 세어지면 안 된다');
+
+  // 기기를 물려주면 주인이 바뀐다
+  await push.saveSubscription('u2',sub('https://push.example/aaa'));
+  assert.equal((await push.subscriptionsOf('u1')).length,1);
+  assert.equal((await push.subscriptionsOf('u2')).length,1);
+
+  await push.removeSubscription('u1','https://push.example/bbb');
+  assert.equal((await push.subscriptionsOf('u1')).length,0);
+
+  for(const bad of [{endpoint:'http://push.example/x',keys:{p256dh:'p',auth:'a'}},
+                    {endpoint:'https://push.example/y',keys:{p256dh:'',auth:'a'}},
+                    {endpoint:'',keys:{p256dh:'p',auth:'a'}}])
+    await assert.rejects(()=>push.saveSubscription('u3',bad),/구독 정보를 확인/);
+  db.close();
+});
+
+test('죽은 구독(410)은 치우고 나머지에는 계속 보낸다',async()=>{
+  const db=localDatabase();
+  await withVapid(async()=>{
+    await push.saveSubscription('u1',{endpoint:'https://push.example/dead',keys:{p256dh:'p',auth:'a'}});
+    await push.saveSubscription('u1',{endpoint:'https://push.example/live',keys:{p256dh:'p',auth:'a'}});
+    const seen=[];const real=globalThis.fetch;
+    globalThis.fetch=async(url,init)=>{
+      seen.push({url,auth:init.headers.Authorization,ttl:init.headers.TTL,method:init.method});
+      return new Response('',{status:url.includes('dead')?410:201});
+    };
+    try{
+      const out=await push.wakeDevices(['u1','u1']);
+      assert.equal(seen.length,2,'같은 사람을 두 번 넣어도 기기 수만큼만 보낸다');
+      assert.ok(seen.every(x=>x.method==='POST'&&/^vapid t=.+, k=.+/.test(x.auth)),'VAPID 헤더가 붙어야 한다');
+      assert.ok(seen.every(x=>x.ttl==='86400'));
+      assert.equal(out.sent,1);assert.equal(out.failed,1);
+    }finally{globalThis.fetch=real}
+    assert.deepEqual((await push.subscriptionsOf('u1')).map(x=>x.endpoint),['https://push.example/live'],
+      '죽은 구독은 지워져야 한다');
+  });
+  db.close();
+});
+
+test('알림을 받은 사람만 깨우고 본인은 깨우지 않는다',async()=>{
+  const db=localDatabase();
+  const f=teamWithRoles();
+  await repository.commit(blank(),f.s,(await repository.load()).version);
+  globalThis.__teamkickTestWoken=[];
+  globalThis.__teamkickTestIdentity={userId:'a',fullName:'A 주장'};
+  const res=await api.POST(new Request('https://teamkick.co.kr/api/app',{method:'POST',
+    body:JSON.stringify({mutationId:'push-1',...gameArgs(f.a)})}));
+  assert.equal(res.status,200,JSON.stringify(await res.clone().json()).slice(0,200));
+  const woken=globalThis.__teamkickTestWoken;
+  assert.ok(woken.includes('mgr')&&woken.includes('mem'),'팀원들을 깨워야 한다: '+JSON.stringify(woken));
+  assert.ok(!woken.includes('a'),'명령을 실행한 본인은 깨우지 않는다');
+  globalThis.__teamkickTestIdentity=null;db.close();
+});
+
+// --- 개인정보 처리방침의 법정 기재사항 ---
+// 공식 작성지침(2025.4)이 요구하는 항목이 문서에서 빠지면 바로 알아야 한다.
+// 문구는 바뀌어도 되지만 항목 자체가 사라지면 안 된다.
+
+test('처리방침에 법정 기재사항이 모두 들어 있다',()=>{
+  const p=legal.PRIVACY;
+  // 제목 줄로 확인한다. 본문 어딘가에 같은 낱말이 있다고 통과하면 안 된다.
+  const heading=name=>new RegExp('^\\d+\\. '+name,'m').test(p);
+  for(const name of ['수집하는 항목과 목적','보유와 이용 기간','파기 절차와 방법',
+      '제3자 제공','처리 위탁','국외 이전','안전 조치','쿠키 등 자동 수집 장치',
+      '이용자의 권리','만 14세 미만','개인정보 보호책임자','권익침해 구제방법',
+      '처리방침의 변경','문의'])
+    assert.ok(heading(name),'"'+name+'" 항목이 빠졌다');
+
+  // 위탁 업체는 실명이어야 한다. "클라우드 사업자" 같은 표현으로 되돌아가면 안 된다.
+  // 다른 절에 이름이 있다고 통과하면 안 되므로 위탁 절만 떼어 본다.
+  const section=n=>{
+    const m=p.match(new RegExp('^'+n+'\\. [\\s\\S]*?(?=^'+(n+1)+'\\. )','m'));
+    return m?m[0]:'';
+  };
+  const 위탁=section(5);
+  assert.ok(위탁.includes('처리 위탁'),'5번이 처리 위탁이어야 한다');
+  for(const vendor of ['OpenAI','Cloudflare','Brevo','카카오'])
+    assert.ok(위탁.includes(vendor),vendor+' 이(가) 위탁 업체로 적혀 있어야 한다');
+  assert.ok(!/클라우드 사업자|메일 발송 사업자|지도 사업자/.test(위탁),
+    '위탁 업체를 뭉뚱그린 표현으로 되돌아가면 안 된다');
+
+  // 국외 이전 절에는 받는 자·항목·목적·보유 기간이 있어야 한다
+  const 국외=section(10);
+  for(const need of ['받는 자','이전 항목','목적','보유 기간','거부'])
+    assert.ok(국외.includes(need),'국외 이전 절에 "'+need+'" 가 있어야 한다');
+
+  // 이번에 새로 저장하기 시작한 것들이 수집 항목에 적혀 있어야 한다
+  assert.ok(p.includes('1:1 문의'),'문의 내용이 수집 항목에 있어야 한다');
+  assert.ok(p.includes('알림 구독'),'기기 알림 구독 정보가 수집 항목에 있어야 한다');
+
+  // 연락처와 적용 시점
+  assert.ok(p.includes(legal.CONTACT),'문의처가 있어야 한다');
+  assert.ok(p.includes(legal.LEGAL_VERSION),'적용 시점이 적혀 있어야 한다');
+
+  // 초안이라는 표기를 지우면 안 된다. 아직 변호사 검토 전이다.
+  assert.match(p.split('\n')[0],/초안/,'처리방침 첫 줄에 전문가 검토 전이라는 표기를 유지해야 한다');
+  assert.match(legal.TERMS.split('\n')[0],/초안/,'약관 첫 줄에도 같은 표기를 유지해야 한다');
+
+  // 해외 사업자는 위탁 절과 국외 이전 절에 모두 있어야 한다. 한쪽만 고치면 어긋난다.
+  for(const vendor of ['OpenAI','Cloudflare','Brevo'])
+    assert.ok(국외.includes(vendor),vendor+' 은(는) 해외 사업자이므로 국외 이전에도 적어야 한다');
+});
+
+// 소셜 로그인을 늘리면 처리방침도 같이 늘어야 한다. 코드만 고치고 문서를 두면 잡는다.
+test('처리방침이 구글·네이버 로그인을 함께 적는다',()=>{
+  const p=legal.PRIVACY;
+  const section=n=>{
+    const m=p.match(new RegExp('^'+n+'\\. [\\s\\S]*?(?=^'+(n+1)+'\\. )','m'));
+    return m?m[0]:'';
+  };
+  // 실제로 붙인 제공자가 모두 적혀 있어야 한다. lib/social.ts 의 목록이 기준이다.
+  const labels={google:'구글',naver:'네이버'};
+  const 수집=section(1),위탁=section(5),연동=section(4);
+  assert.ok(수집.includes('수집하는 항목'),'1번이 수집 항목이어야 한다');
+  assert.ok(연동.includes('제3자 제공'),'4번이 제3자 제공·연동이어야 한다');
+  for(const provider of social.PROVIDERS_LIST){
+    const name=labels[provider];
+    assert.ok(name,'새 제공자 "'+provider+'" 의 표기를 이 테스트에 넣어야 한다');
+    assert.ok(수집.includes(name),name+' 로그인이 수집 항목에 적혀 있어야 한다');
+    assert.ok(위탁.includes(name)||위탁.includes(provider==='google'?'Google':'네이버'),
+      name+' 이(가) 위탁 절에 적혀 있어야 한다');
+    assert.ok(연동.includes(name),name+' 연결을 끊는 방법이 적혀 있어야 한다');
+  }
+  // 받지 않기로 한 것을 받는다고 적으면 안 되고, 받지 않는다는 사실은 남아야 한다.
+  assert.ok(/이메일·비밀번호[\s\S]*?받지도, 저장하지도 않습니다/.test(수집),
+    '소셜 로그인에서 이메일을 받지 않는다는 사실이 적혀 있어야 한다');
+  // 구글은 해외 사업자라 국외 이전에도 있어야 한다. 푸시 서버 줄과 구분해서 확인한다.
+  const 국외=section(10);
+  assert.ok(/받는 자: Google \(미국\)[\s\S]*?구글 로그인/.test(국외),
+    '구글 로그인이 국외 이전 절에 따로 적혀 있어야 한다');
+});
+
+test('보유 기간 숫자가 코드와 어긋나지 않는다',()=>{
+  const p=legal.PRIVACY;
+  assert.ok(p.includes('1년'),'문의 1년');
+  assert.ok(p.includes(String(KEEP.audit)+'일'),'운영 이력 '+KEEP.audit+'일');
+  assert.ok(p.includes(String(KEEP.readNotice)+'일'),'읽은 알림 '+KEEP.readNotice+'일');
+  assert.ok(p.includes(String(KEEP.unreadNotice)+'일'),'읽지 않은 알림 '+KEEP.unreadNotice+'일');
+});
+
+// --- 팀 찾기 ---
+// 이름을 정확히 몰라도 일부만으로 찾을 수 있어야 한다. "oz" 로 "FCOZ" 를 찾는 식이다.
+test('팀 찾기는 대소문자를 가리지 않고 일부만으로도 찾는다',()=>{
+  const team={id:'t1',name:'FCOZ',region:'경기 남부'};
+  for(const q of ['oz','OZ','Oz','fc','FCOZ','경기','경기 남부','남부',''])
+    assert.equal(screens.teamMatches(team,q),true,'"'+q+'" 로 찾혀야 한다');
+  for(const q of ['서울','zzz','FCOX'])
+    assert.equal(screens.teamMatches(team,q),false,'"'+q+'" 로는 찾히면 안 된다');
+  // 앞뒤 공백은 무시한다
+  assert.equal(screens.teamMatches(team,'  oz  '),true);
+  // 값이 없는 팀에서도 터지지 않는다
+  assert.equal(screens.teamMatches({id:'t2'},'oz'),false);
+  assert.equal(screens.teamMatches({id:'t2'},''),true);
+});
+
+// --- 구글·네이버 로그인 ---
+// 실제 제공자 서버에는 닿을 수 없다. 보내는 쪽에서 확인할 수 있는 것만 확인한다.
+
+function withSocial(vars,run){
+  const env=globalThis.__teamkickTestEnv;
+  Object.assign(env,vars);
+  try{return run()}finally{for(const k of Object.keys(vars))delete env[k]}
+}
+
+test('키가 둘 다 있어야 소셜 로그인이 켜진다',()=>{
+  assert.equal(social.socialReady('google'),false);
+  withSocial({GOOGLE_CLIENT_ID:'id'},()=>
+    assert.equal(social.socialReady('google'),false,'비밀키만 빠져도 켜지면 안 된다'));
+  withSocial({GOOGLE_CLIENT_SECRET:'sec'},()=>
+    assert.equal(social.socialReady('google'),false,'아이디만 빠져도 켜지면 안 된다'));
+  withSocial({GOOGLE_CLIENT_ID:'id',GOOGLE_CLIENT_SECRET:'sec'},()=>
+    assert.equal(social.socialReady('google'),true));
+  // 한쪽을 켜도 다른 쪽은 그대로다
+  withSocial({GOOGLE_CLIENT_ID:'id',GOOGLE_CLIENT_SECRET:'sec'},()=>
+    assert.equal(social.socialReady('naver'),false));
+});
+
+test('설정 전에는 보내는 주소를 만들지 않는다',()=>{
+  for(const p of ['google','naver'])
+    assert.throws(()=>social.authorizeUrl(p,'https://teamkick.co.kr','s1'),/설정되지 않았어요/);
+});
+
+test('보내는 주소에 콜백과 상태값이 들어가고 이메일은 요구하지 않는다',()=>{
+  withSocial({GOOGLE_CLIENT_ID:'gid',GOOGLE_CLIENT_SECRET:'gsec',
+              NAVER_CLIENT_ID:'nid',NAVER_CLIENT_SECRET:'nsec'},()=>{
+    const g=new URL(social.authorizeUrl('google','https://teamkick.co.kr','state-1'));
+    assert.equal(g.origin+g.pathname,'https://accounts.google.com/o/oauth2/v2/auth');
+    assert.equal(g.searchParams.get('redirect_uri'),'https://teamkick.co.kr/api/google');
+    assert.equal(g.searchParams.get('state'),'state-1');
+    assert.equal(g.searchParams.get('client_id'),'gid');
+    assert.equal(g.searchParams.get('response_type'),'code');
+    assert.equal(g.searchParams.get('scope'),'openid profile');
+    assert.ok(!/email/.test(g.searchParams.get('scope')),'이메일을 요구하면 안 된다');
+
+    const n=new URL(social.authorizeUrl('naver','https://teamkick.co.kr','state-2'));
+    assert.equal(n.origin+n.pathname,'https://nid.naver.com/oauth2.0/authorize');
+    assert.equal(n.searchParams.get('redirect_uri'),'https://teamkick.co.kr/api/naver');
+    assert.equal(n.searchParams.get('state'),'state-2');
+    // 주소가 바뀌면 콜백도 따라간다
+    assert.equal(new URL(social.authorizeUrl('naver','https://teamkick-jaeyeon.qkrwodus96.chatgpt.site','s'))
+      .searchParams.get('redirect_uri'),'https://teamkick-jaeyeon.qkrwodus96.chatgpt.site/api/naver');
+  });
+});
+
+test('제공자 응답에서 식별자와 이름만 읽는다',()=>{
+  const g=social.config('google').read({sub:'google-123',name:'박재연',email:'x@y.z',picture:'p'});
+  assert.deepEqual(g,{id:'google-123',nickname:'박재연'});
+  const n=social.config('naver').read({response:{id:'naver-abc',name:'박재연',mobile:'010',birthyear:'1990'}});
+  assert.deepEqual(n,{id:'naver-abc',nickname:'박재연'});
+  // 이름을 안 주는 경우도 있다
+  assert.equal(social.config('google').read({sub:'s'}).nickname,'');
+  assert.equal(social.config('naver').read({}).id,'');
+});
+
+test('네이버는 200 으로 오는 실패도 실패로 본다',async()=>{
+  await withSocial({NAVER_CLIENT_ID:'nid',NAVER_CLIENT_SECRET:'nsec'},async()=>{
+    const real=globalThis.fetch;
+    globalThis.fetch=async()=>new Response(JSON.stringify({error:'invalid_request'}),{status:200});
+    try{await assert.rejects(()=>social.exchange('naver','code','https://teamkick.co.kr','s'),/실패했어요/)}
+    finally{globalThis.fetch=real}
+  });
+});
+
+test('제공자가 다르면 다른 계정이고, 같은 사람은 같은 계정이다',async()=>{
+  const db=localDatabase();
+  const a=await auth.signInWithSocial('google','same-id','구글 박재연');
+  const again=await auth.signInWithSocial('google','same-id','이름 바뀜');
+  assert.equal(a.user.userId,again.user.userId,'같은 제공자·같은 식별자는 같은 계정');
+
+  const b=await auth.signInWithSocial('naver','same-id','네이버 박재연');
+  assert.notEqual(a.user.userId,b.user.userId,'제공자가 다르면 다른 계정이어야 한다');
+
+  await assert.rejects(()=>auth.signInWithSocial('google','','이름'),/로그인 정보를 가져오지 못했/);
+  await assert.rejects(()=>auth.signInWithSocial('','id','이름'),/로그인 정보를 가져오지 못했/);
+  db.close();
+});
+
+test('소셜 계정은 비밀번호로 들어올 수 없다',async()=>{
+  const db=localDatabase();
+  const {user}=await auth.signInWithSocial('naver','nv-1','박재연');
+  const row=db.prepare('SELECT email,password,provider,provider_id,verified_at FROM accounts WHERE id=?').get(user.userId);
+  assert.equal(row.password,'','비밀번호는 비어 있어야 한다');
+  assert.equal(row.provider,'naver');
+  assert.equal(row.provider_id,'nv-1');
+  assert.ok(row.verified_at,'제공자가 확인했으므로 확인 완료로 둔다');
+  for(const pw of ['','password',' '])
+    await assert.rejects(()=>auth.signIn({email:row.email,password:pw}),/이메일 또는 비밀번호/);
+  db.close();
+});
+
+test('카카오만 있던 계정도 새 열로 옮겨진다',async()=>{
+  const db=localDatabase();
+  db.prepare("INSERT INTO accounts(id,email,name,password,failures,agreed_at,verified_at,provider,kakao_id,at) VALUES(?,?,?,'',0,?,?, 'kakao',?,?)")
+    .run('old-1','kakao-9@teamkick.invalid','옛 회원',iso(NOW),iso(NOW),'9',iso(NOW));
+  await schema.backfillAccounts();
+  const row=db.prepare('SELECT provider_id FROM accounts WHERE id=?').get('old-1');
+  assert.equal(row.provider_id,'9','카카오 식별자가 provider_id 로 옮겨져야 한다');
+
+  // 이미 옮긴 값을 덮어쓰지 않는다. 여러 번 돌아도 안전해야 한다.
+  db.prepare('UPDATE accounts SET provider_id=? WHERE id=?').run('손으로 고침','old-1');
+  await schema.backfillAccounts();
+  assert.equal(db.prepare('SELECT provider_id FROM accounts WHERE id=?').get('old-1').provider_id,'손으로 고침');
+
+  // 옮긴 뒤에는 그 계정으로 로그인이 이어진다
+  db.prepare('UPDATE accounts SET provider_id=? WHERE id=?').run('9','old-1');
+  const {user}=await auth.signInWithSocial('kakao','9','옛 회원');
+  assert.equal(user.userId,'old-1','같은 사람이 새 계정을 만들면 안 된다');
+  db.close();
 });

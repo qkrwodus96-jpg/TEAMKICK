@@ -9,6 +9,11 @@ export const STATEMENTS=[
  `CREATE INDEX IF NOT EXISTS idx_entities_kind_scope ON entities (kind, scope)`,
  `CREATE TABLE IF NOT EXISTS write_guards (id text PRIMARY KEY NOT NULL, expected integer NOT NULL, actual integer NOT NULL, CONSTRAINT "revision_matches" CHECK("write_guards"."expected" = "write_guards"."actual"))`,
  `CREATE TABLE IF NOT EXISTS state_revision (id integer PRIMARY KEY NOT NULL, version integer DEFAULT 0 NOT NULL)`,
+ // 기기 푸시 구독. 기기마다 하나씩 생긴다. entities 가 아니라 따로 두는 이유는
+ // (1) 매 요청마다 읽히면 안 되고 (2) 기기 자격증명이라 백업에 담지 않기 위해서다.
+ `CREATE TABLE IF NOT EXISTS push_subs (id text PRIMARY KEY NOT NULL, account_id text NOT NULL, endpoint text NOT NULL, p256dh text NOT NULL, auth text NOT NULL, at text NOT NULL)`,
+ `CREATE UNIQUE INDEX IF NOT EXISTS push_subs_endpoint_unique ON push_subs (endpoint)`,
+ `CREATE INDEX IF NOT EXISTS idx_push_subs_account ON push_subs (account_id)`,
  `CREATE TABLE IF NOT EXISTS accounts (id text PRIMARY KEY NOT NULL, email text NOT NULL, name text NOT NULL, password text NOT NULL, failures integer DEFAULT 0 NOT NULL, locked_until text, at text NOT NULL)`,
  `CREATE UNIQUE INDEX IF NOT EXISTS accounts_email_unique ON accounts (email)`,
  `CREATE TABLE IF NOT EXISTS sessions (id text PRIMARY KEY NOT NULL, account_id text NOT NULL, expires text NOT NULL, at text NOT NULL)`,
@@ -25,13 +30,24 @@ export const STATEMENTS=[
  `ALTER TABLE accounts ADD COLUMN provider text DEFAULT 'local' NOT NULL`,
  `ALTER TABLE accounts ADD COLUMN kakao_id text`,
  `CREATE INDEX IF NOT EXISTS idx_accounts_kakao ON accounts (kakao_id)`,
+ // 소셜 로그인이 늘어 제공자별 열을 계속 만들 수 없다. (provider, provider_id) 로 묶는다.
+ `ALTER TABLE accounts ADD COLUMN provider_id text`,
+ `CREATE UNIQUE INDEX IF NOT EXISTS accounts_provider_unique ON accounts (provider,provider_id)`,
 ];
 
 // 배포된 코드가 어느 시점 것인지 화면으로 확인하기 위한 표시.
 // 스키마나 진단에 영향을 주는 변경을 할 때 함께 올린다.
-export const BUILD="2026-09-16-inquiry-keep";
+export const BUILD="2026-09-17-faster-saves";
 
-export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications"];
+export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications","push_subs"];
+
+// 카카오만 있던 시절의 계정을 새 열로 옮긴다. 여러 번 돌아도 안전하다.
+export async function backfillAccounts(){
+ if(!env.DB)return;
+ await env.DB.prepare(
+  `UPDATE accounts SET provider_id=kakao_id WHERE provider='kakao' AND kakao_id IS NOT NULL AND provider_id IS NULL`
+ ).run();
+}
 
 let prepared=false;
 export async function ensureSchema(){
@@ -46,6 +62,8 @@ export async function ensureSchema(){
    throw new AppError("데이터베이스를 준비하지 못했어요. 관리자에게 문의해주세요.",503);
   }
  }
+ // 표를 만든 뒤에 옮긴다. 열이 없는 상태에서 돌면 실패한다.
+ try{await backfillAccounts()}catch(e){console.error("TeamKick schema backfill",e)}
  prepared=true;
 }
 

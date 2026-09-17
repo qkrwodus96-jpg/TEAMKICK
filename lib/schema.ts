@@ -30,13 +30,24 @@ export const STATEMENTS=[
  `ALTER TABLE accounts ADD COLUMN provider text DEFAULT 'local' NOT NULL`,
  `ALTER TABLE accounts ADD COLUMN kakao_id text`,
  `CREATE INDEX IF NOT EXISTS idx_accounts_kakao ON accounts (kakao_id)`,
+ // 소셜 로그인이 늘어 제공자별 열을 계속 만들 수 없다. (provider, provider_id) 로 묶는다.
+ `ALTER TABLE accounts ADD COLUMN provider_id text`,
+ `CREATE UNIQUE INDEX IF NOT EXISTS accounts_provider_unique ON accounts (provider,provider_id)`,
 ];
 
 // 배포된 코드가 어느 시점 것인지 화면으로 확인하기 위한 표시.
 // 스키마나 진단에 영향을 주는 변경을 할 때 함께 올린다.
-export const BUILD="2026-09-17-privacy-search-date";
+export const BUILD="2026-09-17-social-login-splash";
 
 export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications","push_subs"];
+
+// 카카오만 있던 시절의 계정을 새 열로 옮긴다. 여러 번 돌아도 안전하다.
+export async function backfillAccounts(){
+ if(!env.DB)return;
+ await env.DB.prepare(
+  `UPDATE accounts SET provider_id=kakao_id WHERE provider='kakao' AND kakao_id IS NOT NULL AND provider_id IS NULL`
+ ).run();
+}
 
 let prepared=false;
 export async function ensureSchema(){
@@ -51,6 +62,8 @@ export async function ensureSchema(){
    throw new AppError("데이터베이스를 준비하지 못했어요. 관리자에게 문의해주세요.",503);
   }
  }
+ // 표를 만든 뒤에 옮긴다. 열이 없는 상태에서 돌면 실패한다.
+ try{await backfillAccounts()}catch(e){console.error("TeamKick schema backfill",e)}
  prepared=true;
 }
 

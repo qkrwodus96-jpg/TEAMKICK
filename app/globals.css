@@ -13,6 +13,10 @@
 @media(max-width:767px){.nav-side{display:none!important}.page-title{flex-wrap:wrap}.demo-strip{align-items:flex-start;flex-wrap:wrap}.vote-title{flex-wrap:wrap}.team-header{min-width:0}.team-header h2{overflow-wrap:anywhere}.onboarding>h1{font-size:25px}.detail-meta .row{flex-wrap:wrap}}
 
 /* 카카오 로그인 버튼. 카카오 브랜드 색을 그대로 쓴다. */
+.btn-naver{display:flex;align-items:center;justify-content:center;width:100%;background:#03c75a;color:#fff;border:none;font-weight:600;text-decoration:none}
+.btn-google{display:flex;align-items:center;justify-content:center;width:100%;background:#fff;color:#1f1f1f;border:1px solid #dadce0;font-weight:600;text-decoration:none}
+.brand-mark-svg{width:46px;height:36px;display:block;border-radius:7px}
+@media(max-width:767px){.brand-mark-svg{width:40px;height:31px}}
 .btn-kakao{display:flex;align-items:center;justify-content:center;width:100%;background:#fee500;color:#191600;border:none;font-weight:600;text-decoration:none}
 .btn-kakao:hover{background:#f5dc00}
 

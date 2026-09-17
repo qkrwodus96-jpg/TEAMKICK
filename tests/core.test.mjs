@@ -30,11 +30,12 @@ compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:wor
     ts.transpileModule(src.slice(start,end).replace('(t:Row,q:string)','(t,q)'),
       {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText);
 }
+compile('lib/social.ts','social.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/push.ts','push.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {pushReady} from "@/lib/push";','const pushReady=()=>true;').replace('import {schemaStatus,BUILD} from "@/lib/schema";','const schemaStatus=async()=>globalThis.__teamkickTestSchema??{db:true,tables:{},error:""};const BUILD="test";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady,mailAccount,fromDomain} from "@/lib/mail";','const mailReady=()=>true;const mailAccount=async()=>"ok";const fromDomain=()=>"teamkick.co.kr";').replace('import {hashPassword,currentUser} from "@/lib/auth";','const hashPassword=async()=>"";const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";','const kakaoReady=()=>true;const kakaoSecretSet=()=>true;').replace('import {ownerCodeFromEnv} from "@/lib/owner-config";','const ownerCodeFromEnv=()=>true;').replace('"@/lib/store"','"./store.mjs"'));
 compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./schema"','"./schema.mjs"').replace('"./store"','"./store.mjs"'));
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
-compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {wakeDevices} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0}};').replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
+compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0}};').replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
 const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
@@ -48,6 +49,7 @@ const backup=await import(path.join(runtime,'backup.mjs'));
 const backupApi=await import(path.join(runtime,'backup-api.mjs'));
 const health=await import(path.join(runtime,'health.mjs'));
 const push=await import(path.join(runtime,'push.mjs'));
+const social=await import(path.join(runtime,'social.mjs'));
 const screens=await import(path.join(runtime,'screens-bits.mjs'));
 const api=await import(path.join(runtime,'api.mjs'));
 const NOW=Date.now(),DAY=864e5;
@@ -1630,6 +1632,35 @@ test('처리방침에 법정 기재사항이 모두 들어 있다',()=>{
     assert.ok(국외.includes(vendor),vendor+' 은(는) 해외 사업자이므로 국외 이전에도 적어야 한다');
 });
 
+// 소셜 로그인을 늘리면 처리방침도 같이 늘어야 한다. 코드만 고치고 문서를 두면 잡는다.
+test('처리방침이 구글·네이버 로그인을 함께 적는다',()=>{
+  const p=legal.PRIVACY;
+  const section=n=>{
+    const m=p.match(new RegExp('^'+n+'\\. [\\s\\S]*?(?=^'+(n+1)+'\\. )','m'));
+    return m?m[0]:'';
+  };
+  // 실제로 붙인 제공자가 모두 적혀 있어야 한다. lib/social.ts 의 목록이 기준이다.
+  const labels={google:'구글',naver:'네이버'};
+  const 수집=section(1),위탁=section(5),연동=section(4);
+  assert.ok(수집.includes('수집하는 항목'),'1번이 수집 항목이어야 한다');
+  assert.ok(연동.includes('제3자 제공'),'4번이 제3자 제공·연동이어야 한다');
+  for(const provider of social.PROVIDERS_LIST){
+    const name=labels[provider];
+    assert.ok(name,'새 제공자 "'+provider+'" 의 표기를 이 테스트에 넣어야 한다');
+    assert.ok(수집.includes(name),name+' 로그인이 수집 항목에 적혀 있어야 한다');
+    assert.ok(위탁.includes(name)||위탁.includes(provider==='google'?'Google':'네이버'),
+      name+' 이(가) 위탁 절에 적혀 있어야 한다');
+    assert.ok(연동.includes(name),name+' 연결을 끊는 방법이 적혀 있어야 한다');
+  }
+  // 받지 않기로 한 것을 받는다고 적으면 안 되고, 받지 않는다는 사실은 남아야 한다.
+  assert.ok(/이메일·비밀번호[\s\S]*?받지도, 저장하지도 않습니다/.test(수집),
+    '소셜 로그인에서 이메일을 받지 않는다는 사실이 적혀 있어야 한다');
+  // 구글은 해외 사업자라 국외 이전에도 있어야 한다. 푸시 서버 줄과 구분해서 확인한다.
+  const 국외=section(10);
+  assert.ok(/받는 자: Google \(미국\)[\s\S]*?구글 로그인/.test(국외),
+    '구글 로그인이 국외 이전 절에 따로 적혀 있어야 한다');
+});
+
 test('보유 기간 숫자가 코드와 어긋나지 않는다',()=>{
   const p=legal.PRIVACY;
   assert.ok(p.includes('1년'),'문의 1년');
@@ -1651,4 +1682,119 @@ test('팀 찾기는 대소문자를 가리지 않고 일부만으로도 찾는�
   // 값이 없는 팀에서도 터지지 않는다
   assert.equal(screens.teamMatches({id:'t2'},'oz'),false);
   assert.equal(screens.teamMatches({id:'t2'},''),true);
+});
+
+// --- 구글·네이버 로그인 ---
+// 실제 제공자 서버에는 닿을 수 없다. 보내는 쪽에서 확인할 수 있는 것만 확인한다.
+
+function withSocial(vars,run){
+  const env=globalThis.__teamkickTestEnv;
+  Object.assign(env,vars);
+  try{return run()}finally{for(const k of Object.keys(vars))delete env[k]}
+}
+
+test('키가 둘 다 있어야 소셜 로그인이 켜진다',()=>{
+  assert.equal(social.socialReady('google'),false);
+  withSocial({GOOGLE_CLIENT_ID:'id'},()=>
+    assert.equal(social.socialReady('google'),false,'비밀키만 빠져도 켜지면 안 된다'));
+  withSocial({GOOGLE_CLIENT_SECRET:'sec'},()=>
+    assert.equal(social.socialReady('google'),false,'아이디만 빠져도 켜지면 안 된다'));
+  withSocial({GOOGLE_CLIENT_ID:'id',GOOGLE_CLIENT_SECRET:'sec'},()=>
+    assert.equal(social.socialReady('google'),true));
+  // 한쪽을 켜도 다른 쪽은 그대로다
+  withSocial({GOOGLE_CLIENT_ID:'id',GOOGLE_CLIENT_SECRET:'sec'},()=>
+    assert.equal(social.socialReady('naver'),false));
+});
+
+test('설정 전에는 보내는 주소를 만들지 않는다',()=>{
+  for(const p of ['google','naver'])
+    assert.throws(()=>social.authorizeUrl(p,'https://teamkick.co.kr','s1'),/설정되지 않았어요/);
+});
+
+test('보내는 주소에 콜백과 상태값이 들어가고 이메일은 요구하지 않는다',()=>{
+  withSocial({GOOGLE_CLIENT_ID:'gid',GOOGLE_CLIENT_SECRET:'gsec',
+              NAVER_CLIENT_ID:'nid',NAVER_CLIENT_SECRET:'nsec'},()=>{
+    const g=new URL(social.authorizeUrl('google','https://teamkick.co.kr','state-1'));
+    assert.equal(g.origin+g.pathname,'https://accounts.google.com/o/oauth2/v2/auth');
+    assert.equal(g.searchParams.get('redirect_uri'),'https://teamkick.co.kr/api/google');
+    assert.equal(g.searchParams.get('state'),'state-1');
+    assert.equal(g.searchParams.get('client_id'),'gid');
+    assert.equal(g.searchParams.get('response_type'),'code');
+    assert.equal(g.searchParams.get('scope'),'openid profile');
+    assert.ok(!/email/.test(g.searchParams.get('scope')),'이메일을 요구하면 안 된다');
+
+    const n=new URL(social.authorizeUrl('naver','https://teamkick.co.kr','state-2'));
+    assert.equal(n.origin+n.pathname,'https://nid.naver.com/oauth2.0/authorize');
+    assert.equal(n.searchParams.get('redirect_uri'),'https://teamkick.co.kr/api/naver');
+    assert.equal(n.searchParams.get('state'),'state-2');
+    // 주소가 바뀌면 콜백도 따라간다
+    assert.equal(new URL(social.authorizeUrl('naver','https://teamkick-jaeyeon.qkrwodus96.chatgpt.site','s'))
+      .searchParams.get('redirect_uri'),'https://teamkick-jaeyeon.qkrwodus96.chatgpt.site/api/naver');
+  });
+});
+
+test('제공자 응답에서 식별자와 이름만 읽는다',()=>{
+  const g=social.config('google').read({sub:'google-123',name:'박재연',email:'x@y.z',picture:'p'});
+  assert.deepEqual(g,{id:'google-123',nickname:'박재연'});
+  const n=social.config('naver').read({response:{id:'naver-abc',name:'박재연',mobile:'010',birthyear:'1990'}});
+  assert.deepEqual(n,{id:'naver-abc',nickname:'박재연'});
+  // 이름을 안 주는 경우도 있다
+  assert.equal(social.config('google').read({sub:'s'}).nickname,'');
+  assert.equal(social.config('naver').read({}).id,'');
+});
+
+test('네이버는 200 으로 오는 실패도 실패로 본다',async()=>{
+  await withSocial({NAVER_CLIENT_ID:'nid',NAVER_CLIENT_SECRET:'nsec'},async()=>{
+    const real=globalThis.fetch;
+    globalThis.fetch=async()=>new Response(JSON.stringify({error:'invalid_request'}),{status:200});
+    try{await assert.rejects(()=>social.exchange('naver','code','https://teamkick.co.kr','s'),/실패했어요/)}
+    finally{globalThis.fetch=real}
+  });
+});
+
+test('제공자가 다르면 다른 계정이고, 같은 사람은 같은 계정이다',async()=>{
+  const db=localDatabase();
+  const a=await auth.signInWithSocial('google','same-id','구글 박재연');
+  const again=await auth.signInWithSocial('google','same-id','이름 바뀜');
+  assert.equal(a.user.userId,again.user.userId,'같은 제공자·같은 식별자는 같은 계정');
+
+  const b=await auth.signInWithSocial('naver','same-id','네이버 박재연');
+  assert.notEqual(a.user.userId,b.user.userId,'제공자가 다르면 다른 계정이어야 한다');
+
+  await assert.rejects(()=>auth.signInWithSocial('google','','이름'),/로그인 정보를 가져오지 못했/);
+  await assert.rejects(()=>auth.signInWithSocial('','id','이름'),/로그인 정보를 가져오지 못했/);
+  db.close();
+});
+
+test('소셜 계정은 비밀번호로 들어올 수 없다',async()=>{
+  const db=localDatabase();
+  const {user}=await auth.signInWithSocial('naver','nv-1','박재연');
+  const row=db.prepare('SELECT email,password,provider,provider_id,verified_at FROM accounts WHERE id=?').get(user.userId);
+  assert.equal(row.password,'','비밀번호는 비어 있어야 한다');
+  assert.equal(row.provider,'naver');
+  assert.equal(row.provider_id,'nv-1');
+  assert.ok(row.verified_at,'제공자가 확인했으므로 확인 완료로 둔다');
+  for(const pw of ['','password',' '])
+    await assert.rejects(()=>auth.signIn({email:row.email,password:pw}),/이메일 또는 비밀번호/);
+  db.close();
+});
+
+test('카카오만 있던 계정도 새 열로 옮겨진다',async()=>{
+  const db=localDatabase();
+  db.prepare("INSERT INTO accounts(id,email,name,password,failures,agreed_at,verified_at,provider,kakao_id,at) VALUES(?,?,?,'',0,?,?, 'kakao',?,?)")
+    .run('old-1','kakao-9@teamkick.invalid','옛 회원',iso(NOW),iso(NOW),'9',iso(NOW));
+  await schema.backfillAccounts();
+  const row=db.prepare('SELECT provider_id FROM accounts WHERE id=?').get('old-1');
+  assert.equal(row.provider_id,'9','카카오 식별자가 provider_id 로 옮겨져야 한다');
+
+  // 이미 옮긴 값을 덮어쓰지 않는다. 여러 번 돌아도 안전해야 한다.
+  db.prepare('UPDATE accounts SET provider_id=? WHERE id=?').run('손으로 고침','old-1');
+  await schema.backfillAccounts();
+  assert.equal(db.prepare('SELECT provider_id FROM accounts WHERE id=?').get('old-1').provider_id,'손으로 고침');
+
+  // 옮긴 뒤에는 그 계정으로 로그인이 이어진다
+  db.prepare('UPDATE accounts SET provider_id=? WHERE id=?').run('9','old-1');
+  const {user}=await auth.signInWithSocial('kakao','9','옛 회원');
+  assert.equal(user.userId,'old-1','같은 사람이 새 계정을 만들면 안 된다');
+  db.close();
 });

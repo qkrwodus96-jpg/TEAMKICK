@@ -12,7 +12,7 @@ import {currentVote,guestStatusOf,REGIONS,FORMATS,LEVELS,DAYS,levelOf,type Row} 
 import {TERMS,PRIVACY} from "@/lib/legal";
 import {APP_VERSION} from "@/lib/version";
 import {NotifyToggle} from "./notify";
-export function AuthPanel({onDemo,mailReady=true,kakaoReady=false,resetToken=""}:{onDemo:()=>void;mailReady?:boolean;kakaoReady?:boolean;resetToken?:string}){
+export function AuthPanel({onDemo,mailReady=true,kakaoReady=false,googleReady=false,naverReady=false,resetToken=""}:{onDemo:()=>void;mailReady?:boolean;kakaoReady?:boolean;googleReady?:boolean;naverReady?:boolean;resetToken?:string}){
  const [mode,setMode]=useState(resetToken?"reset":"login"),[form,setForm]=useState<Record<string,string>>({email:"",password:"",password2:"",name:""});
  const [busy,setBusy]=useState(false),[failure,setFailure]=useState("");
  const [token,setToken]=useState(resetToken);
@@ -41,8 +41,10 @@ export function AuthPanel({onDemo,mailReady=true,kakaoReady=false,resetToken=""}
   <p className="small muted" style={{marginBottom:20,lineHeight:1.7}}>{signup?"가입한 뒤 팀을 등록하거나 소속 팀에 가입을 신청할 수 있어요.":forgot?"가입한 이메일로 재설정 링크를 보내드려요.":reset?"새로 쓸 비밀번호를 정해주세요. 다른 기기에서는 모두 로그아웃돼요.":"가입한 이메일과 비밀번호로 로그인하세요."}</p>
   {failure&&<p className="error-bar" role="alert">{failure}</p>}
   {sent&&<p className="data-note" role="status" style={{lineHeight:1.8}}>가입된 주소라면 재설정 링크를 보냈어요. 받은 편지함을 확인해주세요. 링크는 1시간 동안 한 번만 쓸 수 있어요.</p>}
-  {kakaoReady&&!forgot&&!reset&&<>
-   <a className="btn btn-kakao" href="/api/kakao">카카오로 시작하기</a>
+  {!forgot&&!reset&&(kakaoReady||googleReady||naverReady)&&<>
+   {kakaoReady&&<a className="btn btn-kakao" href="/api/kakao">카카오로 시작하기</a>}
+   {naverReady&&<a className="btn btn-naver" href="/api/naver">네이버로 시작하기</a>}
+   {googleReady&&<a className="btn btn-google" href="/api/google">구글로 시작하기</a>}
    <p className="data-note" style={{textAlign:"center",margin:"12px 0 18px"}}>또는 이메일로</p>
   </>}
   <form className="form-grid" onSubmit={submit}>

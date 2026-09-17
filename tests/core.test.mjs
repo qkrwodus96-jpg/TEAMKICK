@@ -20,6 +20,16 @@ compile('lib/kakao.ts','kakao.mjs',s=>s.replace('import {env} from "cloudflare:w
 compile('lib/schema.ts','schema.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/mail.ts','mail.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./legal"','"./legal.mjs"'));
 compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('import {sendMail,mailReady} from "./mail";','const sendMail=async(to,subject,text)=>{if(globalThis.__teamkickTestMailFail)throw new AppError("메일을 보내지 못했어요. 잠시 후 다시 시도해주세요.",503);(globalThis.__teamkickTestMail??=[]).push({to,subject,text})};const mailReady=()=>globalThis.__teamkickTestMailReady!==false;').replace('"./model"','"./model.mjs"'));
+// 화면 파일 전체는 이 환경에서 돌릴 수 없다. 검색 규칙 함수만 떼어 확인한다.
+{
+  const src=fs.readFileSync('app/screens.tsx','utf8');
+  const start=src.indexOf('export const teamMatches=');
+  const end=src.indexOf('};',start)+2;
+  if(start<0)throw new Error('teamMatches 를 찾지 못했다');
+  fs.writeFileSync(path.join(runtime,'screens-bits.mjs'),
+    ts.transpileModule(src.slice(start,end).replace('(t:Row,q:string)','(t,q)'),
+      {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText);
+}
 compile('lib/push.ts','push.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {pushReady} from "@/lib/push";','const pushReady=()=>true;').replace('import {schemaStatus,BUILD} from "@/lib/schema";','const schemaStatus=async()=>globalThis.__teamkickTestSchema??{db:true,tables:{},error:""};const BUILD="test";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady,mailAccount,fromDomain} from "@/lib/mail";','const mailReady=()=>true;const mailAccount=async()=>"ok";const fromDomain=()=>"teamkick.co.kr";').replace('import {hashPassword,currentUser} from "@/lib/auth";','const hashPassword=async()=>"";const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";','const kakaoReady=()=>true;const kakaoSecretSet=()=>true;').replace('import {ownerCodeFromEnv} from "@/lib/owner-config";','const ownerCodeFromEnv=()=>true;').replace('"@/lib/store"','"./store.mjs"'));
 compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./schema"','"./schema.mjs"').replace('"./store"','"./store.mjs"'));
@@ -38,6 +48,7 @@ const backup=await import(path.join(runtime,'backup.mjs'));
 const backupApi=await import(path.join(runtime,'backup-api.mjs'));
 const health=await import(path.join(runtime,'health.mjs'));
 const push=await import(path.join(runtime,'push.mjs'));
+const screens=await import(path.join(runtime,'screens-bits.mjs'));
 const api=await import(path.join(runtime,'api.mjs'));
 const NOW=Date.now(),DAY=864e5;
 const owner={id:'owner',name:'운영자',ownerSetup:true},A={id:'a',name:'A 주장'},B={id:'b',name:'B 주장'},C={id:'c',name:'C 주장'},member={id:'player',name:'선수'};
@@ -1568,4 +1579,76 @@ test('알림을 받은 사람만 깨우고 본인은 깨우지 않는다',async(
   assert.ok(woken.includes('mgr')&&woken.includes('mem'),'팀원들을 깨워야 한다: '+JSON.stringify(woken));
   assert.ok(!woken.includes('a'),'명령을 실행한 본인은 깨우지 않는다');
   globalThis.__teamkickTestIdentity=null;db.close();
+});
+
+// --- 개인정보 처리방침의 법정 기재사항 ---
+// 공식 작성지침(2025.4)이 요구하는 항목이 문서에서 빠지면 바로 알아야 한다.
+// 문구는 바뀌어도 되지만 항목 자체가 사라지면 안 된다.
+
+test('처리방침에 법정 기재사항이 모두 들어 있다',()=>{
+  const p=legal.PRIVACY;
+  // 제목 줄로 확인한다. 본문 어딘가에 같은 낱말이 있다고 통과하면 안 된다.
+  const heading=name=>new RegExp('^\\d+\\. '+name,'m').test(p);
+  for(const name of ['수집하는 항목과 목적','보유와 이용 기간','파기 절차와 방법',
+      '제3자 제공','처리 위탁','국외 이전','안전 조치','쿠키 등 자동 수집 장치',
+      '이용자의 권리','만 14세 미만','개인정보 보호책임자','권익침해 구제방법',
+      '처리방침의 변경','문의'])
+    assert.ok(heading(name),'"'+name+'" 항목이 빠졌다');
+
+  // 위탁 업체는 실명이어야 한다. "클라우드 사업자" 같은 표현으로 되돌아가면 안 된다.
+  // 다른 절에 이름이 있다고 통과하면 안 되므로 위탁 절만 떼어 본다.
+  const section=n=>{
+    const m=p.match(new RegExp('^'+n+'\\. [\\s\\S]*?(?=^'+(n+1)+'\\. )','m'));
+    return m?m[0]:'';
+  };
+  const 위탁=section(5);
+  assert.ok(위탁.includes('처리 위탁'),'5번이 처리 위탁이어야 한다');
+  for(const vendor of ['OpenAI','Cloudflare','Brevo','카카오'])
+    assert.ok(위탁.includes(vendor),vendor+' 이(가) 위탁 업체로 적혀 있어야 한다');
+  assert.ok(!/클라우드 사업자|메일 발송 사업자|지도 사업자/.test(위탁),
+    '위탁 업체를 뭉뚱그린 표현으로 되돌아가면 안 된다');
+
+  // 국외 이전 절에는 받는 자·항목·목적·보유 기간이 있어야 한다
+  const 국외=section(10);
+  for(const need of ['받는 자','이전 항목','목적','보유 기간','거부'])
+    assert.ok(국외.includes(need),'국외 이전 절에 "'+need+'" 가 있어야 한다');
+
+  // 이번에 새로 저장하기 시작한 것들이 수집 항목에 적혀 있어야 한다
+  assert.ok(p.includes('1:1 문의'),'문의 내용이 수집 항목에 있어야 한다');
+  assert.ok(p.includes('알림 구독'),'기기 알림 구독 정보가 수집 항목에 있어야 한다');
+
+  // 연락처와 적용 시점
+  assert.ok(p.includes(legal.CONTACT),'문의처가 있어야 한다');
+  assert.ok(p.includes(legal.LEGAL_VERSION),'적용 시점이 적혀 있어야 한다');
+
+  // 초안이라는 표기를 지우면 안 된다. 아직 변호사 검토 전이다.
+  assert.match(p.split('\n')[0],/초안/,'처리방침 첫 줄에 전문가 검토 전이라는 표기를 유지해야 한다');
+  assert.match(legal.TERMS.split('\n')[0],/초안/,'약관 첫 줄에도 같은 표기를 유지해야 한다');
+
+  // 해외 사업자는 위탁 절과 국외 이전 절에 모두 있어야 한다. 한쪽만 고치면 어긋난다.
+  for(const vendor of ['OpenAI','Cloudflare','Brevo'])
+    assert.ok(국외.includes(vendor),vendor+' 은(는) 해외 사업자이므로 국외 이전에도 적어야 한다');
+});
+
+test('보유 기간 숫자가 코드와 어긋나지 않는다',()=>{
+  const p=legal.PRIVACY;
+  assert.ok(p.includes('1년'),'문의 1년');
+  assert.ok(p.includes(String(KEEP.audit)+'일'),'운영 이력 '+KEEP.audit+'일');
+  assert.ok(p.includes(String(KEEP.readNotice)+'일'),'읽은 알림 '+KEEP.readNotice+'일');
+  assert.ok(p.includes(String(KEEP.unreadNotice)+'일'),'읽지 않은 알림 '+KEEP.unreadNotice+'일');
+});
+
+// --- 팀 찾기 ---
+// 이름을 정확히 몰라도 일부만으로 찾을 수 있어야 한다. "oz" 로 "FCOZ" 를 찾는 식이다.
+test('팀 찾기는 대소문자를 가리지 않고 일부만으로도 찾는다',()=>{
+  const team={id:'t1',name:'FCOZ',region:'경기 남부'};
+  for(const q of ['oz','OZ','Oz','fc','FCOZ','경기','경기 남부','남부',''])
+    assert.equal(screens.teamMatches(team,q),true,'"'+q+'" 로 찾혀야 한다');
+  for(const q of ['서울','zzz','FCOX'])
+    assert.equal(screens.teamMatches(team,q),false,'"'+q+'" 로는 찾히면 안 된다');
+  // 앞뒤 공백은 무시한다
+  assert.equal(screens.teamMatches(team,'  oz  '),true);
+  // 값이 없는 팀에서도 터지지 않는다
+  assert.equal(screens.teamMatches({id:'t2'},'oz'),false);
+  assert.equal(screens.teamMatches({id:'t2'},''),true);
 });

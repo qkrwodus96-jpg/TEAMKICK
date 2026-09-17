@@ -3,10 +3,11 @@
 최종 갱신: 2026-09-17
 작업 폴더: `/home/user/TEAMKICK`
 브랜치: `claude/teamkick-setup-baseline-lwntca`
-Pull Request: https://github.com/qkrwodus96-jpg/TEAMKICK/pull/20 (검토 중)
-현재 커밋: 저장 왕복 절반으로 (T38)
+Pull Request: https://github.com/qkrwodus96-jpg/TEAMKICK/pull/20 (**병합 완료** 2026-09-17)
+`main` 이 최신이다. 배포도 끝났다(`build=2026-09-17-faster-saves` 확인).
+현재 커밋: /api/health 에 version·소셜 준비 여부 (T39)
 미커밋 변경: 없음
-버전: `APP_VERSION=1.4.1`, `BUILD=2026-09-17-faster-saves`
+버전: `APP_VERSION=1.4.2`, `BUILD=2026-09-17-health-version`
 현재 작업 ID: **배포 후 구글·네이버 로그인 실제 확인** → 확인되면 T20(이메일 가입 제거)
 
 ---
@@ -47,6 +48,24 @@ Pull Request: https://github.com/qkrwodus96-jpg/TEAMKICK/pull/20 (검토 중)
 ---
 
 ## 이번에 완료한 작업
+
+### /api/health 에 version 과 소셜 준비 여부를 넣는다 (T39)
+
+- **내 안내가 틀렸다.** 배포 확인 방법으로 `/api/health` 의 `version` 을 보라고 했는데
+  **그 라우트는 `version` 을 준 적이 없다.** `googleReady`·`naverReady` 도 없었다
+  (그 둘은 `GET /api/app` 에만 있었다). 배포한 쪽이 맞게 지적했다.
+- 고침: `version` 은 누구나 보는 부분에 넣었다(앱 화면 아래에도 이미 적혀 있어
+  비밀이 아니고, 이게 없으면 배포 확인 수단이 반쪽이다).
+  `googleReady`·`naverReady` 는 **운영자에게만** 보이는 부분에 넣었다
+  (무엇이 켜져 있는지는 공격자에게 쓸모 있는 지도가 된다).
+- 로그인하지 않은 사람에게 보이는 것은 `build`·`version`·`database` 뿐이다.
+  주장이어도 운영자가 아니면 같다. 테스트로 고정했고, 운영자 확인을 빼는 변이가
+  실제로 잡히는 것을 확인했다.
+
+### 2026-09-17 배포 확인됨
+
+`/api/health` 가 `{"build":"2026-09-17-faster-saves","database":true}` 를 돌려줬다.
+**구글·네이버 실제 로그인은 아직 확인하지 못했다.** 사용자 확인 대기.
 
 ### 저장할 때 서버를 두 번 다녀오던 것을 한 번으로 (T38)
 

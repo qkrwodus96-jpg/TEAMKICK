@@ -32,7 +32,7 @@ compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:wor
 }
 compile('lib/social.ts','social.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/push.ts','push.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
-compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {pushReady} from "@/lib/push";','const pushReady=()=>true;').replace('import {schemaStatus,BUILD} from "@/lib/schema";','const schemaStatus=async()=>globalThis.__teamkickTestSchema??{db:true,tables:{},error:""};const BUILD="test";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady,mailAccount,fromDomain} from "@/lib/mail";','const mailReady=()=>true;const mailAccount=async()=>"ok";const fromDomain=()=>"teamkick.co.kr";').replace('import {hashPassword,currentUser} from "@/lib/auth";','const hashPassword=async()=>"";const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";','const kakaoReady=()=>true;const kakaoSecretSet=()=>true;').replace('import {ownerCodeFromEnv} from "@/lib/owner-config";','const ownerCodeFromEnv=()=>true;').replace('"@/lib/store"','"./store.mjs"'));
+compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {pushReady} from "@/lib/push";','const pushReady=()=>true;').replace('import {socialReady} from "@/lib/social";','const socialReady=(p)=>p==="google";').replace('import {APP_VERSION} from "@/lib/version";','const APP_VERSION="9.9.9";').replace('import {schemaStatus,BUILD} from "@/lib/schema";','const schemaStatus=async()=>globalThis.__teamkickTestSchema??{db:true,tables:{},error:""};const BUILD="test";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady,mailAccount,fromDomain} from "@/lib/mail";','const mailReady=()=>true;const mailAccount=async()=>"ok";const fromDomain=()=>"teamkick.co.kr";').replace('import {hashPassword,currentUser} from "@/lib/auth";','const hashPassword=async()=>"";const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";','const kakaoReady=()=>true;const kakaoSecretSet=()=>true;').replace('import {ownerCodeFromEnv} from "@/lib/owner-config";','const ownerCodeFromEnv=()=>true;').replace('"@/lib/store"','"./store.mjs"'));
 compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./schema"','"./schema.mjs"').replace('"./store"','"./store.mjs"'));
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
 compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0}};').replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
@@ -1147,16 +1147,21 @@ test('운영자가 정해진 뒤에는 남에게 설정 상태를 보여주지 �
 
   globalThis.__teamkickTestIdentity=null;
   const anon=await healthOf();
-  assert.deepEqual(Object.keys(anon).sort(),['build','database'],'배포 확인에 필요한 것만 남긴다');
+  assert.deepEqual(Object.keys(anon).sort(),['build','database','version'],'배포 확인에 필요한 것만 남긴다');
+  assert.equal(anon.version,'9.9.9','배포된 앱 버전을 확인할 수 있어야 한다');
 
   globalThis.__teamkickTestIdentity={userId:'a',fullName:'A 주장'};
   const captain=await healthOf();
-  assert.deepEqual(Object.keys(captain).sort(),['build','database'],'주장이어도 운영자가 아니면 못 본다');
+  assert.deepEqual(Object.keys(captain).sort(),['build','database','version'],'주장이어도 운영자가 아니면 못 본다');
 
   globalThis.__teamkickTestIdentity={userId:'owner',fullName:'운영자'};
   const owner=await healthOf();
   assert.ok(owner.mailReady!==undefined&&owner.kakaoSecret!==undefined&&owner.tables!==undefined,
     '운영자는 전부 볼 수 있어야 한다');
+  // 로그인 수단이 실제로 켜졌는지 배포 뒤에 확인할 방법이 있어야 한다.
+  // 없으면 "키를 넣었는데 되는지 모르겠다" 상태에서 확인할 길이 없다.
+  assert.equal(owner.googleReady,true,'구글 로그인 준비 여부를 볼 수 있어야 한다');
+  assert.equal(owner.naverReady,false,'네이버도 따로 볼 수 있어야 한다');
   globalThis.__teamkickTestIdentity=null;db.close();
 });
 

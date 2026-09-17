@@ -1,11 +1,9 @@
 // 첫 화면. React 가 붙기 전에 보여야 해서 layout 이 HTML 에 직접 넣고,
 // 치우는 일은 layout 의 작은 스크립트가 맡는다. 여기에는 모양과 값만 둔다.
-// 최대 대기. 데이터가 준비되면 이보다 먼저 사라진다.
+// 첫 화면을 보여주는 시간. 데이터가 먼저 준비돼도 줄이지 않는다.
+// 사용자 결정(2026-09-17): 나중에 이 자리에 광고를 넣을 것이라 길이를 지킨다.
+// 화면을 누르거나 키를 누르면 바로 넘어간다.
 export const SPLASH_MS=2000;
-// 최소 노출. 화면이 번쩍 지나가면 로고를 본 것도 아니고 깜빡임만 남는다.
-export const SPLASH_MIN_MS=700;
-// 앱이 준비되면 이 이름으로 알린다.
-export const SPLASH_READY="teamkick-ready";
 export const SPLASH_ID="teamkick-splash";
 export const SPLASH_KEY="teamkick_splash_shown";
 

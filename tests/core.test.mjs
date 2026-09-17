@@ -206,6 +206,62 @@ test('API는 서버 로그인 신원을 사용하고 중복 저장 요청을 다
   db.close();
 });
 
+// 저장 응답에 새 화면 상태가 들어 있어야 한다. 들어 있지 않으면 화면이 저장 뒤에
+// 한 번 더 읽어와야 해서 기다리는 시간이 두 배가 된다.
+test('저장 응답이 새 화면 상태를 그대로 담아 준다',async()=>{
+  const db=localDatabase(),{s,a,b}=fixture();
+  // A 가 두 팀에 속해야 "보던 팀"이 첫 번째 팀과 구분된다. 한 팀뿐이면 무엇을
+  // 보내도 그 팀이 나와서, 보던 팀을 무시해도 테스트가 통과해 버린다.
+  command(s,A,{type:'joinTeam',teamId:b,name:A.name,position:'MF',number:7},NOW-20*DAY);
+  const joined=s.members.find(x=>x.teamId===b&&x.userId===A.id);
+  command(s,B,{type:'approveMember',teamId:b,memberId:joined.id},NOW-20*DAY);
+  await repository.commit(blank(),s,0);
+  globalThis.__teamkickTestIdentity={userId:A.id,fullName:A.name};
+  const send=body=>api.POST(new Request('https://example.test/api/app',{method:'POST',
+    headers:{'content-type':'application/json',origin:'https://example.test'},body:JSON.stringify(body)}));
+
+  const res=await send({type:'createGame',teamId:a,mutationId:'m-state-1',
+    start:iso(NOW+8*DAY),end:iso(NOW+8*DAY+7200e3),venue:'축구장',address:'서울'});
+  assert.equal(res.status,200);
+  const body=await res.json();
+  // 방금 만든 경기가 응답에 이미 있어야 한다. 다시 읽어올 필요가 없어야 한다.
+  assert.equal(body.games.length,1,'저장 응답에 새 경기가 들어 있어야 한다');
+  assert.equal(body.teamId,a,'보고 있던 팀 기준으로 와야 한다');
+  for(const key of ['teams','members','mine','games','sides','notices','notifications','requests'])
+    assert.ok(key in body,'저장 응답에 "'+key+'" 가 있어야 한다');
+
+  // 팀이 없는 명령에서도 보던 팀이 유지되어야 한다. 그렇지 않으면 저장할 때마다
+  // 선택한 팀이 멋대로 바뀐다.
+  // 두 번째 팀을 보고 있었다면 저장 뒤에도 두 번째 팀이어야 한다.
+  const kept=await send({type:'readNotifications',mutationId:'m-state-2',viewTeam:b});
+  assert.equal((await kept.json()).teamId,b,'viewTeam 으로 보던 팀이 유지되어야 한다');
+  // 보던 팀을 보내지 않으면 첫 번째 팀으로 돌아간다. 위와 값이 달라야 의미가 있다.
+  const noView=await send({type:'readNotifications',mutationId:'m-state-2b'});
+  assert.equal((await noView.json()).teamId,a);
+
+  // 명령의 대상 팀이 보던 팀보다 앞선다. 반대로 하면 방금 바꾼 팀이 아니라
+  // 엉뚱한 팀의 화면이 돌아온다.
+  const targeted=await send({type:'editProfile',teamId:b,mutationId:'m-state-2c',viewTeam:a,
+    name:A.name,position:'FW',number:7});
+  assert.equal(targeted.status,200);
+  assert.equal((await targeted.json()).teamId,b,'명령의 대상 팀이 우선이어야 한다');
+
+  // 같은 요청을 다시 보내도(재전송) 상태를 함께 줘야 한다.
+  const again=await send({type:'createGame',teamId:a,mutationId:'m-state-1',
+    start:iso(NOW+8*DAY),end:iso(NOW+8*DAY+7200e3),venue:'축구장',address:'서울'});
+  const repeat=await again.json();
+  assert.equal(repeat.games.length,1,'재전송 응답에도 상태가 있어야 한다');
+
+  // viewTeam 은 보는 기준일 뿐이라 권한을 넘겨주지 않는다.
+  globalThis.__teamkickTestIdentity={userId:'stranger',fullName:'남'};
+  const outsider=await send({type:'readNotifications',mutationId:'m-state-3',viewTeam:a});
+  const seen=await outsider.json();
+  assert.equal(seen.teamId,'','속하지 않은 팀을 viewTeam 으로 보내도 열리면 안 된다');
+  assert.equal(seen.members.length,0,'속하지 않은 팀의 팀원이 보이면 안 된다');
+
+  globalThis.__teamkickTestIdentity=null;db.close();
+});
+
 const G1={id:'guest-1',name:'용병1'},G2={id:'guest-2',name:'용병2'},G3={id:'용병3-id',name:'용병3'};
 
 test('용병 모집은 정원에 도달하면 서버가 마감하고 초과 승인·추가 신청을 막는다',()=>{

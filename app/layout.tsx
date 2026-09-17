@@ -1,6 +1,6 @@
 import type {Metadata,Viewport} from "next";
 import "./globals.css";
-import {SPLASH_MS,SPLASH_MIN_MS,SPLASH_READY,SPLASH_ID,SPLASH_KEY,SplashMark} from "./splash";
+import {SPLASH_MS,SPLASH_ID,SPLASH_KEY,SplashMark} from "./splash";
 
 export const metadata:Metadata={title:"팀킥 · 우리 팀의 모든 경기",description:"일정부터 참여 투표, 팀 매칭과 선수 기록까지.",manifest:"/manifest.webmanifest",icons:{icon:"/favicon.svg",shortcut:"/favicon.svg",apple:"/icon-192.png"}};
 export const viewport:Viewport={width:"device-width",initialScale:1,themeColor:"#168b53"};
@@ -15,13 +15,17 @@ const CATCH=`(function(){window.__teamkickInstall=null;window.addEventListener("
 // 그래서 첫 화면을 HTML 에 그대로 넣어 두고, 이 스크립트가 화면을 칠하기 전에
 // 보여줄지 말지 정한다. 이미 본 사람은 <html> 에 표시를 남겨 CSS 가 즉시 숨긴다.
 const SPLASH=`(function(){try{if(sessionStorage.getItem(${JSON.stringify(SPLASH_KEY)})==="1"){document.documentElement.setAttribute("data-splash","skip");return}sessionStorage.setItem(${JSON.stringify(SPLASH_KEY)},"1")}catch(e){}
-var gone=false,ready=false,waited=false;
-var go=function(){if(gone)return;gone=true;var el=document.getElementById(${JSON.stringify(SPLASH_ID)});if(el)el.remove()};
-// 데이터가 준비되고 최소 시간이 지나면 바로 넘어간다. 둘 중 하나만으로는 넘어가지 않는다.
-var maybe=function(){if(ready&&waited)go()};
-setTimeout(function(){waited=true;maybe()},${SPLASH_MIN_MS});
-setTimeout(go,${SPLASH_MS});                       // 준비가 늦어도 여기서는 넘어간다
-window.addEventListener(${JSON.stringify(SPLASH_READY)},function(){ready=true;maybe()});
+var gone=false;
+// 첫 화면은 React 의 Layout 안에도 들어 있다. 그래서 한 번 지워도 React 가 붙는
+// 순간 되살아나 다시 화면을 덮는다(실제로 그랬다. 눌러서 건너뛰어도 2초를 채웠다).
+// React 가 붙는 동안만 지켜보다가 되살아나면 다시 치우고, 곧 그만둔다.
+var kill=function(){var el=document.getElementById(${JSON.stringify(SPLASH_ID)});if(el)el.remove()};
+var go=function(){if(gone)return;gone=true;kill();
+try{var watch=new MutationObserver(kill);watch.observe(document.body,{childList:true});
+setTimeout(function(){watch.disconnect()},${SPLASH_MS});}catch(e){}};
+// 사용자 결정(2026-09-17): 데이터가 먼저 준비되어도 줄이지 않고 2초를 그대로 보여준다.
+// 나중에 이 자리에 광고가 들어갈 자리를 지키기 위해서다.
+setTimeout(go,${SPLASH_MS});
 document.addEventListener("click",go,{once:true});document.addEventListener("keydown",go,{once:true})})()`;
 
 export default function Layout({children}:{children:React.ReactNode}){

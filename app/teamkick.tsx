@@ -1,6 +1,6 @@
 "use client";
 import {InstallGuide} from "./install";
-import {BrandMark,SPLASH_READY} from "./splash";
+import {BrandMark} from "./splash";
 import {useState,useEffect,useMemo,useCallback,useRef} from "react";
 import {Home,CalendarDays,Handshake,ChartNoAxesCombined,Users,Bell,ChevronRight,ChevronLeft,Plus,MapPin,Clock,ArrowUpRight,CheckCircle2,XCircle,HelpCircle,ShieldCheck,Settings,LogOut,Goal,Flag,ClipboardCheck,TrendingUp,Pin,ArrowLeft,LoaderCircle,Search} from "lucide-react";
 import {Sidebar,SidebarProvider,SidebarContent,SidebarMenu,SidebarMenuItem,SidebarMenuButton} from "@/components/ui/sidebar";
@@ -34,6 +34,8 @@ export function Calendar({month,setMonth,selected,onSelect,games,large=false}:an
  return <section className={"panel "+(large?"match-calendar":"")}><div className="calendar-head"><strong>{y}년 {m}월</strong><div className="calendar-nav"><button aria-label="이전 달" onClick={()=>shift(-1)}><ChevronLeft/></button><button aria-label="다음 달" onClick={()=>shift(1)}><ChevronRight/></button></div></div><div className="calendar-grid">{days.map((d,i)=><span className="weekday" key={d} style={i===0?{color:"#c69494"}:{}}>{d}</span>)}{Array.from({length:Math.ceil((n+offset)/7)*7},(_,i)=>{const num=i-offset+1,d=new Date(Date.UTC(y,m-1,num)),key=d.toISOString().slice(0,10),has=games.some((g:Row)=>localDay(g.start)===key&&g.status!=="cancelled");return <button aria-label={key+(has?" 경기 있음":"")} key={key} onClick={()=>onSelect(key)} className={(num<1||num>n?"other ":"")+(i%7===0?"weekend ":"")+(selected===key?"selected ":"")+(has?"has-match":"")}>{d.getUTCDate()}</button>})}</div><div className="calendar-legend">● 경기 일정　<span className="muted">날짜를 눌러 확인하세요</span></div></section>
 }
 export function Fixture({g,v,onClick}:any){const z=v.sides?.find((x:Row)=>x.gameId===g.id);return <div role="button" tabIndex={0} onKeyDown={e=>e.key==="Enter"&&onClick()} className="fixture-row" onClick={onClick}><div className="fixture-date"><b>{new Date(new Date(g.start).getTime()+9*3600e3).getUTCDate()}</b><span>{days[new Date(new Date(g.start).getTime()+9*3600e3).getUTCDay()]}요일</span></div><div className="fixture-info"><strong>{v.teams.find((t:Row)=>t.id===v.teamId)?.name} <span className="muted" style={{fontWeight:400}}>vs</span> {opponent(v,g)||"상대팀 미정"}</strong><p>{time(g.start)} · {g.venue}</p></div>{g.result?.status==="confirmed"?<span className="mini-result">{g.home===v.teamId?g.result.a:g.result.b} : {g.home===v.teamId?g.result.b:g.result.a}</span>:<GameBadge g={g}/>}<GuestBadge z={z}/><ChevronRight/></div>}
+// 저장 응답의 껍데기. 화면 상태가 아니므로 남기지 않는다.
+const SAVE_META=new Set(["ok","output","closed","error"]);
 const nav=[{id:"home",label:"홈",icon:Home},{id:"schedule",label:"일정",icon:CalendarDays},{id:"matching",label:"매칭",icon:Handshake},{id:"records",label:"기록",icon:ChartNoAxesCombined},{id:"team",label:"MY",icon:Users}];
 export default function TeamKick({resetToken="",verifyToken="",kakaoNote=""}:{resetToken?:string;verifyToken?:string;kakaoNote?:string}){
  const [samples,setSamples]=useState(demoState),[demo,setDemo]=useState(true),[demoActor,setDemoActor]=useState("demo-a"),[demoTeam,setDemoTeam]=useState("team-a");
@@ -45,7 +47,7 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote=""}:{re
  const v=demo?{...visibleState(samples,demoActor,demoTeam),user:{id:demoActor,name:"샘플 주장"}}:{teams:[],members:[],mine:[],games:[],sides:[],notices:[],notifications:[],requests:[],listings:[],ownTeams:[],invites:[],...real};
  const team=v.teams?.find((t:Row)=>t.id===v.teamId),manager=["captain","manager"].includes(v.role),captain=v.role==="captain";
  async function refresh(teamId?:string){const params=new URLSearchParams();if(teamId)params.set("team",teamId);const invite=new URLSearchParams(window.location.search).get("invite");if(invite)params.set("invite",invite);const r=await fetch("/api/app?"+params,{cache:"no-store"});const data:any=await r.json();if(!r.ok)throw Error(data.error);setReal(data);return data}
- useEffect(()=>{refresh().then(r=>{if(r.user)setDemo(false);if(r.invitedTeam&&!r.mine?.some((m:Row)=>m.teamId===r.invitedTeam&&["active","pending"].includes(m.status)))setModal({kind:"joinTeam",team:r.teams.find((t:Row)=>t.id===r.invitedTeam)})}).catch(e=>setError(e.message)).finally(()=>{setLoading(false);window.dispatchEvent(new Event(SPLASH_READY))});if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{});},[]);
+ useEffect(()=>{refresh().then(r=>{if(r.user)setDemo(false);if(r.invitedTeam&&!r.mine?.some((m:Row)=>m.teamId===r.invitedTeam&&["active","pending"].includes(m.status)))setModal({kind:"joinTeam",team:r.teams.find((t:Row)=>t.id===r.invitedTeam)})}).catch(e=>setError(e.message)).finally(()=>setLoading(false));if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{});},[]);
  // 카카오 로그인이 실패하면 그 이유가 주소에 실려 돌아온다. 보여주고 주소는 정리한다.
  useEffect(()=>{if(kakaoNote)window.history.replaceState(null,"","/")},[kakaoNote]);
  // 메일의 확인 링크로 들어온 경우. 링크는 한 번만 쓰이므로 주소에서 바로 지운다.
@@ -62,9 +64,21 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote=""}:{re
    toast[d.sent?"success":"info"](d.sent?"확인 메일을 다시 보냈어요.":"조금 전에 보낸 메일을 먼저 확인해주세요.");
   }catch(e){toast.error(e instanceof Error?e.message:"보내지 못했어요.")}
  }
+ // 저장 응답에는 이미 새 화면 상태가 들어 있다. 그대로 쓰면 왕복이 한 번 줄어든다.
+ // 다만 응답에 없는 값(로그인한 사람, 외부 연동 준비 여부 등)은 저장으로 바뀌지
+ // 않으므로 지금 값을 남겨둔다. 통째로 갈아끼우면 로그인 표시가 사라진다.
+ const applySaved=useCallback((data:Record<string,unknown>)=>{
+  const next:Record<string,unknown>={};
+  for(const key of Object.keys(data))if(!SAVE_META.has(key))next[key]=data[key];
+  if(Object.keys(next).length)setReal((prev:Record<string,unknown>)=>({...prev,...next}));
+ },[]);
+ // 계정·운영자 상태는 저장 응답에 담기지 않는다. 이때만 다시 읽어온다.
+ const needsReload=(type:string)=>type==="setupOwner"||type==="closeAccount";
  async function action(c:any){if(busy)return;setBusy(true);setError("");try{
    let output:any;if(demo){const copy=structuredClone(samples);output=applyCommand(copy,{id:demoActor,name:"샘플 주장"},c);setSamples(copy);toast.success("샘플에 반영했어요.");}
-   else{const r=await fetch("/api/app",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...c,mutationId:crypto.randomUUID()})});const data:any=await r.json();if(!r.ok)throw Error(data.error);output=data.output;await refresh(c.teamId||v.teamId);toast.success("저장했어요.");}
+   else{const r=await fetch("/api/app",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...c,viewTeam:v.teamId||"",mutationId:crypto.randomUUID()})});const data:any=await r.json();if(!r.ok)throw Error(data.error);output=data.output;
+    if(needsReload(c.type))await refresh(c.teamId||v.teamId);else applySaved(data);
+    toast.success("저장했어요.");}
    return output??{};
  }catch(e:any){toast.error(e.message);throw e}finally{setBusy(false)}}
  function run(c:any){action(c).catch(()=>{})}

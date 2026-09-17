@@ -1730,6 +1730,46 @@ test('보유 기간 숫자가 코드와 어긋나지 않는다',()=>{
   assert.ok(p.includes(String(KEEP.unreadNotice)+'일'),'읽지 않은 알림 '+KEEP.unreadNotice+'일');
 });
 
+// --- 로고와 앱 아이콘 ---
+// 로고 글자에는 skewX(-13) 이 걸려 있다. 기울이면 글자가 왼쪽으로 밀리므로
+// 글자에 적은 x 값을 그대로 잘라내면 T 와 K 가 잘린다(실제로 잘려 있었다).
+test('머리말 로고가 그림을 잘라내지 않는다',()=>{
+  const src=fs.readFileSync('app/splash.tsx','utf8');
+  const mark=src.slice(src.indexOf('export function BrandMark'));
+  const m=mark.match(/viewBox="([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+)"/);
+  assert.ok(m,'BrandMark 에 viewBox 가 있어야 한다');
+  const [x,y,w,h]=m.slice(1).map(Number);
+
+  // 초록 띠의 실제 위치는 계산으로 정확히 구할 수 있다. skewX 는 x 를 x - tan13*y 로 민다.
+  const tan13=Math.tan(13*Math.PI/180);
+  const bar=[[150,378],[480,378],[466,414],[136,414]].map(([px,py])=>[px-tan13*py,py]);
+  const barX1=Math.min(...bar.map(p=>p[0])),barX2=Math.max(...bar.map(p=>p[0]));
+  const barY2=Math.max(...bar.map(p=>p[1]));
+  assert.ok(x<=barX1,'초록 띠 왼쪽이 잘리면 안 된다 (띠 시작 '+barX1.toFixed(1)+', viewBox 시작 '+x+')');
+  assert.ok(x+w>=barX2,'초록 띠 오른쪽이 잘리면 안 된다');
+  assert.ok(y+h>=barY2,'초록 띠 아래가 잘리면 안 된다');
+
+  // 글자까지 포함한 전체 범위는 브라우저에서 잰 값이다(512x512 기준).
+  // 이 값 바깥을 잘라내면 글자가 잘린다. 예전 viewBox 는 x 를 88 에서 시작해
+  // 왼쪽 58px 을 잘라먹고 있었다.
+  const art={x1:29.7,y1:120.5,x2:462.2,y2:414.0};
+  assert.ok(x<=art.x1,'로고 왼쪽이 잘린다 (그림 시작 '+art.x1+', viewBox 시작 '+x+')');
+  assert.ok(y<=art.y1,'로고 위쪽이 잘린다');
+  assert.ok(x+w>=art.x2,'로고 오른쪽이 잘린다');
+  assert.ok(y+h>=art.y2,'로고 아래쪽이 잘린다');
+});
+
+test('앱 아이콘이 홈 화면에서 잘리지 않게 준비되어 있다',()=>{
+  const manifest=JSON.parse(fs.readFileSync('public/manifest.webmanifest','utf8'));
+  // 안드로이드는 홈 화면 아이콘을 원·둥근네모로 잘라낸다. 잘려도 되는 아이콘을 따로 줘야 한다.
+  const maskable=manifest.icons.filter(i=>String(i.purpose||'').split(/\s+/).includes('maskable'));
+  assert.ok(maskable.length>0,'maskable 아이콘이 있어야 안드로이드에서 글자가 잘리지 않는다');
+  // 적어놓은 파일이 실제로 있어야 한다. 없으면 설치할 때 아이콘이 깨진다.
+  for(const icon of manifest.icons)
+    assert.ok(fs.existsSync(path.join('public',icon.src.replace(/^\//,''))),
+      icon.src+' 파일이 없다');
+});
+
 // --- 팀 찾기 ---
 // 이름을 정확히 몰라도 일부만으로 찾을 수 있어야 한다. "oz" 로 "FCOZ" 를 찾는 식이다.
 test('팀 찾기는 대소문자를 가리지 않고 일부만으로도 찾는다',()=>{

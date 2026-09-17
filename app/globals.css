@@ -15,8 +15,10 @@
 /* 카카오 로그인 버튼. 카카오 브랜드 색을 그대로 쓴다. */
 .btn-naver{display:flex;align-items:center;justify-content:center;width:100%;background:#03c75a;color:#fff;border:none;font-weight:600;text-decoration:none}
 .btn-google{display:flex;align-items:center;justify-content:center;width:100%;background:#fff;color:#1f1f1f;border:1px solid #dadce0;font-weight:600;text-decoration:none}
-.brand-mark-svg{width:46px;height:36px;display:block;border-radius:7px}
-@media(max-width:767px){.brand-mark-svg{width:40px;height:31px}}
+/* 로고 옆 글자를 뺐으므로(사용자 요청) 마크 자체가 브랜드 역할을 한다. 그만큼 키운다.
+   가로세로 비율은 viewBox(448x310 = 1.445)와 맞춘다. 어긋나면 로고 둘레에 빈 띠가 생긴다. */
+.brand-mark-svg{width:116px;height:80px;display:block;border-radius:10px}
+@media(max-width:767px){.brand-mark-svg{width:62px;height:43px;border-radius:8px}}
 .btn-kakao{display:flex;align-items:center;justify-content:center;width:100%;background:#fee500;color:#191600;border:none;font-weight:600;text-decoration:none}
 .btn-kakao:hover{background:#f5dc00}
 

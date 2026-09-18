@@ -1,4 +1,5 @@
 import {schemaStatus,BUILD} from "@/lib/schema";
+import {APP_VERSION} from "@/lib/version";
 import {storageReady} from "@/lib/images";
 import {placeSearchReady} from "@/lib/places";
 import {mailReady,mailAccount,fromDomain} from "@/lib/mail";
@@ -6,6 +7,7 @@ import {hashPassword,currentUser} from "@/lib/auth";
 import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";
 import {ownerCodeFromEnv} from "@/lib/owner-config";
 import {pushReady} from "@/lib/push";
+import {socialReady} from "@/lib/social";
 import {load} from "@/lib/store";
 
 export const dynamic="force-dynamic";
@@ -32,9 +34,10 @@ async function ownerView(req:Request){
 
 export async function GET(req:Request){
  const schema=await schemaStatus();
- // 배포가 반영됐는지 확인하는 데 쓰므로 build 와 연결 여부는 누구에게나 준다.
- // 둘 다 비밀이 아니고, 이것까지 막으면 배포 확인 수단이 사라진다.
- const open={build:BUILD,database:schema.db};
+ // 배포가 반영됐는지 확인하는 데 쓰므로 build·version 과 연결 여부는 누구에게나 준다.
+ // 셋 다 비밀이 아니고(version 은 앱 화면 아래에도 적혀 있다), 이것까지 막으면
+ // 배포 확인 수단이 사라진다.
+ const open={build:BUILD,version:APP_VERSION,database:schema.db};
  if(!await ownerView(req))return no(open);
 
  // Workers 는 PBKDF2 반복에 상한이 있어 로컬에서만 통과하는 설정이 나올 수 있다.
@@ -53,6 +56,8 @@ export async function GET(req:Request){
   placeSearchReady:placeSearchReady(),
   kakaoReady:kakaoReady(),
   kakaoSecret:kakaoSecretSet()?"set":"missing",
+  googleReady:socialReady("google"),
+  naverReady:socialReady("naver"),
   ownerSetupCode:ownerCodeFromEnv()?"env":"built-in",
   pushReady:pushReady(),
  });

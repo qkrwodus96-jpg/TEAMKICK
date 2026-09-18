@@ -11,6 +11,12 @@ import {Download,X,Share} from "lucide-react";
 
 type Prompt=Event&{prompt:()=>Promise<void>;userChoice:Promise<{outcome:string}>};
 const HIDDEN="teamkick_install_hidden";
+// 한 번 설치하면 기억해 둔다. 설치한 뒤 **브라우저 탭으로** 다시 들어오면
+// display-mode 가 standalone 이 아니라서 "설치하세요" 를 또 권하게 되는데,
+// 그 상태에서 눌러봐야 브라우저가 "설치할 수 없다"고 거절한다.
+const DONE="teamkick_installed";
+const remember=(key:string)=>{try{localStorage.setItem(key,"1")}catch{}};
+const remembered=(key:string)=>{try{return localStorage.getItem(key)==="1"}catch{return false}};
 const held=()=>(window as unknown as {__teamkickInstall?:Prompt|null}).__teamkickInstall??null;
 
 function installed(){
@@ -26,15 +32,15 @@ export function InstallGuide(){
 
  useEffect(()=>{
   // 브라우저 환경은 화면을 그린 뒤에만 읽을 수 있다.
-  if(installed())return;
+  if(installed()){remember(DONE);return}
   // 저장소를 막아둔 브라우저가 있다. 읽지 못해도 화면은 그대로 떠야 한다.
-  try{if(localStorage.getItem(HIDDEN)==="1")return}catch{}
+  if(remembered(HIDDEN)||remembered(DONE))return;
   const how=isIos()?"ios":isSamsung()?"samsung":"other";
   // eslint-disable-next-line react-hooks/set-state-in-effect -- 환경은 화면을 그린 뒤에만 읽을 수 있다
   setView({show:true,how,prompt:held()});
   // 설치 창이 늦게 오는 경우도 있다. 오면 버튼으로 바꿔 준다.
   const ready=()=>setView(v=>({...v,prompt:held()}));
-  const done=()=>setView(v=>({...v,show:false,prompt:null}));
+  const done=()=>{remember(DONE);setView(v=>({...v,show:false,prompt:null}))};
   window.addEventListener("teamkick-install-ready",ready);
   window.addEventListener("appinstalled",done);
   return()=>{window.removeEventListener("teamkick-install-ready",ready);window.removeEventListener("appinstalled",done)};
@@ -46,12 +52,24 @@ export function InstallGuide(){
   setView(v=>({...v,show:false}));
   try{localStorage.setItem(HIDDEN,"1")}catch{}
  }
+ const [failed,setFailed]=useState("");
  async function install(){
   if(!prompt)return;
-  await prompt.prompt();
-  await prompt.userChoice.catch(()=>null);
-  (window as unknown as {__teamkickInstall:Prompt|null}).__teamkickInstall=null;
-  setView(v=>({...v,show:false,prompt:null}));
+  setFailed("");
+  try{
+   // 설치 창은 **한 번만** 부를 수 있다. 이미 한 번 불렀거나 브라우저가 거절하면
+   // 예외가 난다. 예전에는 아무도 받지 않아 눌러도 반응이 없는 것처럼 보였다.
+   await prompt.prompt();
+   const choice=await prompt.userChoice.catch(()=>null);
+   (window as unknown as {__teamkickInstall:Prompt|null}).__teamkickInstall=null;
+   if(choice?.outcome==="accepted"){remember(DONE);setView(v=>({...v,show:false,prompt:null}));return}
+   // 사용자가 그만둔 것이다. 손으로 하는 방법을 계속 볼 수 있게 남겨 둔다.
+   setView(v=>({...v,prompt:null}));
+  }catch{
+   (window as unknown as {__teamkickInstall:Prompt|null}).__teamkickInstall=null;
+   setView(v=>({...v,prompt:null}));
+   setFailed("이 브라우저가 설치 창을 열지 못했어요. 이미 설치되어 있을 수 있어요. 아래 방법으로 직접 추가해주세요.");
+  }
  }
 
  if(!show)return null;
@@ -67,6 +85,7 @@ export function InstallGuide(){
    <div>
     <p><strong>팀킥을 앱처럼 쓰세요</strong></p>
     <span className="small muted">{prompt?"홈 화면에 추가하면 아이콘이 생기고 주소창 없이 열려요.":manual}</span>
+    {failed&&<p className="data-note" role="alert" style={{marginTop:8}}>{failed}</p>}
    </div>
    <button type="button" className="btn btn-ghost" aria-label="안내 닫기" onClick={close}><X size={16}/></button>
   </div>

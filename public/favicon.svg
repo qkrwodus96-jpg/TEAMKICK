@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#000000"/>
-  <g transform="skewX(-13)" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900"
-     fill="#ffffff" stroke="#ffffff" stroke-width="7" stroke-linejoin="round" text-anchor="start">
-    <text x="118" y="236" font-size="128" textLength="372" lengthAdjust="spacingAndGlyphs">TEAM</text>
-    <text x="118" y="356" font-size="128" textLength="372" lengthAdjust="spacingAndGlyphs">KICK</text>
-  </g>
-  <polygon points="150,378 480,378 466,414 136,414" fill="#16f08a" transform="skewX(-13)"/>
-</svg>

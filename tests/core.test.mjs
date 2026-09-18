@@ -32,12 +32,13 @@ compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:wor
 }
 compile('lib/social.ts','social.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/push.ts','push.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
-compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {pushReady} from "@/lib/push";','const pushReady=()=>true;').replace('import {schemaStatus,BUILD} from "@/lib/schema";','const schemaStatus=async()=>globalThis.__teamkickTestSchema??{db:true,tables:{},error:""};const BUILD="test";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady,mailAccount,fromDomain} from "@/lib/mail";','const mailReady=()=>true;const mailAccount=async()=>"ok";const fromDomain=()=>"teamkick.co.kr";').replace('import {hashPassword,currentUser} from "@/lib/auth";','const hashPassword=async()=>"";const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";','const kakaoReady=()=>true;const kakaoSecretSet=()=>true;').replace('import {ownerCodeFromEnv} from "@/lib/owner-config";','const ownerCodeFromEnv=()=>true;').replace('"@/lib/store"','"./store.mjs"'));
+compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {pushReady} from "@/lib/push";','const pushReady=()=>true;').replace('import {socialReady} from "@/lib/social";','const socialReady=(p)=>p==="google";').replace('import {APP_VERSION} from "@/lib/version";','const APP_VERSION="9.9.9";').replace('import {schemaStatus,BUILD} from "@/lib/schema";','const schemaStatus=async()=>globalThis.__teamkickTestSchema??{db:true,tables:{},error:""};const BUILD="test";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady,mailAccount,fromDomain} from "@/lib/mail";','const mailReady=()=>true;const mailAccount=async()=>"ok";const fromDomain=()=>"teamkick.co.kr";').replace('import {hashPassword,currentUser} from "@/lib/auth";','const hashPassword=async()=>"";const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";','const kakaoReady=()=>true;const kakaoSecretSet=()=>true;').replace('import {ownerCodeFromEnv} from "@/lib/owner-config";','const ownerCodeFromEnv=()=>true;').replace('"@/lib/store"','"./store.mjs"'));
 compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./schema"','"./schema.mjs"').replace('"./store"','"./store.mjs"'));
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
+compile('app/api/auth/route.ts','auth-api.mjs',s=>s.replace('import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword,limit,clientKey,verifyEmail,resendVerification,currentUser} from "@/lib/auth";','const signUp=async()=>{(globalThis.__teamkickSignups??=[]).push(1);return {user:{userId:"u",fullName:"새 사람"},token:"t",verificationSent:false}};const signIn=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const signOut=async()=>{};const sessionCookie=()=>"";const clearedCookie=()=>"";const requestPasswordReset=async()=>{};const resetPassword=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const limit=async()=>{};const clientKey=()=>"k";const verifyEmail=async()=>{};const resendVerification=async()=>true;const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>!!globalThis.__teamkickSocial;').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>false;').replace('"@/lib/model"','"./model.mjs"'));
 compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0}};').replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
-const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf}=await import(path.join(runtime,'model.mjs'));
+const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
 const auth=await import(path.join(runtime,'auth.mjs'));
 const mail=await import(path.join(runtime,'mail.mjs'));
@@ -52,6 +53,7 @@ const push=await import(path.join(runtime,'push.mjs'));
 const social=await import(path.join(runtime,'social.mjs'));
 const screens=await import(path.join(runtime,'screens-bits.mjs'));
 const api=await import(path.join(runtime,'api.mjs'));
+const authApi=await import(path.join(runtime,'auth-api.mjs'));
 const NOW=Date.now(),DAY=864e5;
 const owner={id:'owner',name:'운영자',ownerSetup:true},A={id:'a',name:'A 주장'},B={id:'b',name:'B 주장'},C={id:'c',name:'C 주장'},member={id:'player',name:'선수'};
 function command(s,a,c,when=NOW){return applyCommand(s,a,c,when)}
@@ -88,6 +90,144 @@ function localDatabase(){
   const api={prepare(sql){return {sql,args:[],bind(...args){this.args=args;return this},async first(){return db.prepare(this.sql).get(...this.args)??null},async run(){const r=db.prepare(this.sql).run(...this.args);return {success:true,meta:{changes:Number(r.changes??0)}}},async all(){return {results:db.prepare(this.sql).all(...this.args)}}}},async batch(statements){db.exec('BEGIN IMMEDIATE');try{const out=statements.map(x=>({success:true,results:db.prepare(x.sql).all(...x.args)}));db.exec('COMMIT');return out}catch(e){db.exec('ROLLBACK');throw e}}};
   globalThis.__teamkickTestEnv.DB=api;return db;
 }
+
+// 알림을 누르면 그 소식이 있는 화면으로 가야 한다. 화면 이름을 teamId 자리에 잘못
+// 넣으면 알림이 **아예 보이지 않게** 된다(보이는 알림은 teamId 로 걸러진다).
+const VIEWS=['home','schedule','matching','records','team','admin'];
+test('모든 알림이 갈 화면을 들고 있고, 화면 이름이 teamId 자리에 섞이지 않는다',()=>{
+  const {s,a,b}=fixture();
+  const m=addPlayer(s,a);
+  const gameId=game(s,a,{listing:true,start:NOW+2*DAY});
+  command(s,B,{type:'applyMatch',teamId:b,gameId});
+  command(s,A,{type:'acceptMatch',teamId:a,gameId,requestId:s.requests[0].id});
+  command(s,A,{type:'createNotice',teamId:a,title:'공지',body:'내용'});
+  command(s,A,{type:'openGuests',teamId:a,gameId,needed:2});
+  const guestId=applyGuest(s,a,gameId,C);
+  command(s,A,{type:'approveGuest',teamId:a,gameId,guestId});
+  command(s,A,{type:'editMember',teamId:a,memberId:m.id,name:'선수',position:'FW',number:7});
+  command(s,member,{type:'correctRequest',teamId:a,message:'기록을 고쳐주세요'});
+  assert.ok(s.notifications.length>6,'알림이 여러 종류 쌓여야 한다');
+  // teamId 는 실제로 있는 팀이거나 비어 있어야 한다. 화면 이름이 그 자리에 들어가면
+  // 그 알림은 화면에서 걸러져 **아예 보이지 않는다**(실제로 한 번 그렇게 만들었다).
+  const teamIds=new Set(s.teams.map(x=>x.id));
+  for(const n of s.notifications){
+    assert.ok(VIEWS.includes(n.to),n.title+' 알림에 갈 화면이 없다: '+n.to);
+    assert.ok(!n.teamId||teamIds.has(n.teamId),n.title+' 의 teamId 자리에 엉뚱한 값이 들어갔다: '+n.teamId);
+    assert.ok(!VIEWS.includes(n.teamId),n.title+' 의 teamId 자리에 화면 이름이 들어갔다');
+  }
+  // 경기가 딸린 알림은 따로 적지 않아도 일정 화면으로 간다.
+  const g=s.notifications.find(n=>n.title==='새 경기 일정');
+  assert.equal(g.to,'schedule');
+  assert.equal(s.notifications.find(n=>n.title==='새 팀 공지').to,'home');
+  assert.equal(s.notifications.find(n=>n.title==='매칭 확정').to,'matching');
+  assert.equal(s.notifications.find(n=>n.title==='기록 정정 요청').to,'records');
+});
+
+test('주장은 올린 공지의 알림을 다시 보낼 수 있고, 6시간 안에는 다시 못 보낸다',()=>{
+  const {s,a}=fixture();
+  addPlayer(s,a);
+  const {noticeId}=command(s,A,{type:'createNotice',teamId:a,title:'이번 주 경기',body:'집합'},NOW);
+  assert.ok(noticeId,'공지 id 를 돌려줘야 다시 보낼 수 있다');
+  // 올린 직후에는 방금 알림이 나갔으므로 다시 보낼 수 없다.
+  assert.throws(()=>command(s,A,{type:'notifyNotice',teamId:a,noticeId},NOW+60e3),/6시간/);
+  const before=s.notifications.filter(n=>n.title==='팀 공지 알림').length;
+  const out=command(s,A,{type:'notifyNotice',teamId:a,noticeId},NOW+7*3600e3);
+  assert.equal(out.notified,1,'글쓴이 본인을 뺀 팀원 수만큼 보낸다');
+  const sent=s.notifications.filter(n=>n.title==='팀 공지 알림');
+  assert.equal(sent.length,before+1);
+  assert.equal(sent.at(-1).to,'home');
+  assert.ok(sent.every(n=>n.userId!==A.id),'글쓴이 본인에게는 보내지 않는다');
+  // 주장만 보낼 수 있다.
+  assert.throws(()=>command(s,member,{type:'notifyNotice',teamId:a,noticeId},NOW+20*3600e3),/권한/);
+  assert.throws(()=>command(s,A,{type:'notifyNotice',teamId:a,noticeId:'없는-공지'},NOW+20*3600e3),/찾을 수 없/);
+});
+
+test('승인된 용병이 그 경기의 참여 인원에 들어간다',()=>{
+  const {s,a}=fixture();
+  addPlayer(s,a);
+  const gameId=game(s,a,{start:NOW+3*DAY});
+  command(s,A,{type:'openGuests',teamId:a,gameId,needed:2});
+  const before=visibleState(s,A.id,a).sides.find(z=>z.gameId===gameId);
+  assert.deepEqual(before.guestRoster,[],'승인 전에는 비어 있어야 한다');
+  const guestId=applyGuest(s,a,gameId,C);
+  const pending=visibleState(s,A.id,a).sides.find(z=>z.gameId===gameId);
+  assert.deepEqual(pending.guestRoster,[],'신청만 해서는 들어가지 않는다');
+  command(s,A,{type:'approveGuest',teamId:a,gameId,guestId});
+  const after=visibleState(s,A.id,a).sides.find(z=>z.gameId===gameId);
+  assert.equal(after.guestRoster.length,1,'승인하면 참여 인원에 들어간다');
+  assert.equal(after.guestRoster[0].name,C.name);
+  // 용병은 팀원 명단·출석에는 넣지 않는다(ASM-04).
+  assert.ok(!after.roster.some(x=>x.name===C.name),'용병이 팀원 명단에 섞이면 안 된다');
+  command(s,A,{type:'cancelGuest',teamId:a,gameId,guestId});
+  assert.deepEqual(visibleState(s,A.id,a).sides.find(z=>z.gameId===gameId).guestRoster,[],
+    '확정을 취소하면 참여 인원에서도 빠진다');
+});
+
+// T20: 새 가입은 소셜로만 받는다. 화면에서 감추는 것만으로는 부족하고 서버가 막아야 한다.
+// 다만 소셜이 하나도 준비되지 않은 곳에서는 막으면 아무도 가입할 수 없게 된다.
+async function authPost(body){
+  const res=await authApi.POST(new Request('https://teamkick.test/api/auth',
+    {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}));
+  return {status:res.status,body:await res.json()};
+}
+test('소셜 로그인이 준비되면 서버가 이메일 가입을 거절한다',async()=>{
+  globalThis.__teamkickSocial=true;globalThis.__teamkickSignups=[];
+  const out=await authPost({action:'signup',email:'a@b.test',password:'12345678',name:'새 사람',agree:true,adult:true});
+  assert.equal(out.status,403);
+  assert.match(out.body.error,/카카오·네이버·구글/);
+  assert.equal(globalThis.__teamkickSignups.length,0,'거절했으면 계정을 만들면 안 된다');
+
+  // 이미 가입한 이메일 계정은 그대로 쓸 수 있어야 한다. 이게 막히면 기존 사용자가 잠긴다.
+  assert.equal((await authPost({action:'login',email:'a@b.test',password:'12345678'})).status,200);
+  assert.equal((await authPost({action:'forgot',email:'a@b.test'})).status,200);
+  assert.equal((await authPost({action:'reset',token:'x',password:'12345678'})).status,200);
+});
+test('소셜 로그인이 하나도 없으면 이메일 가입을 막지 않는다',async()=>{
+  // 키를 넣기 전 배포나 로컬에서까지 막으면 아무도 가입할 수 없고 운영자 설정도 못 한다.
+  globalThis.__teamkickSocial=false;globalThis.__teamkickSignups=[];
+  const out=await authPost({action:'signup',email:'a@b.test',password:'12345678',name:'새 사람',agree:true,adult:true});
+  assert.equal(out.status,200);
+  assert.equal(globalThis.__teamkickSignups.length,1);
+});
+
+test('팀 공지는 고정한 것을 먼저, 그다음 최근에 쓴 것부터 보여준다',()=>{
+  const {s,a}=fixture();
+  command(s,A,{type:'createNotice',teamId:a,title:'가장 먼저 쓴 글',body:'1'},NOW-3*DAY);
+  command(s,A,{type:'createNotice',teamId:a,title:'가운데 글',body:'2'},NOW-2*DAY);
+  command(s,A,{type:'createNotice',teamId:a,title:'가장 나중에 쓴 글',body:'3'},NOW-1*DAY);
+  command(s,A,{type:'createNotice',teamId:a,title:'고정한 오래된 글',body:'4',pinned:true},NOW-4*DAY);
+  const titles=visibleState(s,A.id,a).notices.map(x=>x.title);
+  assert.equal(titles[0],'고정한 오래된 글','고정한 공지가 맨 위여야 한다');
+  assert.deepEqual(titles.slice(1),['가장 나중에 쓴 글','가운데 글','가장 먼저 쓴 글'],'나머지는 최근 순이어야 한다');
+});
+
+test('알림 문구는 UTC 원문이 아니라 Asia/Seoul 로 적힌다',()=>{
+  // 이 컨테이너의 시스템 시간대는 UTC 다. 그래도 알림은 한국 시각이어야 한다.
+  assert.equal(seoulStamp('2026-09-21T16:00:00.000Z'),'9월 22일 (화) 01:00'); // 날짜가 넘어가는 자리
+  assert.equal(seoulStamp('2026-09-22T01:00:00.000Z'),'9월 22일 (화) 10:00');
+  assert.equal(seoulStamp('2026-12-31T15:00:00.000Z'),'1월 1일 (금) 00:00'); // 해가 바뀌는 자리
+  const {s,a}=fixture();
+  const start=NOW+2*DAY;
+  command(s,A,{type:'createGame',teamId:a,start:iso(start),end:iso(start+7200e3),venue:'난지천공원',address:'서울 마포구',external:'외부 FC'},start-DAY);
+  const n=s.notifications.find(x=>x.title==='새 경기 일정');
+  assert.ok(n,'경기 알림이 있어야 한다');
+  assert.ok(!/\d{4}-\d{2}-\d{2}T/.test(n.body),'ISO 원문이 알림에 그대로 나가면 안 된다: '+n.body);
+  assert.equal(n.body,seoulStamp(iso(start))+' · 난지천공원');
+});
+
+test('팀 등록 상태 알림은 영문 상태값 대신 한국어와 사유를 보여준다',()=>{
+  const s=blank();
+  command(s,owner,{type:'setupOwner'},NOW-40*DAY);
+  const {teamId}=command(s,A,{type:'createTeam',name:'상태팀',region:'서울',description:'테스트'},NOW-30*DAY);
+  command(s,owner,{type:'approveTeam',teamId},NOW-30*DAY);
+  const approved=s.notifications.filter(x=>x.title==='팀 등록 상태 변경').at(-1);
+  assert.ok(!/active|rejected|suspended|pending/.test(approved.body),'영문 상태값이 그대로 나가면 안 된다: '+approved.body);
+  assert.match(approved.body,/승인됐어요/);
+  command(s,owner,{type:'suspendTeam',teamId,reason:'신고 확인 중'},NOW-10*DAY);
+  const suspended=s.notifications.filter(x=>x.title==='팀 등록 상태 변경').at(-1);
+  assert.match(suspended.body,/이용이 정지됐어요/);
+  assert.match(suspended.body,/신고 확인 중/,'정지 사유를 당사자가 알 수 있어야 한다');
+});
 
 test('운영자 초기 설정은 검증된 코드가 필요하고 팀 승인 권한이 분리된다',()=>{
   const s=blank();assert.throws(()=>command(s,A,{type:'setupOwner'}),/초기 설정 코드/);
@@ -1147,16 +1287,21 @@ test('운영자가 정해진 뒤에는 남에게 설정 상태를 보여주지 �
 
   globalThis.__teamkickTestIdentity=null;
   const anon=await healthOf();
-  assert.deepEqual(Object.keys(anon).sort(),['build','database'],'배포 확인에 필요한 것만 남긴다');
+  assert.deepEqual(Object.keys(anon).sort(),['build','database','version'],'배포 확인에 필요한 것만 남긴다');
+  assert.equal(anon.version,'9.9.9','배포된 앱 버전을 확인할 수 있어야 한다');
 
   globalThis.__teamkickTestIdentity={userId:'a',fullName:'A 주장'};
   const captain=await healthOf();
-  assert.deepEqual(Object.keys(captain).sort(),['build','database'],'주장이어도 운영자가 아니면 못 본다');
+  assert.deepEqual(Object.keys(captain).sort(),['build','database','version'],'주장이어도 운영자가 아니면 못 본다');
 
   globalThis.__teamkickTestIdentity={userId:'owner',fullName:'운영자'};
   const owner=await healthOf();
   assert.ok(owner.mailReady!==undefined&&owner.kakaoSecret!==undefined&&owner.tables!==undefined,
     '운영자는 전부 볼 수 있어야 한다');
+  // 로그인 수단이 실제로 켜졌는지 배포 뒤에 확인할 방법이 있어야 한다.
+  // 없으면 "키를 넣었는데 되는지 모르겠다" 상태에서 확인할 길이 없다.
+  assert.equal(owner.googleReady,true,'구글 로그인 준비 여부를 볼 수 있어야 한다');
+  assert.equal(owner.naverReady,false,'네이버도 따로 볼 수 있어야 한다');
   globalThis.__teamkickTestIdentity=null;db.close();
 });
 
@@ -1723,6 +1868,51 @@ test('보유 기간 숫자가 코드와 어긋나지 않는다',()=>{
   assert.ok(p.includes(String(KEEP.audit)+'일'),'운영 이력 '+KEEP.audit+'일');
   assert.ok(p.includes(String(KEEP.readNotice)+'일'),'읽은 알림 '+KEEP.readNotice+'일');
   assert.ok(p.includes(String(KEEP.unreadNotice)+'일'),'읽지 않은 알림 '+KEEP.unreadNotice+'일');
+});
+
+// --- 로고와 앱 아이콘 ---
+// 사용자 결정(2026-09-18): 로고는 원본 파일 하나를 쓴다. 예전에는 코드로 다시 그렸고
+// (Arial Black + skewX) 글꼴이 원본과 달랐다. 다시 그리는 쪽으로 돌아가지 않도록 고정한다.
+function pngSize(file){
+  const b=fs.readFileSync(file);
+  assert.equal(b.slice(1,4).toString('latin1'),'PNG',file+' 가 PNG 가 아니다');
+  return {w:b.readUInt32BE(16),h:b.readUInt32BE(20)};
+}
+test('첫 화면과 머리말 로고는 원본 파일을 쓴다',()=>{
+  const src=fs.readFileSync('app/splash.tsx','utf8');
+  const logo=src.match(/export const LOGO="([^"]+)"/);
+  assert.ok(logo,'splash.tsx 가 LOGO 파일 경로를 내보내야 한다');
+  const file=path.join('public',logo[1].replace(/^\//,''));
+  assert.ok(fs.existsSync(file),logo[1]+' 파일이 없다');
+  const {w,h}=pngSize(file);
+  assert.equal(w,512);assert.equal(h,512);
+  for(const name of ['SplashMark','BrandMark']){
+    const body=src.slice(src.indexOf('export function '+name),src.indexOf('export function '+name)+400);
+    assert.match(body,/<img[^>]*src=\{LOGO\}/,name+' 은 원본 파일을 그대로 써야 한다');
+    assert.ok(!/<text|skewX/.test(body),name+' 에서 로고를 코드로 다시 그리면 안 된다');
+  }
+  // 머리말은 정사각 원본을 가로 자리에 넣는다. 눌러 찌그러뜨리지 않고 잘라 써야 한다.
+  const css=fs.readFileSync('app/globals.css','utf8');
+  const rule=css.match(/\.brand-mark-svg\{[^}]*\}/);
+  assert.ok(rule&&/object-fit:cover/.test(rule[0]),'머리말 로고는 object-fit:cover 로 잘라 써야 한다');
+  // 파일을 받는 동안 첫 화면이 비지 않도록 미리 받아 둔다.
+  assert.match(fs.readFileSync('app/layout.tsx','utf8'),/rel="preload"[^>]*as="image"/,
+    '로고를 preload 해야 첫 화면이 빈 채로 뜨지 않는다');
+});
+
+test('앱 아이콘이 홈 화면에서 잘리지 않게 준비되어 있다',()=>{
+  const manifest=JSON.parse(fs.readFileSync('public/manifest.webmanifest','utf8'));
+  // 안드로이드는 홈 화면 아이콘을 원·둥근네모로 잘라낸다. 잘려도 되는 아이콘을 따로 줘야 한다.
+  const maskable=manifest.icons.filter(i=>String(i.purpose||'').split(/\s+/).includes('maskable'));
+  assert.ok(maskable.length>0,'maskable 아이콘이 있어야 안드로이드에서 글자가 잘리지 않는다');
+  // 적어놓은 파일이 실제로 있어야 한다. 없으면 설치할 때 아이콘이 깨진다.
+  for(const icon of manifest.icons){
+    const file=path.join('public',icon.src.replace(/^\//,''));
+    assert.ok(fs.existsSync(file),icon.src+' 파일이 없다');
+    // 적어둔 크기와 실제 크기가 다르면 설치할 때 흐릿하거나 아예 안 쓰인다.
+    const [w,h]=String(icon.sizes).split('x').map(Number);
+    assert.deepEqual(pngSize(file),{w,h},icon.src+' 의 실제 크기가 manifest 와 다르다');
+  }
 });
 
 // --- 팀 찾기 ---

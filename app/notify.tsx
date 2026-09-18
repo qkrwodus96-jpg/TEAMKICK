@@ -83,7 +83,7 @@ export function NotifyToggle(){
    <div>
     <p><strong>기기 알림</strong>{on&&<span className="badge badge-green" style={{marginLeft:8}}>켜짐</span>}</p>
     <span>{blocked?why||"알림을 준비 중이에요.":on
-     ? "경기 등록과 투표 마감을 잠금화면으로 알려드려요."
+     ? "새 경기·팀 공지·매칭 신청·가입 신청 같은 새 소식을 잠금화면으로 알려드려요."
      : "켜두면 앱을 열지 않아도 소식을 받을 수 있어요."}</span>
    </div>
    {!blocked&&<button type="button" className={"btn "+(on?"":"btn-green")} disabled={busy} onClick={on?turnOff:turnOn}>

@@ -3,12 +3,23 @@
 최종 갱신: 2026-09-18
 작업 폴더: `/home/user/TEAMKICK`
 브랜치: `claude/fervent-galileo-8sulep`
-(이전 브랜치 `claude/teamkick-setup-baseline-lwntca` 의 `edf3aae` 에서 이어 간다.
-PR https://github.com/qkrwodus96-jpg/TEAMKICK/pull/20 은 **병합 완료** 2026-09-17.)
+PR https://github.com/qkrwodus96-jpg/TEAMKICK/pull/21 **병합 완료** 2026-09-18
+(T39-T62, 커밋 8개). `main` 이 `ab2ea14` 로 최신이고 브랜치와 차이가 없다.
+**배포는 아직 확인하지 못했다** — 아래 "배포 직후 확인" 을 사용자가 해야 한다.
+(그 앞의 PR #20 은 2026-09-17 병합 완료.)
 현재 커밋: 이메일 가입 제거(T20) + 소셜 단추 간격 + 검토 요청서
 미커밋 변경: 없음
 버전: `APP_VERSION=1.7.0`, `BUILD=2026-09-18-social-signup-only`
-**다음 세션이 가장 먼저 할 일: `REVIEW_PACKET.md` 에 대한 GPT(Astra) 답을 확인한다.**
+**다음 세션이 가장 먼저 할 일: 배포 후 소셜 가입이 실제로 되는지 사용자 확인을 받는다.**
+그 다음 `REVIEW_PACKET.md` 에 대한 GPT(Astra) 답을 확인한다.
+
+### 배포 직후 확인 (사용자)
+
+1. **새 계정으로 소셜 가입이 실제로 되는가.** 안 되면 아무도 가입할 수 없다.
+   **비상 복구**: 배포 환경변수에서 소셜 키를 잠깐 빼면 이메일 가입이 다시 열린다
+   (`socialSignupOnly()` 가 거짓이 되어 차단이 풀린다). 코드 배포 없이 된다.
+2. `/api/health` 가 `"build":"2026-09-18-social-signup-only"`, `"version":"1.7.0"` 인가.
+3. 실기기에서 잠금화면 알림·홈 화면 아이콘 개수·PWA 설치.
 현재 작업 ID: **T20 완료(로컬 검증). 배포 후 실제 소셜 가입 확인이 남았다.**
 
 ---

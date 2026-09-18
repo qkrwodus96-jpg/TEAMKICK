@@ -89,6 +89,17 @@ function localDatabase(){
   globalThis.__teamkickTestEnv.DB=api;return db;
 }
 
+test('팀 공지는 고정한 것을 먼저, 그다음 최근에 쓴 것부터 보여준다',()=>{
+  const {s,a}=fixture();
+  command(s,A,{type:'createNotice',teamId:a,title:'가장 먼저 쓴 글',body:'1'},NOW-3*DAY);
+  command(s,A,{type:'createNotice',teamId:a,title:'가운데 글',body:'2'},NOW-2*DAY);
+  command(s,A,{type:'createNotice',teamId:a,title:'가장 나중에 쓴 글',body:'3'},NOW-1*DAY);
+  command(s,A,{type:'createNotice',teamId:a,title:'고정한 오래된 글',body:'4',pinned:true},NOW-4*DAY);
+  const titles=visibleState(s,A.id,a).notices.map(x=>x.title);
+  assert.equal(titles[0],'고정한 오래된 글','고정한 공지가 맨 위여야 한다');
+  assert.deepEqual(titles.slice(1),['가장 나중에 쓴 글','가운데 글','가장 먼저 쓴 글'],'나머지는 최근 순이어야 한다');
+});
+
 test('알림 문구는 UTC 원문이 아니라 Asia/Seoul 로 적힌다',()=>{
   // 이 컨테이너의 시스템 시간대는 UTC 다. 그래도 알림은 한국 시각이어야 한다.
   assert.equal(seoulStamp('2026-09-21T16:00:00.000Z'),'9월 22일 (화) 01:00'); // 날짜가 넘어가는 자리
@@ -1759,32 +1770,33 @@ test('보유 기간 숫자가 코드와 어긋나지 않는다',()=>{
 });
 
 // --- 로고와 앱 아이콘 ---
-// 로고 글자에는 skewX(-13) 이 걸려 있다. 기울이면 글자가 왼쪽으로 밀리므로
-// 글자에 적은 x 값을 그대로 잘라내면 T 와 K 가 잘린다(실제로 잘려 있었다).
-test('머리말 로고가 그림을 잘라내지 않는다',()=>{
+// 사용자 결정(2026-09-18): 로고는 원본 파일 하나를 쓴다. 예전에는 코드로 다시 그렸고
+// (Arial Black + skewX) 글꼴이 원본과 달랐다. 다시 그리는 쪽으로 돌아가지 않도록 고정한다.
+function pngSize(file){
+  const b=fs.readFileSync(file);
+  assert.equal(b.slice(1,4).toString('latin1'),'PNG',file+' 가 PNG 가 아니다');
+  return {w:b.readUInt32BE(16),h:b.readUInt32BE(20)};
+}
+test('첫 화면과 머리말 로고는 원본 파일을 쓴다',()=>{
   const src=fs.readFileSync('app/splash.tsx','utf8');
-  const mark=src.slice(src.indexOf('export function BrandMark'));
-  const m=mark.match(/viewBox="([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+)"/);
-  assert.ok(m,'BrandMark 에 viewBox 가 있어야 한다');
-  const [x,y,w,h]=m.slice(1).map(Number);
-
-  // 초록 띠의 실제 위치는 계산으로 정확히 구할 수 있다. skewX 는 x 를 x - tan13*y 로 민다.
-  const tan13=Math.tan(13*Math.PI/180);
-  const bar=[[150,378],[480,378],[466,414],[136,414]].map(([px,py])=>[px-tan13*py,py]);
-  const barX1=Math.min(...bar.map(p=>p[0])),barX2=Math.max(...bar.map(p=>p[0]));
-  const barY2=Math.max(...bar.map(p=>p[1]));
-  assert.ok(x<=barX1,'초록 띠 왼쪽이 잘리면 안 된다 (띠 시작 '+barX1.toFixed(1)+', viewBox 시작 '+x+')');
-  assert.ok(x+w>=barX2,'초록 띠 오른쪽이 잘리면 안 된다');
-  assert.ok(y+h>=barY2,'초록 띠 아래가 잘리면 안 된다');
-
-  // 글자까지 포함한 전체 범위는 브라우저에서 잰 값이다(512x512 기준).
-  // 이 값 바깥을 잘라내면 글자가 잘린다. 예전 viewBox 는 x 를 88 에서 시작해
-  // 왼쪽 58px 을 잘라먹고 있었다.
-  const art={x1:29.7,y1:120.5,x2:462.2,y2:414.0};
-  assert.ok(x<=art.x1,'로고 왼쪽이 잘린다 (그림 시작 '+art.x1+', viewBox 시작 '+x+')');
-  assert.ok(y<=art.y1,'로고 위쪽이 잘린다');
-  assert.ok(x+w>=art.x2,'로고 오른쪽이 잘린다');
-  assert.ok(y+h>=art.y2,'로고 아래쪽이 잘린다');
+  const logo=src.match(/export const LOGO="([^"]+)"/);
+  assert.ok(logo,'splash.tsx 가 LOGO 파일 경로를 내보내야 한다');
+  const file=path.join('public',logo[1].replace(/^\//,''));
+  assert.ok(fs.existsSync(file),logo[1]+' 파일이 없다');
+  const {w,h}=pngSize(file);
+  assert.equal(w,512);assert.equal(h,512);
+  for(const name of ['SplashMark','BrandMark']){
+    const body=src.slice(src.indexOf('export function '+name),src.indexOf('export function '+name)+400);
+    assert.match(body,/<img[^>]*src=\{LOGO\}/,name+' 은 원본 파일을 그대로 써야 한다');
+    assert.ok(!/<text|skewX/.test(body),name+' 에서 로고를 코드로 다시 그리면 안 된다');
+  }
+  // 머리말은 정사각 원본을 가로 자리에 넣는다. 눌러 찌그러뜨리지 않고 잘라 써야 한다.
+  const css=fs.readFileSync('app/globals.css','utf8');
+  const rule=css.match(/\.brand-mark-svg\{[^}]*\}/);
+  assert.ok(rule&&/object-fit:cover/.test(rule[0]),'머리말 로고는 object-fit:cover 로 잘라 써야 한다');
+  // 파일을 받는 동안 첫 화면이 비지 않도록 미리 받아 둔다.
+  assert.match(fs.readFileSync('app/layout.tsx','utf8'),/rel="preload"[^>]*as="image"/,
+    '로고를 preload 해야 첫 화면이 빈 채로 뜨지 않는다');
 });
 
 test('앱 아이콘이 홈 화면에서 잘리지 않게 준비되어 있다',()=>{
@@ -1793,9 +1805,13 @@ test('앱 아이콘이 홈 화면에서 잘리지 않게 준비되어 있다',()
   const maskable=manifest.icons.filter(i=>String(i.purpose||'').split(/\s+/).includes('maskable'));
   assert.ok(maskable.length>0,'maskable 아이콘이 있어야 안드로이드에서 글자가 잘리지 않는다');
   // 적어놓은 파일이 실제로 있어야 한다. 없으면 설치할 때 아이콘이 깨진다.
-  for(const icon of manifest.icons)
-    assert.ok(fs.existsSync(path.join('public',icon.src.replace(/^\//,''))),
-      icon.src+' 파일이 없다');
+  for(const icon of manifest.icons){
+    const file=path.join('public',icon.src.replace(/^\//,''));
+    assert.ok(fs.existsSync(file),icon.src+' 파일이 없다');
+    // 적어둔 크기와 실제 크기가 다르면 설치할 때 흐릿하거나 아예 안 쓰인다.
+    const [w,h]=String(icon.sizes).split('x').map(Number);
+    assert.deepEqual(pngSize(file),{w,h},icon.src+' 의 실제 크기가 manifest 와 다르다');
+  }
 });
 
 // --- 팀 찾기 ---

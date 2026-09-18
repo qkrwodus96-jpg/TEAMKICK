@@ -7,33 +7,20 @@ export const SPLASH_MS=2000;
 export const SPLASH_ID="teamkick-splash";
 export const SPLASH_KEY="teamkick_splash_shown";
 
-// 로고를 그림 파일로 불러오면 받는 동안 빈 화면이 보인다. 첫 화면이라 직접 그린다.
+// 사용자 결정(2026-09-18): 로고는 **원본 파일 그대로** 쓴다. 예전에는 코드로 다시
+// 그렸는데(Arial Black + skewX) 글꼴이 원본과 달랐다. 이제 `public/icon-512.png`
+// 하나만 보면 되고, 첫 화면·머리말·앱 아이콘이 모두 같은 그림을 쓴다.
+//
+// 그림 파일이라 받는 동안 빈 자리가 보일 수 있다. 그래서 layout 의 <head> 에서
+// 미리 받아 두고(preload), 배경도 로고와 같은 검정이라 흰 번쩍임이 없다.
+export const LOGO="/icon-512.png";
+
 export function SplashMark(){
- return <svg className="splash-mark" viewBox="0 0 512 512" role="img" aria-label="팀킥">
-  <g transform="skewX(-13)" fontFamily="Arial Black, Arial, Helvetica, sans-serif" fontWeight="900"
-     fill="#ffffff" stroke="#ffffff" strokeWidth="7" strokeLinejoin="round">
-   <text x="118" y="236" fontSize="128" textLength="372" lengthAdjust="spacingAndGlyphs">TEAM</text>
-   <text x="118" y="356" fontSize="128" textLength="372" lengthAdjust="spacingAndGlyphs">KICK</text>
-  </g>
-  <polygon points="150,378 480,378 466,414 136,414" fill="#16f08a" transform="skewX(-13)"/>
- </svg>;
+ return <img className="splash-mark" src={LOGO} alt="팀킥" width={512} height={512} decoding="sync"/>;
 }
 
-// 화면 위쪽 브랜드 자리에 쓰는 마크. 첫 화면과 같은 모양이라 따로 그리지 않고
-// 같은 도형을 잘라 쓴다. 로고를 고치면 두 곳이 함께 바뀐다.
-//
-// viewBox 는 글자에 skewX(-13) 이 걸린 뒤의 **실제** 범위에 맞춘다.
-// 기울이면 글자가 왼쪽으로 밀려서, 글자를 적은 x 값(118)을 그대로 쓰면
-// TEAM 의 T 와 KICK 의 K 가 잘린다(실제로 잘려 있었다).
-// 브라우저에서 잰 실제 범위: x 29.7~462.2, y 120.5~414.0. 여기에 여백 8 을 둔다.
+// 화면 위쪽 브랜드 자리. 같은 원본을 쓰되 자리에 맞춰 잘라 보여준다
+// (원본은 정사각이고 글자는 가운데 띠에 있다. object-fit:cover 가 위아래 빈 검정만 덜어낸다).
 export function BrandMark(){
- return <svg className="brand-mark-svg" viewBox="22 112 448 310" role="img" aria-label="팀킥">
-  <rect x="22" y="112" width="448" height="310" fill="#0b0b0b" rx="20"/>
-  <g transform="skewX(-13)" fontFamily="Arial Black, Arial, Helvetica, sans-serif" fontWeight="900"
-     fill="#ffffff" stroke="#ffffff" strokeWidth="7" strokeLinejoin="round">
-   <text x="118" y="236" fontSize="128" textLength="372" lengthAdjust="spacingAndGlyphs">TEAM</text>
-   <text x="118" y="356" fontSize="128" textLength="372" lengthAdjust="spacingAndGlyphs">KICK</text>
-  </g>
-  <polygon points="150,378 480,378 466,414 136,414" fill="#16f08a" transform="skewX(-13)"/>
- </svg>;
+ return <img className="brand-mark-svg" src={LOGO} alt="팀킥" width={512} height={512}/>;
 }

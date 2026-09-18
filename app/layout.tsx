@@ -1,8 +1,8 @@
 import type {Metadata,Viewport} from "next";
 import "./globals.css";
-import {SPLASH_MS,SPLASH_ID,SPLASH_KEY,SplashMark} from "./splash";
+import {SPLASH_MS,SPLASH_ID,SPLASH_KEY,SplashMark,LOGO} from "./splash";
 
-export const metadata:Metadata={title:"팀킥 · 우리 팀의 모든 경기",description:"일정부터 참여 투표, 팀 매칭과 선수 기록까지.",manifest:"/manifest.webmanifest",icons:{icon:"/favicon.svg",shortcut:"/favicon.svg",apple:"/icon-192.png"}};
+export const metadata:Metadata={title:"팀킥 · 우리 팀의 모든 경기",description:"일정부터 참여 투표, 팀 매칭과 선수 기록까지.",manifest:"/manifest.webmanifest",icons:{icon:"/icon-192.png",shortcut:"/icon-192.png",apple:"/icon-192.png"}};
 export const viewport:Viewport={width:"device-width",initialScale:1,themeColor:"#168b53"};
 
 // 브라우저는 화면을 그리기 전에 설치 창(beforeinstallprompt)을 띄우겠다고 알린다.
@@ -36,6 +36,8 @@ export default function Layout({children}:{children:React.ReactNode}){
  // 여기서 걸릴 다른 속성은 lang 뿐이고, 자식 요소의 검사는 그대로 살아 있다.
  return <html lang="ko" suppressHydrationWarning>
   <head>
+   {/* 첫 화면이 로고 파일을 기다리지 않도록 가장 먼저 받아 둔다. */}
+   <link rel="preload" as="image" href={LOGO}/>
    <script dangerouslySetInnerHTML={{__html:CATCH}}/>
    <script dangerouslySetInnerHTML={{__html:SPLASH}}/>
    {/* 자바스크립트가 막혀 있으면 첫 화면을 치울 방법이 없다. 아예 보여주지 않는다. */}

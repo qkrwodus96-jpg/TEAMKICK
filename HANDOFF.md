@@ -5,9 +5,10 @@
 브랜치: `claude/teamkick-setup-baseline-lwntca`
 Pull Request: https://github.com/qkrwodus96-jpg/TEAMKICK/pull/20 (**병합 완료** 2026-09-17)
 `main` 이 최신이다. 배포도 끝났다(`build=2026-09-17-faster-saves` 확인).
-현재 커밋: 머리말 로고 잘림·앱 아이콘 (T40)
+현재 커밋: 팀 로고 동그라미·앱 안 크기 맞추기 (T42)
 미커밋 변경: 없음
-버전: `APP_VERSION=1.4.3`, `BUILD=2026-09-17-logo-icons`
+버전: `APP_VERSION=1.4.4`, `BUILD=2026-09-18-round-crest`
+**다음 세션이 가장 먼저 할 일: 아래 "브라우저 확인이 남았다" 를 실행한다.**
 현재 작업 ID: **배포 후 구글·네이버 로그인 실제 확인** → 확인되면 T20(이메일 가입 제거)
 
 ---
@@ -48,6 +49,51 @@ Pull Request: https://github.com/qkrwodus96-jpg/TEAMKICK/pull/20 (**병합 완�
 ---
 
 ## 이번에 완료한 작업
+
+### 팀 로고를 동그라미로, 올릴 때 앱 안에서 크기 맞추기 (T42)
+**코드 작성 완료 / 타입·테스트 통과 / 브라우저 확인은 남았다**
+
+사용자 요청: "팀마다 로고가 조금씩 다른데 지금은 깃발 모양에 들어간다.
+동그랗게 하고 앱 안에서 이미지 크기를 조정할 수 있게 하면 좋겠다."
+
+- `.club-crest` 의 `clip-path`(방패·깃발 모양)를 없애고 **정원(border-radius:50%)** 으로
+  바꿨다. 66x66(휴대폰 62x62). 로고 없는 팀의 `FOOTBALL CLUB` 잔글씨는 원 안에서
+  비좁아 지웠다. 미리보기 썸네일도 동그라미로 맞췄다.
+- `ImageCropper`(`app/screens.tsx`) 를 새로 만들었다. 그림을 고르면 **바로 올리지 않고**
+  동그란 틀 안에서 끌어 옮기고 막대로 크기를 맞춘 뒤 저장한다.
+  보이는 그대로 512x512 정사각으로 잘라 올린다.
+  - 짧은 쪽을 틀에 맞추는 것을 기본 배율로 삼아 **어떻게 옮겨도 빈 곳이 생기지 않는다.**
+  - 옮길 수 있는 범위는 그릴 때마다 다시 계산해 가둔다(`pos=clamp(...)`).
+    값을 고치는 `useEffect` 를 쓰지 않아 렌더가 겹치지 않는다.
+  - 손가락·마우스 모두 포인터 이벤트 하나로 받는다(`touch-action:none`).
+
+### 브라우저 확인이 남았다 (다음 세션에서 먼저 할 것)
+
+로컬 개발 서버가 불안정해져(포트 점유, `kill` 이 셸까지 끊김) 끝내지 못했다.
+**확인 절차** — 팀 로고 업로드는 **팀이 승인된 상태**여야 열린다:
+
+1. `pnpm dev` 로 서버를 띄운다(이미 떠 있으면 그대로 쓴다).
+2. 로컬 운영자가 이미 있으면 `setupOwner` 가 409 가 난다. 그때만
+   로컬 시험 DB에서 운영자 기록을 지운다(운영 데이터 아님):
+   `.wrangler/state/v3/d1/miniflare-D1DatabaseObject/*.sqlite` 에서
+   `DELETE FROM entities WHERE kind='settings' AND id='settings:owner'`
+   후 `UPDATE state_revision SET version=version+1 WHERE id=1`.
+3. 가입 → `setupOwner`(코드는 `.dev.vars` 의 `OWNER_SETUP_CODE`) →
+   `createTeam` → `approveTeam` → 화면에서 MY → 팀 정보 수정 → 팀 로고 선택.
+4. 확인할 것: 자르기 화면이 뜨는지 / 끌어서 옮겨지는지 / 막대로 커지는지 /
+   저장 후 동그란 로고로 보이는지 / 정사각형이 아닌 그림도 빈 곳 없이 채워지는지.
+   시험용 그림은 `/tmp/claude-0/wide.png`(900x300) 같은 가로로 긴 것을 쓴다.
+
+### 로고 원본 파일 — 사용자 결정: "글꼴까지 원본 그대로"
+
+채팅으로 보낸 그림은 **파일로 받을 수 없다**(볼 수만 있다). 그래서 지금 로고는
+코드로 다시 그린 것이다(Arial Black + skewX). 사용자가 원본 파일을 쓰기로 했으므로
+**사용자가 GitHub `public/` 에 직접 올려주기를 기다리는 중이다.**
+올라오면 할 일:
+- `public/icon-512.png`·`icon-192.png` 교체
+- 원본으로 `icon-512-maskable.png` 다시 생성(안전 영역 = 가운데 80% 원)
+- `public/favicon.svg`, `SplashMark`, `BrandMark` 를 원본 파일 기준으로 교체
+- 머리말·첫 화면은 SVG 가 아니라 이미지가 되므로 크기·선명도 재확인 필요
 
 ### 머리말 로고가 잘리던 것과 옆 글자 제거 (T40)
 

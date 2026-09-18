@@ -1,5 +1,5 @@
 "use client";
-import {useState,useEffect,type ChangeEvent,type FormEvent} from "react";
+import {useState,useEffect,useRef,type ChangeEvent,type FormEvent} from "react";
 import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from "@/components/ui/dialog";
 import {AlertDialog,AlertDialogContent,AlertDialogHeader,AlertDialogTitle,AlertDialogDescription,AlertDialogFooter,AlertDialogCancel,AlertDialogAction} from "@/components/ui/alert-dialog";
 import {Tabs,TabsList,TabsTrigger,TabsContent} from "@/components/ui/tabs";
@@ -96,11 +96,96 @@ async function shrink(file:File,max=512){
   return blob?new File([blob],file.name,{type}):file;
  }catch{return file}
 }
+// 올린 그림을 앱 안에서 키우고 옮겨 저장 범위를 맞춘다.
+// 팀마다 로고 모양이 제각각이라 그냥 잘라 넣으면 귀퉁이가 날아간다.
+// 동그란 테두리 안에 보이는 그대로가 저장된다.
+const CROP_SIZE=512;       // 저장하는 크기(정사각)
+const STAGE=240;           // 화면에서 보이는 크기. 저장할 때 비율만 환산한다.
+
+export function ImageCropper({file,busy,onCancel,onDone}:{file:File;busy:boolean;onCancel:()=>void;onDone:(f:File)=>void}){
+ // 그림을 다 읽은 뒤에 한 번에 담는다. 크기를 모른 채 그리면 한 번 튄다.
+ const [loaded,setLoaded]=useState({url:"",w:0,h:0});
+ const [zoom,setZoom]=useState(1);
+ const [offset,setOffset]=useState({x:0,y:0});
+ const drag=useRef<{x:number;y:number;ox:number;oy:number}|null>(null);
+
+ useEffect(()=>{
+  const u=URL.createObjectURL(file);
+  const img=new Image();
+  img.onload=()=>{setLoaded({url:u,w:img.naturalWidth,h:img.naturalHeight});setZoom(1);setOffset({x:0,y:0})};
+  img.src=u;
+  return ()=>URL.revokeObjectURL(u);
+ },[file]);
+
+ // 짧은 쪽을 테두리에 맞춘다. 이래야 어떻게 옮겨도 빈 곳이 생기지 않는다.
+ const base=loaded.w&&loaded.h?STAGE/Math.min(loaded.w,loaded.h):1;
+ const scale=base*zoom;
+ // 그림이 테두리를 벗어나 빈 곳이 보이지 않도록 옮길 수 있는 범위를 제한한다.
+ const limit=(length:number)=>Math.max(0,(length*scale-STAGE)/2);
+ const clamp=(x:number,y:number)=>({
+  x:Math.max(-limit(loaded.w),Math.min(limit(loaded.w),x)),
+  y:Math.max(-limit(loaded.h),Math.min(limit(loaded.h),y)),
+ });
+ // 크기를 바꾸면 옮길 수 있는 범위도 바뀐다. 그릴 때마다 다시 가두면
+ // 따로 손볼 필요가 없다(값을 고치는 useEffect 를 두지 않는다).
+ const pos=clamp(offset.x,offset.y);
+
+ function down(e:React.PointerEvent){
+  if(busy)return;
+  (e.target as Element).setPointerCapture?.(e.pointerId);
+  drag.current={x:e.clientX,y:e.clientY,ox:pos.x,oy:pos.y};
+ }
+ function move(e:React.PointerEvent){
+  const d=drag.current;if(!d)return;
+  setOffset(clamp(d.ox+(e.clientX-d.x),d.oy+(e.clientY-d.y)));
+ }
+ const up=()=>{drag.current=null};
+
+ async function save(){
+  const canvas=document.createElement("canvas");
+  canvas.width=CROP_SIZE;canvas.height=CROP_SIZE;
+  const ctx=canvas.getContext("2d");
+  if(!ctx){onDone(file);return}
+  // 화면에서 보이던 그대로를 저장 크기로 환산한다.
+  const factor=CROP_SIZE/STAGE;
+  const w=loaded.w*scale*factor,h=loaded.h*scale*factor;
+  const bitmap=await createImageBitmap(file);
+  ctx.drawImage(bitmap,CROP_SIZE/2+pos.x*factor-w/2,CROP_SIZE/2+pos.y*factor-h/2,w,h);
+  const blob=await new Promise<Blob|null>(r=>canvas.toBlob(r,"image/png"));
+  onDone(blob?new File([blob],"logo.png",{type:"image/png"}):file);
+ }
+
+ return <div className="cropper">
+  <div className="crop-stage" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
+   {loaded.url&&<img src={loaded.url} alt="" draggable={false}
+     style={{width:loaded.w*scale,height:loaded.h*scale,
+       transform:`translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))`}}/>}
+  </div>
+  <label className="crop-zoom">크기
+   <input type="range" min={1} max={3} step={0.01} value={zoom} disabled={busy}
+     onChange={e=>setZoom(Number(e.target.value))} aria-label="이미지 크기"/>
+  </label>
+  <p className="data-note" style={{margin:0,textAlign:"center"}}>끌어서 위치를 옮기고, 막대로 크기를 맞추세요.<br/>동그라미 안에 보이는 그대로 저장돼요.</p>
+  <div className="crop-actions">
+   <button type="button" className="btn" onClick={onCancel} disabled={busy}>취소</button>
+   <button type="button" className="btn btn-green" onClick={save} disabled={busy||!loaded.w}>
+    {busy?<LoaderCircle className="loader" size={16}/>:null}{busy?" 올리는 중":"이 모습으로 저장"}
+   </button>
+  </div>
+ </div>;
+}
+
 export function ImageField({title,current,kind,teamId,memberId,onSaved,disabled,ready=true}:{title:string;current?:string;kind:string;teamId:string;memberId?:string;onSaved:(key:string)=>Promise<unknown>|unknown;disabled?:boolean;ready?:boolean}){
  const [state,setState]=useState({busy:false,error:""});
- async function pick(e:ChangeEvent<HTMLInputElement>){
+ // 고른 그림을 바로 올리지 않는다. 먼저 크기·위치를 맞추게 한다.
+ const [chosen,setChosen]=useState<File|null>(null);
+ function pick(e:ChangeEvent<HTMLInputElement>){
   const file=e.target.files?.[0];e.target.value="";
   if(!file)return;
+  setState({busy:false,error:""});
+  setChosen(file);
+ }
+ async function upload(file:File){
   setState({busy:true,error:""});
   try{
    const small=await shrink(file);
@@ -112,9 +197,15 @@ export function ImageField({title,current,kind,teamId,memberId,onSaved,disabled,
    if(!res.ok||!out.key)throw new Error(out.error||"이미지를 올리지 못했어요.");
    await onSaved(out.key);
    setState({busy:false,error:""});
+   setChosen(null);
   }catch(err){setState({busy:false,error:err instanceof Error?err.message:"이미지를 올리지 못했어요."})}
  }
  if(!ready)return <div><label style={{marginBottom:8}}>{title}</label><p className="data-note">이미지 저장소가 아직 연결되지 않아 사진을 올릴 수 없어요. 관리자가 저장소를 연결하면 바로 쓸 수 있어요.</p></div>;
+ if(chosen)return <div>
+  <label style={{marginBottom:8}}>{title}</label>
+  <ImageCropper file={chosen} busy={state.busy} onCancel={()=>{setChosen(null);setState({busy:false,error:""})}} onDone={upload}/>
+  {state.error&&<p className="error-bar" role="alert" style={{marginTop:10}}>{state.error}</p>}
+ </div>;
  return <div>
   <label style={{marginBottom:8}}>{title}</label>
   <div className="image-field">
@@ -124,7 +215,7 @@ export function ImageField({title,current,kind,teamId,memberId,onSaved,disabled,
    </label>
    {current&&!state.busy&&<button type="button" className="btn" onClick={()=>onSaved("")}>삭제</button>}
   </div>
-  <p className="data-note">PNG · JPG · WEBP, 2MB 이하. 올리면 바로 저장돼요.</p>
+  <p className="data-note">PNG · JPG · WEBP, 2MB 이하. 고른 뒤 크기와 위치를 맞출 수 있어요.</p>
   {state.error&&<p className="error-bar" role="alert" style={{marginTop:10}}>{state.error}</p>}
  </div>;
 }

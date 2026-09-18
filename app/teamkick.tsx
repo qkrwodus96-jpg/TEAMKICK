@@ -23,7 +23,7 @@ export const imageUrl=(key:string)=>"/api/image?key="+encodeURIComponent(key);
 export function PlayerPhoto({name="",photo="",className="player-avatar"}:{name?:string;photo?:string;className?:string}){
  return photo?<img className={className+" as-photo"} src={imageUrl(photo)} alt={name} loading="lazy"/>:<span className={className}>{name.slice(-2)}</span>;
 }
-export function Crest({name="",color="",logo=""}:any){if(logo)return <div className={"club-crest "+color}><img className="crest-photo" src={imageUrl(logo)} alt={name+" 로고"} loading="lazy"/></div>;return <div className={"club-crest "+color}><span>{name.includes("한강")?"HG":name.includes("서울")?"SU":name.replace(/\s|FC|유나이티드/g,"").slice(0,2)||"?"}</span><small>FOOTBALL CLUB</small></div>}
+export function Crest({name="",color="",logo=""}:any){if(logo)return <div className={"club-crest "+color}><img className="crest-photo" src={imageUrl(logo)} alt={name+" 로고"} loading="lazy"/></div>;return <div className={"club-crest "+color}><span>{name.includes("한강")?"HG":name.includes("서울")?"SU":name.replace(/\s|FC|유나이티드/g,"").slice(0,2)||"?"}</span></div>}
 export function Empty({title,description,action,onClick}:any){return <div className="empty"><CalendarDays/><h3>{title}</h3><p>{description}</p>{action&&<button className="btn btn-green" onClick={onClick}>{action}</button>}</div>}
 export function opponent(v:any,g:Row){return v.teams.find((t:Row)=>t.id===(g.home===v.teamId?g.away:g.home))?.name??g.external??""}
 export function GuestBadge({z}:{z?:Row}){const st=z?.guestStatus??"none";return st==="none"?null:<span className={"badge "+(st==="open"?"badge-orange":"badge-red")}>{st==="open"?"용병 모집 중":"용병 마감"}</span>}

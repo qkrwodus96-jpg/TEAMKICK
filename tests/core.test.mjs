@@ -37,7 +37,7 @@ compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
 compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0}};').replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
-const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf}=await import(path.join(runtime,'model.mjs'));
+const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
 const auth=await import(path.join(runtime,'auth.mjs'));
 const mail=await import(path.join(runtime,'mail.mjs'));
@@ -88,6 +88,34 @@ function localDatabase(){
   const api={prepare(sql){return {sql,args:[],bind(...args){this.args=args;return this},async first(){return db.prepare(this.sql).get(...this.args)??null},async run(){const r=db.prepare(this.sql).run(...this.args);return {success:true,meta:{changes:Number(r.changes??0)}}},async all(){return {results:db.prepare(this.sql).all(...this.args)}}}},async batch(statements){db.exec('BEGIN IMMEDIATE');try{const out=statements.map(x=>({success:true,results:db.prepare(x.sql).all(...x.args)}));db.exec('COMMIT');return out}catch(e){db.exec('ROLLBACK');throw e}}};
   globalThis.__teamkickTestEnv.DB=api;return db;
 }
+
+test('알림 문구는 UTC 원문이 아니라 Asia/Seoul 로 적힌다',()=>{
+  // 이 컨테이너의 시스템 시간대는 UTC 다. 그래도 알림은 한국 시각이어야 한다.
+  assert.equal(seoulStamp('2026-09-21T16:00:00.000Z'),'9월 22일 (화) 01:00'); // 날짜가 넘어가는 자리
+  assert.equal(seoulStamp('2026-09-22T01:00:00.000Z'),'9월 22일 (화) 10:00');
+  assert.equal(seoulStamp('2026-12-31T15:00:00.000Z'),'1월 1일 (금) 00:00'); // 해가 바뀌는 자리
+  const {s,a}=fixture();
+  const start=NOW+2*DAY;
+  command(s,A,{type:'createGame',teamId:a,start:iso(start),end:iso(start+7200e3),venue:'난지천공원',address:'서울 마포구',external:'외부 FC'},start-DAY);
+  const n=s.notifications.find(x=>x.title==='새 경기 일정');
+  assert.ok(n,'경기 알림이 있어야 한다');
+  assert.ok(!/\d{4}-\d{2}-\d{2}T/.test(n.body),'ISO 원문이 알림에 그대로 나가면 안 된다: '+n.body);
+  assert.equal(n.body,seoulStamp(iso(start))+' · 난지천공원');
+});
+
+test('팀 등록 상태 알림은 영문 상태값 대신 한국어와 사유를 보여준다',()=>{
+  const s=blank();
+  command(s,owner,{type:'setupOwner'},NOW-40*DAY);
+  const {teamId}=command(s,A,{type:'createTeam',name:'상태팀',region:'서울',description:'테스트'},NOW-30*DAY);
+  command(s,owner,{type:'approveTeam',teamId},NOW-30*DAY);
+  const approved=s.notifications.filter(x=>x.title==='팀 등록 상태 변경').at(-1);
+  assert.ok(!/active|rejected|suspended|pending/.test(approved.body),'영문 상태값이 그대로 나가면 안 된다: '+approved.body);
+  assert.match(approved.body,/승인됐어요/);
+  command(s,owner,{type:'suspendTeam',teamId,reason:'신고 확인 중'},NOW-10*DAY);
+  const suspended=s.notifications.filter(x=>x.title==='팀 등록 상태 변경').at(-1);
+  assert.match(suspended.body,/이용이 정지됐어요/);
+  assert.match(suspended.body,/신고 확인 중/,'정지 사유를 당사자가 알 수 있어야 한다');
+});
 
 test('운영자 초기 설정은 검증된 코드가 필요하고 팀 승인 권한이 분리된다',()=>{
   const s=blank();assert.throws(()=>command(s,A,{type:'setupOwner'}),/초기 설정 코드/);

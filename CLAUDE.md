@@ -44,15 +44,19 @@ TEAMKICK(모바일 표기: 팀킥) 저장소의 상시 개발 기준이다.
 ```bash
 pnpm install --frozen-lockfile          # 의존성 설치 (exit 0 확인)
 pnpm dev                                # 개발 서버 → http://localhost:5173
-node --test tests/core.test.mjs         # 도메인·저장·API 테스트 10/10 통과
+node --test tests/core.test.mjs         # 도메인·저장·API 테스트 101/101 통과 (2026-09-18)
 node node_modules/typescript/bin/tsc --noEmit   # 타입 검사 통과
 pnpm lint                               # 기존 no-explicit-any 오류 77건 있음(시작 시점부터)
 pnpm db:generate                        # 스키마 변경 시 migration 생성
 ```
 
-**로컬 첫 실행 시 주의**: 로컬 D1에는 테이블이 없어 `/api/app`이 503이 된다.
-`drizzle/`의 SQL을 순서대로 로컬 D1 파일에 적용해야 한다
-(`.wrangler/state/v3/d1/miniflare-D1DatabaseObject/*.sqlite`).
+**로컬 첫 실행**: 이제 `pnpm dev` 만으로 된다. `ensureSchema()` 가 첫 요청에서 스키마를
+만든다(2026-09-18 빈 컨테이너에서 확인). 상태는 `/api/health` 로 본다 — 테이블이 모두
+`true` 이고 `setupError` 가 `null` 이면 정상이다. 로컬 D1 파일은
+`.wrangler/state/v3/d1/miniflare-D1DatabaseObject/*.sqlite` 에 있다.
+
+운영자 초기 설정 코드는 원문이 없어도 된다. 로컬에서는 `.dev.vars` 에
+`OWNER_SETUP_CODE` 를 직접 정해 넣으면 그 값이 쓰인다(`lib/owner-config.ts`).
 
 로컬 개발 서버는 R2도 흉내 낸다(`.wrangler/state/v3/r2/`). `.openai/hosting.json`의
 `r2` 값이 있으면 바인딩이 붙고, 없으면 앱은 그대로 돌되 이미지 업로드만 막힌다.

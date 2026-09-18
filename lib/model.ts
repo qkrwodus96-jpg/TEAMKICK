@@ -98,6 +98,19 @@ export function eligibleMembers(s:State,side:Row,g:Row){const when=Math.min(Date
 export function rosterFor(s:State,side:Row,g:Row){return side.roster??eligibleMembers(s,side,g).map(m=>({id:m.id,name:m.name,number:m.number,position:m.position}))}
 export function attendanceDraft(s:State,side:Row,g:Row){return Object.fromEntries(rosterFor(s,side,g).map((m:any)=>[m.id,currentVote(side,m.id,Date.parse(g.start))==="yes"]))}
 export function newSide(g:Row,t:string):Row{return {id:g.id+":"+t,gameId:g.id,teamId:t,deadline:g.start,meeting:"",note:"",needed:11,votes:{},attendance:{},attendanceFinal:false,records:{},recordsFinal:false,guestNeeded:0,guestStatus:"none"}}
+// 알림 문구에 들어갈 경기 시각. 저장은 UTC 로 두고 보여줄 때만 Asia/Seoul 로 바꾼다.
+// 화면 쪽 koreanDate·time 과 같은 모양("9월 22일 (화) 10:00")을 만든다. Workers 런타임의
+// Intl 표준 시간대 자료에 기대지 않도록 9시간을 직접 더해 계산한다.
+const WEEKDAYS=["일","월","화","수","목","금","토"];
+export function seoulStamp(value:string){
+ const d=new Date(new Date(value).getTime()+9*3600e3);
+ if(Number.isNaN(d.getTime()))return String(value??"");
+ const two=(n:number)=>String(n).padStart(2,"0");
+ return (d.getUTCMonth()+1)+"월 "+d.getUTCDate()+"일 ("+WEEKDAYS[d.getUTCDay()]+") "+two(d.getUTCHours())+":"+two(d.getUTCMinutes());
+}
+// 팀 등록 상태를 사람이 읽는 말로 바꾼다. 알림에 active·rejected 가 그대로 나가고 있었다.
+const TEAM_STATUS:Record<string,string>={pending:"승인 대기 중이에요",active:"승인됐어요",rejected:"반려됐어요",suspended:"이용이 정지됐어요"};
+
 function notice(s:State,t:string,title:string,body:string,gameId?:string){for(const m of s.members.filter(x=>x.teamId===t&&x.status==="active"))s.notifications.push({id:id(),userId:m.userId,teamId:t,title,body,gameId,read:false,at:iso()})}
 function userNotice(s:State,u:string,title:string,body:string,t?:string){s.notifications.push({id:id(),userId:u,teamId:t,title,body,read:false,at:iso()})}
 function checkConflict(s:State,t:string,start:string,end:string,except:string){ensure(!s.games.some(g=>g.id!==except&&g.status!=="cancelled"&&containsTeam(g,t)&&Date.parse(g.start)<Date.parse(end)&&Date.parse(g.end)>Date.parse(start)),"같은 시간에 등록된 경기가 있어요. 기존 일정을 확인해주세요.",409)}
@@ -119,7 +132,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   if(type==="rejectTeam"){ensure(team!.status==="pending","이미 처리된 신청이에요.",409);team!.status="rejected";team!.reason=textValue(c.reason,300);}
   if(type==="suspendTeam"){ensure(team!.status==="active","활성 팀만 정지할 수 있어요.");team!.status="suspended";team!.reason=textValue(c.reason,300);}
   if(type==="restoreTeam"){ensure(team!.status==="suspended","정지된 팀이 아니에요.");team!.status="active";team!.reason="";}
-  userNotice(s,team!.applicant,"팀 등록 상태 변경",team!.name+" · "+team!.status,t);
+  userNotice(s,team!.applicant,"팀 등록 상태 변경",team!.name+" · "+(TEAM_STATUS[team!.status]??team!.status)+(team!.reason?" · "+team!.reason:""),t);
  }
  else if(type==="joinTeam"){
   ensure(a.verified!==false,"이메일 확인을 먼저 해주세요. 받은 편지함에서 확인 링크를 눌러주세요.",403);
@@ -163,7 +176,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   const g={id:id(),home:t,away:null,external:textValue(c.external,60,false),...d,venue:textValue(c.venue,100),address:textValue(c.address,200),lat:coord(c.lat,90),lng:coord(c.lng,180),region:regionValue(c.region||teamOf(s,t)!.region),format:textValue(c.format||"11인제",20),secured:c.secured!==false,cost:integer(c.cost??0,0,10000000),status:"scheduled",listing:c.listing?"open":"none",revision:1,result:null,at:stamp};
   const voteCloses=c.deadline?Date.parse(String(c.deadline)):0;if(c.deadline)ensure(Number.isFinite(voteCloses)&&voteCloses>now&&voteCloses<=Date.parse(g.start),"투표 마감은 지금 이후, 경기 시작 시각까지로 정해주세요.");ensure(!g.external||!c.listing,"수기 상대팀과 모집을 동시에 설정할 수 없어요.");ensure(!c.listing||Date.parse(g.start)>now,"지난 경기로 모집할 수 없어요.");
   if(c.listing)requireTeam(s,t,a.id,"captain");s.games.push(g);const side=newSide(g,t);side.needed=integer(c.needed??11,1,50);side.note=textValue(c.note,500,false);if(voteCloses)side.deadline=iso(voteCloses);
-  s.sides.push(side);notice(s,t,"새 경기 일정",g.venue+" · "+g.start,g.id);output={gameId:g.id};
+  s.sides.push(side);notice(s,t,"새 경기 일정",seoulStamp(g.start)+" · "+g.venue,g.id);output={gameId:g.id};
  }
  else if(type==="applyMatch"||type==="withdrawMatch"||type==="acceptMatch"||type==="rejectMatch"){
   requireTeam(s,t,a.id,"captain");const g=s.games.find(x=>x.id===c.gameId);ensure(g,"경기를 찾을 수 없어요.",404);

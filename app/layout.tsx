@@ -29,7 +29,12 @@ setTimeout(go,${SPLASH_MS});
 document.addEventListener("click",go,{once:true});document.addEventListener("keydown",go,{once:true})})()`;
 
 export default function Layout({children}:{children:React.ReactNode}){
- return <html lang="ko">
+ // 위 SPLASH 스크립트가 React 보다 먼저 <html> 에 data-splash 를 붙인다. 서버가 보낸
+ // HTML 에는 그 표시가 없으므로 React 가 hydration 불일치로 본다("이미 본 사람"의
+ // 재방문마다 콘솔 오류가 하나씩 쌓였다). 표시를 서버에서 미리 붙일 수는 없다
+ // (sessionStorage 는 브라우저에만 있다). 그래서 <html> 의 속성 비교만 끈다.
+ // 여기서 걸릴 다른 속성은 lang 뿐이고, 자식 요소의 검사는 그대로 살아 있다.
+ return <html lang="ko" suppressHydrationWarning>
   <head>
    <script dangerouslySetInnerHTML={{__html:CATCH}}/>
    <script dangerouslySetInnerHTML={{__html:SPLASH}}/>

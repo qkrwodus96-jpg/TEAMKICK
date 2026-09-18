@@ -89,6 +89,78 @@ function localDatabase(){
   globalThis.__teamkickTestEnv.DB=api;return db;
 }
 
+// 알림을 누르면 그 소식이 있는 화면으로 가야 한다. 화면 이름을 teamId 자리에 잘못
+// 넣으면 알림이 **아예 보이지 않게** 된다(보이는 알림은 teamId 로 걸러진다).
+const VIEWS=['home','schedule','matching','records','team','admin'];
+test('모든 알림이 갈 화면을 들고 있고, 화면 이름이 teamId 자리에 섞이지 않는다',()=>{
+  const {s,a,b}=fixture();
+  const m=addPlayer(s,a);
+  const gameId=game(s,a,{listing:true,start:NOW+2*DAY});
+  command(s,B,{type:'applyMatch',teamId:b,gameId});
+  command(s,A,{type:'acceptMatch',teamId:a,gameId,requestId:s.requests[0].id});
+  command(s,A,{type:'createNotice',teamId:a,title:'공지',body:'내용'});
+  command(s,A,{type:'openGuests',teamId:a,gameId,needed:2});
+  const guestId=applyGuest(s,a,gameId,C);
+  command(s,A,{type:'approveGuest',teamId:a,gameId,guestId});
+  command(s,A,{type:'editMember',teamId:a,memberId:m.id,name:'선수',position:'FW',number:7});
+  command(s,member,{type:'correctRequest',teamId:a,message:'기록을 고쳐주세요'});
+  assert.ok(s.notifications.length>6,'알림이 여러 종류 쌓여야 한다');
+  // teamId 는 실제로 있는 팀이거나 비어 있어야 한다. 화면 이름이 그 자리에 들어가면
+  // 그 알림은 화면에서 걸러져 **아예 보이지 않는다**(실제로 한 번 그렇게 만들었다).
+  const teamIds=new Set(s.teams.map(x=>x.id));
+  for(const n of s.notifications){
+    assert.ok(VIEWS.includes(n.to),n.title+' 알림에 갈 화면이 없다: '+n.to);
+    assert.ok(!n.teamId||teamIds.has(n.teamId),n.title+' 의 teamId 자리에 엉뚱한 값이 들어갔다: '+n.teamId);
+    assert.ok(!VIEWS.includes(n.teamId),n.title+' 의 teamId 자리에 화면 이름이 들어갔다');
+  }
+  // 경기가 딸린 알림은 따로 적지 않아도 일정 화면으로 간다.
+  const g=s.notifications.find(n=>n.title==='새 경기 일정');
+  assert.equal(g.to,'schedule');
+  assert.equal(s.notifications.find(n=>n.title==='새 팀 공지').to,'home');
+  assert.equal(s.notifications.find(n=>n.title==='매칭 확정').to,'matching');
+  assert.equal(s.notifications.find(n=>n.title==='기록 정정 요청').to,'records');
+});
+
+test('주장은 올린 공지의 알림을 다시 보낼 수 있고, 6시간 안에는 다시 못 보낸다',()=>{
+  const {s,a}=fixture();
+  addPlayer(s,a);
+  const {noticeId}=command(s,A,{type:'createNotice',teamId:a,title:'이번 주 경기',body:'집합'},NOW);
+  assert.ok(noticeId,'공지 id 를 돌려줘야 다시 보낼 수 있다');
+  // 올린 직후에는 방금 알림이 나갔으므로 다시 보낼 수 없다.
+  assert.throws(()=>command(s,A,{type:'notifyNotice',teamId:a,noticeId},NOW+60e3),/6시간/);
+  const before=s.notifications.filter(n=>n.title==='팀 공지 알림').length;
+  const out=command(s,A,{type:'notifyNotice',teamId:a,noticeId},NOW+7*3600e3);
+  assert.equal(out.notified,1,'글쓴이 본인을 뺀 팀원 수만큼 보낸다');
+  const sent=s.notifications.filter(n=>n.title==='팀 공지 알림');
+  assert.equal(sent.length,before+1);
+  assert.equal(sent.at(-1).to,'home');
+  assert.ok(sent.every(n=>n.userId!==A.id),'글쓴이 본인에게는 보내지 않는다');
+  // 주장만 보낼 수 있다.
+  assert.throws(()=>command(s,member,{type:'notifyNotice',teamId:a,noticeId},NOW+20*3600e3),/권한/);
+  assert.throws(()=>command(s,A,{type:'notifyNotice',teamId:a,noticeId:'없는-공지'},NOW+20*3600e3),/찾을 수 없/);
+});
+
+test('승인된 용병이 그 경기의 참여 인원에 들어간다',()=>{
+  const {s,a}=fixture();
+  addPlayer(s,a);
+  const gameId=game(s,a,{start:NOW+3*DAY});
+  command(s,A,{type:'openGuests',teamId:a,gameId,needed:2});
+  const before=visibleState(s,A.id,a).sides.find(z=>z.gameId===gameId);
+  assert.deepEqual(before.guestRoster,[],'승인 전에는 비어 있어야 한다');
+  const guestId=applyGuest(s,a,gameId,C);
+  const pending=visibleState(s,A.id,a).sides.find(z=>z.gameId===gameId);
+  assert.deepEqual(pending.guestRoster,[],'신청만 해서는 들어가지 않는다');
+  command(s,A,{type:'approveGuest',teamId:a,gameId,guestId});
+  const after=visibleState(s,A.id,a).sides.find(z=>z.gameId===gameId);
+  assert.equal(after.guestRoster.length,1,'승인하면 참여 인원에 들어간다');
+  assert.equal(after.guestRoster[0].name,C.name);
+  // 용병은 팀원 명단·출석에는 넣지 않는다(ASM-04).
+  assert.ok(!after.roster.some(x=>x.name===C.name),'용병이 팀원 명단에 섞이면 안 된다');
+  command(s,A,{type:'cancelGuest',teamId:a,gameId,guestId});
+  assert.deepEqual(visibleState(s,A.id,a).sides.find(z=>z.gameId===gameId).guestRoster,[],
+    '확정을 취소하면 참여 인원에서도 빠진다');
+});
+
 test('팀 공지는 고정한 것을 먼저, 그다음 최근에 쓴 것부터 보여준다',()=>{
   const {s,a}=fixture();
   command(s,A,{type:'createNotice',teamId:a,title:'가장 먼저 쓴 글',body:'1'},NOW-3*DAY);

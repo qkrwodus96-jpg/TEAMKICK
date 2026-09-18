@@ -16,7 +16,10 @@ export function AuthPanel({onDemo,mailReady=true,kakaoReady=false,googleReady=fa
  const [mode,setMode]=useState(resetToken?"reset":"login"),[form,setForm]=useState<Record<string,string>>({email:"",password:"",password2:"",name:""});
  const [busy,setBusy]=useState(false),[failure,setFailure]=useState("");
  const [token,setToken]=useState(resetToken);
- const signup=mode==="signup",forgot=mode==="forgot",reset=mode==="reset",[legal,setLegal]=useState("");
+ // T20: 소셜 로그인이 하나라도 준비되어 있으면 새 가입은 소셜로만 받는다.
+ // 서버(`/api/auth`)도 같은 기준으로 막는다. 화면에서 감추는 것만으로는 부족하다.
+ const socialOnly=kakaoReady||googleReady||naverReady;
+ const signup=mode==="signup"&&!socialOnly,forgot=mode==="forgot",reset=mode==="reset",[legal,setLegal]=useState("");
  const [sent,setSent]=useState(false);
  const field=(key:string)=>({value:form[key]??"",onChange:(e:ChangeEvent<HTMLInputElement>)=>setForm(f=>({...f,[key]:e.target.value}))});
  async function submit(e:FormEvent){
@@ -38,7 +41,7 @@ export function AuthPanel({onDemo,mailReady=true,kakaoReady=false,googleReady=fa
  }
  return <section className="onboarding panel">
   <h2 className="view-heading">{signup?"팀킥 회원가입":forgot?"비밀번호 찾기":reset?"새 비밀번호 정하기":"팀킥 로그인"}</h2>
-  <p className="small muted" style={{marginBottom:20,lineHeight:1.7}}>{signup?"가입한 뒤 팀을 등록하거나 소속 팀에 가입을 신청할 수 있어요.":forgot?"가입한 이메일로 재설정 링크를 보내드려요.":reset?"새로 쓸 비밀번호를 정해주세요. 다른 기기에서는 모두 로그아웃돼요.":"가입한 이메일과 비밀번호로 로그인하세요."}</p>
+  <p className="small muted" style={{marginBottom:20,lineHeight:1.7}}>{signup?"가입한 뒤 팀을 등록하거나 소속 팀에 가입을 신청할 수 있어요.":forgot?"가입한 이메일로 재설정 링크를 보내드려요.":reset?"새로 쓸 비밀번호를 정해주세요. 다른 기기에서는 모두 로그아웃돼요.":socialOnly?"처음이시면 위 단추로 시작하세요. 따로 가입하지 않아도 돼요.":"가입한 이메일과 비밀번호로 로그인하세요."}</p>
   {failure&&<p className="error-bar" role="alert">{failure}</p>}
   {sent&&<p className="data-note" role="status" style={{lineHeight:1.8}}>가입된 주소라면 재설정 링크를 보냈어요. 받은 편지함을 확인해주세요. 링크는 1시간 동안 한 번만 쓸 수 있어요.</p>}
   {!forgot&&!reset&&(kakaoReady||googleReady||naverReady)&&<>
@@ -48,7 +51,7 @@ export function AuthPanel({onDemo,mailReady=true,kakaoReady=false,googleReady=fa
     {naverReady&&<a className="btn btn-naver" href="/api/naver">네이버로 시작하기</a>}
     {googleReady&&<a className="btn btn-google" href="/api/google">구글로 시작하기</a>}
    </div>
-   <p className="data-note" style={{textAlign:"center",margin:"16px 0 18px"}}>또는 이메일로</p>
+   <p className="data-note" style={{textAlign:"center",margin:"16px 0 18px"}}>이미 이메일로 가입하셨다면</p>
   </>}
   <form className="form-grid" onSubmit={submit}>
    {signup&&<label>이름<input type="text" required maxLength={30} autoComplete="name" {...field("name")}/></label>}
@@ -68,7 +71,9 @@ export function AuthPanel({onDemo,mailReady=true,kakaoReady=false,googleReady=fa
   </form>
   <div className="action-strip">
    {reset?<button className="btn" onClick={()=>{setToken("");setMode("login");setFailure("")}}>로그인으로 돌아가기</button>
-    :<button className="btn" onClick={()=>{setMode(signup||forgot?"login":"signup");setFailure("");setSent(false)}}>{signup||forgot?"로그인으로 돌아가기":"처음이에요 · 회원가입"}</button>}
+    :socialOnly
+     ? (forgot?<button className="btn" onClick={()=>{setMode("login");setFailure("");setSent(false)}}>로그인으로 돌아가기</button>:null)
+     :<button className="btn" onClick={()=>{setMode(signup||forgot?"login":"signup");setFailure("");setSent(false)}}>{signup||forgot?"로그인으로 돌아가기":"처음이에요 · 회원가입"}</button>}
    {mode==="login"&&mailReady&&<button className="btn btn-ghost" onClick={()=>{setMode("forgot");setFailure("");setSent(false)}}>비밀번호를 잊으셨나요?</button>}
    <button className="btn btn-ghost" onClick={onDemo}>샘플 팀 둘러보기</button>
   </div>

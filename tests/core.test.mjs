@@ -35,6 +35,7 @@ compile('lib/push.ts','push.mjs',s=>s.replace('import {env} from "cloudflare:wor
 compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {pushReady} from "@/lib/push";','const pushReady=()=>true;').replace('import {socialReady} from "@/lib/social";','const socialReady=(p)=>p==="google";').replace('import {APP_VERSION} from "@/lib/version";','const APP_VERSION="9.9.9";').replace('import {schemaStatus,BUILD} from "@/lib/schema";','const schemaStatus=async()=>globalThis.__teamkickTestSchema??{db:true,tables:{},error:""};const BUILD="test";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady,mailAccount,fromDomain} from "@/lib/mail";','const mailReady=()=>true;const mailAccount=async()=>"ok";const fromDomain=()=>"teamkick.co.kr";').replace('import {hashPassword,currentUser} from "@/lib/auth";','const hashPassword=async()=>"";const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";','const kakaoReady=()=>true;const kakaoSecretSet=()=>true;').replace('import {ownerCodeFromEnv} from "@/lib/owner-config";','const ownerCodeFromEnv=()=>true;').replace('"@/lib/store"','"./store.mjs"'));
 compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./schema"','"./schema.mjs"').replace('"./store"','"./store.mjs"'));
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
+compile('app/api/auth/route.ts','auth-api.mjs',s=>s.replace('import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword,limit,clientKey,verifyEmail,resendVerification,currentUser} from "@/lib/auth";','const signUp=async()=>{(globalThis.__teamkickSignups??=[]).push(1);return {user:{userId:"u",fullName:"새 사람"},token:"t",verificationSent:false}};const signIn=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const signOut=async()=>{};const sessionCookie=()=>"";const clearedCookie=()=>"";const requestPasswordReset=async()=>{};const resetPassword=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const limit=async()=>{};const clientKey=()=>"k";const verifyEmail=async()=>{};const resendVerification=async()=>true;const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>!!globalThis.__teamkickSocial;').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>false;').replace('"@/lib/model"','"./model.mjs"'));
 compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0}};').replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
 const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp}=await import(path.join(runtime,'model.mjs'));
@@ -52,6 +53,7 @@ const push=await import(path.join(runtime,'push.mjs'));
 const social=await import(path.join(runtime,'social.mjs'));
 const screens=await import(path.join(runtime,'screens-bits.mjs'));
 const api=await import(path.join(runtime,'api.mjs'));
+const authApi=await import(path.join(runtime,'auth-api.mjs'));
 const NOW=Date.now(),DAY=864e5;
 const owner={id:'owner',name:'운영자',ownerSetup:true},A={id:'a',name:'A 주장'},B={id:'b',name:'B 주장'},C={id:'c',name:'C 주장'},member={id:'player',name:'선수'};
 function command(s,a,c,when=NOW){return applyCommand(s,a,c,when)}
@@ -159,6 +161,33 @@ test('승인된 용병이 그 경기의 참여 인원에 들어간다',()=>{
   command(s,A,{type:'cancelGuest',teamId:a,gameId,guestId});
   assert.deepEqual(visibleState(s,A.id,a).sides.find(z=>z.gameId===gameId).guestRoster,[],
     '확정을 취소하면 참여 인원에서도 빠진다');
+});
+
+// T20: 새 가입은 소셜로만 받는다. 화면에서 감추는 것만으로는 부족하고 서버가 막아야 한다.
+// 다만 소셜이 하나도 준비되지 않은 곳에서는 막으면 아무도 가입할 수 없게 된다.
+async function authPost(body){
+  const res=await authApi.POST(new Request('https://teamkick.test/api/auth',
+    {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}));
+  return {status:res.status,body:await res.json()};
+}
+test('소셜 로그인이 준비되면 서버가 이메일 가입을 거절한다',async()=>{
+  globalThis.__teamkickSocial=true;globalThis.__teamkickSignups=[];
+  const out=await authPost({action:'signup',email:'a@b.test',password:'12345678',name:'새 사람',agree:true,adult:true});
+  assert.equal(out.status,403);
+  assert.match(out.body.error,/카카오·네이버·구글/);
+  assert.equal(globalThis.__teamkickSignups.length,0,'거절했으면 계정을 만들면 안 된다');
+
+  // 이미 가입한 이메일 계정은 그대로 쓸 수 있어야 한다. 이게 막히면 기존 사용자가 잠긴다.
+  assert.equal((await authPost({action:'login',email:'a@b.test',password:'12345678'})).status,200);
+  assert.equal((await authPost({action:'forgot',email:'a@b.test'})).status,200);
+  assert.equal((await authPost({action:'reset',token:'x',password:'12345678'})).status,200);
+});
+test('소셜 로그인이 하나도 없으면 이메일 가입을 막지 않는다',async()=>{
+  // 키를 넣기 전 배포나 로컬에서까지 막으면 아무도 가입할 수 없고 운영자 설정도 못 한다.
+  globalThis.__teamkickSocial=false;globalThis.__teamkickSignups=[];
+  const out=await authPost({action:'signup',email:'a@b.test',password:'12345678',name:'새 사람',agree:true,adult:true});
+  assert.equal(out.status,200);
+  assert.equal(globalThis.__teamkickSignups.length,1);
 });
 
 test('팀 공지는 고정한 것을 먼저, 그다음 최근에 쓴 것부터 보여준다',()=>{

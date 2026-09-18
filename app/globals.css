@@ -30,7 +30,7 @@
    가로세로 비율은 viewBox(448x310 = 1.445)와 맞춘다. 어긋나면 로고 둘레에 빈 띠가 생긴다. */
 .brand-mark-svg{width:116px;height:80px;display:block;border-radius:10px;object-fit:cover;background:#000}
 @media(max-width:767px){.brand-mark-svg{width:62px;height:43px;border-radius:8px}}
-.social-login{display:grid;gap:10px}.btn-kakao{display:flex;align-items:center;justify-content:center;width:100%;background:#fee500;color:#191600;border:none;font-weight:600;text-decoration:none}
+.social-login{display:grid;gap:14px}.social-login>.btn{box-sizing:border-box;min-height:48px;margin:0;width:100%}.btn-kakao{display:flex;align-items:center;justify-content:center;width:100%;background:#fee500;color:#191600;border:none;font-weight:600;text-decoration:none}
 .btn-kakao:hover{background:#f5dc00}
 
 #teamkick-splash{position:fixed;inset:0;z-index:200;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom));animation:splash-in .25s ease-out}

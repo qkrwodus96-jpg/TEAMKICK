@@ -188,7 +188,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   if(type==="applyMatch"){
    ensure(g!.home!==t&&g!.listing==="open"&&g!.status==="scheduled"&&Date.parse(g!.start)>now&&teamOf(s,g!.home)?.status==="active","신청할 수 없는 경기예요.",409);checkConflict(s,t,g!.start,g!.end,g!.id);
    const old=s.requests.find(x=>x.gameId===g!.id&&x.teamId===t);ensure(!old||old.status!=="pending","이미 신청한 경기예요.",409);
-   const value={gameId:g!.id,teamId:t,by:a.id,message:textValue(c.message,300,false),status:"pending",version:g!.revision,at:stamp};if(old)Object.assign(old,value);else s.requests.push({id:id(),...value});notice(s,g!.home,"새 매칭 신청",teamOf(s,t)!.name+"에서 경기를 신청했어요.",g!.id,"matching");
+   const value={gameId:g!.id,teamId:t,by:a.id,message:textValue(c.message,300,false),status:"pending",version:g!.revision,at:stamp};if(old)Object.assign(old,value);else s.requests.push({id:id(),...value});notice(s,g!.home,"새 매칭 신청",teamOf(s,t)!.name+"에서 경기를 신청했어요.",g!.id,"matching:received");
   } else {
    const r=s.requests.find(x=>x.id===c.requestId&&x.gameId===g!.id);ensure(r?.status==="pending","이미 처리된 신청이에요.",409);
    if(type==="withdrawMatch"){ensure(r!.teamId===t,"자신의 신청만 철회할 수 있어요.",403);r!.status="withdrawn";r!.decidedAt=stamp;}
@@ -268,7 +268,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    ensure(!old||!["pending","approved"].includes(old.status),"이미 신청한 경기예요.",409);
    const value={gameId:g!.id,teamId:t,userId:a.id,name:textValue(c.name||a.name,30),position:textValue(c.position||"MF",12),number:integer(c.number??0,0,99),message:textValue(c.message,300,false),status:"pending",at:stamp};
    const row=old?Object.assign(old,value):{id:id(),...value};if(!old)s.guests.push(row);
-   for(const m of s.members.filter(x=>x.teamId===t&&["captain","manager"].includes(x.role)&&x.status==="active"))userNotice(s,m.userId,"새 용병 신청",value.name+"님이 용병으로 신청했어요.",t,"matching");
+   for(const m of s.members.filter(x=>x.teamId===t&&["captain","manager"].includes(x.role)&&x.status==="active"))userNotice(s,m.userId,"새 용병 신청",value.name+"님이 용병으로 신청했어요.",t,"matching:guest");
    output={guestId:row.id};
   }
   else if(type==="withdrawGuest"){const r=find();ensure(r.userId===a.id,"자신의 신청만 철회할 수 있어요.",403);ensure(r.status==="pending","이미 처리된 신청이에요.",409);r.status="withdrawn";}
@@ -278,21 +278,21 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
     ensure(upcoming(),"시작 전 예정 경기에만 용병을 모집할 수 있어요.");const needed=integer(c.needed,1,30);
     ensure(needed>=count(),"이미 승인한 용병보다 적은 인원으로 줄일 수 없어요.");side!.guestNeeded=needed;
     if(count()>=needed){side!.guestStatus="closed";closePending();}
-    else {side!.guestStatus="open";notice(s,t,"용병 모집 시작",g!.venue+" · "+needed+"명 모집",g!.id,"matching");}
+    else {side!.guestStatus="open";notice(s,t,"용병 모집 시작",g!.venue+" · "+needed+"명 모집",g!.id,"matching:guest");}
    }
    if(type==="closeGuests"){ensure(guestStatusOf(side!)==="open","이미 마감된 모집이에요.",409);side!.guestStatus="closed";closePending();}
-   if(type==="rejectGuest"){const r=find();ensure(r.status==="pending","대기 중인 신청이 아니에요.",409);r.status="rejected";userNotice(s,r.userId,"용병 신청 결과",teamOf(s,t)!.name+" 경기의 용병 신청이 거절되었어요.",undefined,"matching");}
+   if(type==="rejectGuest"){const r=find();ensure(r.status==="pending","대기 중인 신청이 아니에요.",409);r.status="rejected";userNotice(s,r.userId,"용병 신청 결과",teamOf(s,t)!.name+" 경기의 용병 신청이 거절되었어요.",undefined,"matching:guest");}
    if(type==="approveGuest"){
     const r=find();ensure(r.status==="pending","이미 처리된 신청이에요.",409);ensure(upcoming(),"지난 경기의 용병은 승인할 수 없어요.",409);
     ensure(guestStatusOf(side!)==="open","용병 모집이 마감되었어요.",409);ensure(count()<limit(),"용병 모집 인원이 모두 찼어요.",409);
     r.status="approved";r.decidedAt=stamp;
     if(count()>=limit()){side!.guestStatus="closed";closePending();}
-    userNotice(s,r.userId,"용병 신청 승인",teamOf(s,t)!.name+" 경기에 용병으로 확정되었어요.",undefined,"matching");
+    userNotice(s,r.userId,"용병 신청 승인",teamOf(s,t)!.name+" 경기에 용병으로 확정되었어요.",undefined,"matching:guest");
    }
    if(type==="cancelGuest"){
     const r=find();ensure(r.status==="approved","승인된 용병만 취소할 수 있어요.",409);r.status="cancelled";r.decidedAt=stamp;
     if(guestStatusOf(side!)==="closed"&&upcoming()&&count()<limit())side!.guestStatus="open";
-    userNotice(s,r.userId,"용병 확정 취소",teamOf(s,t)!.name+" 경기의 용병 확정이 취소되었어요.",undefined,"matching");
+    userNotice(s,r.userId,"용병 확정 취소",teamOf(s,t)!.name+" 경기의 용병 확정이 취소되었어요.",undefined,"matching:guest");
    }
   }
  }

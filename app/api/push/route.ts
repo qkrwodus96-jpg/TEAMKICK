@@ -1,7 +1,7 @@
 import {currentUser} from "@/lib/auth";
 import {AppError,setupIncomplete,SETUP_MESSAGE} from "@/lib/model";
 import {ensureSchema} from "@/lib/schema";
-import {pushReady,pushPublicKey,saveSubscription,removeSubscription,subscriptionsOf} from "@/lib/push";
+import {pushReady,pushPublicKey,saveSubscription,removeSubscription,subscriptionsOf,testWake} from "@/lib/push";
 
 export const dynamic="force-dynamic";
 const json=(x:unknown,status=200)=>Response.json(x,{status,headers:{"Cache-Control":"no-store"}});
@@ -32,6 +32,15 @@ export async function POST(req:Request){
    if(!pushReady())throw new AppError("알림이 아직 설정되지 않았어요.",503);
    await saveSubscription(user.userId,body.subscription??{});
    return json({ok:true,devices:(await subscriptionsOf(user.userId)).length});
+  }
+  // 본인 기기로 시험 발송. 평소 알림은 만든 사람 본인에게는 가지 않아서,
+  // 혼자 쓰는 동안에는 푸시가 되는지 확인할 방법이 없었다.
+  if(body?.action==="test"){
+   const out=await testWake(user.userId);
+   // 실패한 이유를 화면까지 그대로 올린다. "안 와요" 만으로는 고칠 수 없다.
+   const bad=out.results.find(r=>!r.ok);
+   return json({ok:out.sent>0,devices:out.devices,sent:out.sent,
+    reason:bad?(bad.host+" 가 "+(bad.status||"응답 없음")+(bad.detail?" · "+bad.detail:"")):""});
   }
   if(body?.action==="unsubscribe"){
    await removeSubscription(user.userId,String(body.endpoint??""));

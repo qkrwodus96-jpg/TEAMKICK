@@ -1,14 +1,11 @@
 import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword,limit,clientKey,verifyEmail,resendVerification,currentUser} from "@/lib/auth";
 import {AppError,setupIncomplete,SETUP_MESSAGE} from "@/lib/model";
 import {ensureSchema} from "@/lib/schema";
-import {kakaoReady} from "@/lib/kakao";
-import {socialReady} from "@/lib/social";
+import {emailSignupEnabled} from "@/lib/signup-policy";
 
 // T20 (사용자 결정 2026-09-18): 새 가입은 소셜 로그인으로만 받는다.
-// 다만 **소셜이 하나도 준비되지 않은 곳에서는 막지 않는다.** 막아버리면 키를 넣기 전
-// 배포나 로컬에서 아무도 가입할 수 없게 되고, 운영자 초기 설정조차 못 한다.
+// 소셜 키가 빠져도 이메일 신규 가입은 다시 열리지 않는다.
 // 이미 가입한 이메일 계정의 로그인·비밀번호 찾기·이메일 확인은 그대로 둔다.
-export const socialSignupOnly=()=>kakaoReady()||socialReady("google")||socialReady("naver");
 const SIGNUP_CLOSED="이제 카카오·네이버·구글 로그인으로 시작해주세요. 이미 이메일로 가입하셨다면 그대로 로그인할 수 있어요.";
 export const dynamic="force-dynamic";
 const json=(x:unknown,status=200,cookie?:string)=>Response.json(x,{status,headers:cookie?{"Cache-Control":"no-store","Set-Cookie":cookie}:{"Cache-Control":"no-store"}});
@@ -22,7 +19,7 @@ export async function POST(req:Request){
   if(!c||typeof c!=="object")throw new AppError("요청 정보를 확인해주세요.");
   if(c.action==="signup"){
    // 화면에서 감추는 것만으로는 부족하다. 서버에서 막는다.
-   if(socialSignupOnly())throw new AppError(SIGNUP_CLOSED,403);
+   if(!emailSignupEnabled())throw new AppError(SIGNUP_CLOSED,403);
    await limit("signup",clientKey(req));const {user,token,verificationSent}=await signUp(c,new URL(req.url).origin);return json({ok:true,verificationSent,user:{id:user.userId,name:user.fullName}},200,sessionCookie(token))}
   if(c.action==="login"){await limit("login",clientKey(req));const {user,token}=await signIn(c);return json({ok:true,user:{id:user.userId,name:user.fullName}},200,sessionCookie(token))}
   if(c.action==="forgot"){await limit("forgot",clientKey(req));await requestPasswordReset(c,new URL(req.url).origin);return json({ok:true})}

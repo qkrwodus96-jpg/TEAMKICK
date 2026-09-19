@@ -61,6 +61,20 @@ export function NotifyToggle(){
   }catch(e){toast.error(e instanceof Error?e.message:"알림을 켜지 못했어요.")}
   finally{setBusy(false)}
  }
+ // 평소 알림은 **만든 사람 본인에게는 가지 않는다.** 그래서 혼자 쓰는 동안에는
+ // 푸시가 되는지 확인할 길이 없었다. 이 단추만 그 규칙을 건너뛴다.
+ async function sendTest(){
+  setBusy(true);
+  try{
+   const res=await fetch("/api/push",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({action:"test"})});
+   const out=await res.json().catch(()=>({})) as {ok?:boolean;sent?:number;devices?:number;reason?:string;error?:string};
+   if(!res.ok)throw new Error(out.error||"시험 알림을 보내지 못했어요.");
+   if(out.ok)toast.success((out.sent??0)+"대에 보냈어요. 잠시 뒤 잠금화면을 확인해주세요.");
+   else toast.error(out.reason?"보내지 못했어요 · "+out.reason:"보내지 못했어요.");
+  }catch(e){toast.error(e instanceof Error?e.message:"시험 알림을 보내지 못했어요.")}
+  finally{setBusy(false)}
+ }
  async function turnOff(){
   setBusy(true);
   try{
@@ -91,5 +105,9 @@ export function NotifyToggle(){
     {on?"끄기":"알림 켜기"}
    </button>}
   </div>
+  {on&&!blocked&&<>
+   <div className="action-strip"><button type="button" className="btn" disabled={busy} onClick={sendTest}>이 기기로 시험 알림 보내기</button></div>
+   <p className="data-note">평소 알림은 <strong>내가 한 일에는 오지 않아요.</strong> 다른 팀원이 공지를 올리거나 경기를 만들 때 옵니다. 혼자 확인하실 때는 위 단추를 눌러주세요.</p>
+  </>}
  </div>;
 }

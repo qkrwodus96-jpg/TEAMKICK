@@ -39,7 +39,10 @@ export async function POST(req:Request){
    const out=await testWake(user.userId);
    // 실패한 이유를 화면까지 그대로 올린다. "안 와요" 만으로는 고칠 수 없다.
    const bad=out.results.find(r=>!r.ok);
-   return json({ok:out.sent>0,devices:out.devices,sent:out.sent,
+   // 성공했는데도 안 오는 경우가 있다(기기 설정·잠금화면 규칙). 그때 어디로 보냈는지
+   // 알아야 원인을 좁힐 수 있어서 푸시 서버 주소도 함께 돌려준다.
+   const hosts=[...new Set(out.results.map(r=>r.host).filter(Boolean))].join(", ");
+   return json({ok:out.sent>0,devices:out.devices,sent:out.sent,hosts,
     reason:bad?(bad.host+" 가 "+(bad.status||"응답 없음")+(bad.detail?" · "+bad.detail:"")):""});
   }
   if(body?.action==="unsubscribe"){

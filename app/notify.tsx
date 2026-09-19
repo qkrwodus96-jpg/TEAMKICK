@@ -78,6 +78,9 @@ export function NotifyToggle(){
  const [on,setOn]=useState(false);
  const [busy,setBusy]=useState(false);
  const [why,setWhy]=useState("");
+ // 시험 발송 결과는 화면에 남겨 둔다. 토스트는 몇 초 만에 사라져서
+ // "뭐라고 떴는지" 를 물어볼 수가 없었다.
+ const [testNote,setTestNote]=useState("");
 
  useEffect(()=>{
   (async()=>{
@@ -123,11 +126,17 @@ export function NotifyToggle(){
   try{
    const res=await fetch("/api/push",{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({action:"test"})});
-   const out=await res.json().catch(()=>({})) as {ok?:boolean;sent?:number;devices?:number;reason?:string;error?:string};
+   const out=await res.json().catch(()=>({})) as {ok?:boolean;sent?:number;devices?:number;hosts?:string;reason?:string;error?:string};
    if(!res.ok)throw new Error(out.error||"시험 알림을 보내지 못했어요.");
-   if(out.ok)toast.success((out.sent??0)+"대에 보냈어요. 잠시 뒤 잠금화면을 확인해주세요.");
-   else toast.error(out.reason?"보내지 못했어요 · "+out.reason:"보내지 못했어요.");
-  }catch(e){toast.error(e instanceof Error?e.message:"시험 알림을 보내지 못했어요.")}
+   if(out.ok){
+    toast.success((out.sent??0)+"대에 보냈어요. 잠시 뒤 잠금화면을 확인해주세요.");
+    setTestNote("보냈어요 · 기기 "+(out.sent??0)+"대 · 푸시 서버 "+(out.hosts||"알 수 없음")+
+     " · "+new Date().toLocaleTimeString("ko-KR")+". 몇 초 안에 잠금화면에 뜨지 않으면 이 줄을 그대로 알려주세요.");
+   }else{
+    toast.error(out.reason?"보내지 못했어요 · "+out.reason:"보내지 못했어요.");
+    setTestNote("보내지 못했어요 · "+(out.reason||"이유를 알 수 없어요")+" · 이 줄을 그대로 알려주세요.");
+   }
+  }catch(e){const m=e instanceof Error?e.message:"시험 알림을 보내지 못했어요.";toast.error(m);setTestNote("보내지 못했어요 · "+m)}
   finally{setBusy(false)}
  }
  async function turnOff(){
@@ -162,7 +171,9 @@ export function NotifyToggle(){
   </div>
   {on&&!blocked&&<>
    <div className="action-strip"><button type="button" className="btn" disabled={busy} onClick={sendTest}>이 기기로 시험 알림 보내기</button></div>
+   {testNote&&<p className="data-note" role="status" style={{userSelect:"text"}}><strong>시험 결과</strong> · {testNote}</p>}
    <p className="data-note">평소 알림은 <strong>내가 한 일에는 오지 않아요.</strong> 다른 팀원이 공지를 올리거나 경기를 만들 때 옵니다. 혼자 확인하실 때는 위 단추를 눌러주세요.</p>
+   {isIos()&&<p className="data-note">아이폰은 <strong>홈 화면에 추가한 아이콘으로 연 창</strong>에서만 알림과 아이콘 숫자가 나와요. 사파리 탭에서는 오지 않아요.</p>}
   </>}
  </div>;
 }

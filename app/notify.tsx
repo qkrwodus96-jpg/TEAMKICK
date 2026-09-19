@@ -1,6 +1,6 @@
 "use client";
 import {useState,useEffect} from "react";
-import {Bell,BellOff,LoaderCircle} from "lucide-react";
+import {Bell,BellOff,LoaderCircle,X} from "lucide-react";
 import {toast} from "sonner";
 
 // 기기 푸시 켜기/끄기. 브라우저마다 되는 조건이 달라서, 안 되는 이유를 화면에 적는다.
@@ -17,6 +17,61 @@ const installed=()=>{
 const isIos=()=>/iphone|ipad|ipod/i.test(navigator.userAgent);
 
 type State={ready:boolean;key:string;devices:number};
+
+// 홈 화면 위에 뜨는 권유 띠. 기기 알림은 브라우저가 사용자에게 직접 묻는 것이라
+// 앱이 대신 켜 줄 수 없다. 대신 켜야 한다는 것을 놓치지 않게 한 번 크게 권한다.
+// 껐거나 이미 켠 사람에게는 다시 뜨지 않는다.
+const ASKED="teamkick_notify_asked";
+export function NotifyInvite(){
+ const [show,setShow]=useState(false);
+ const [busy,setBusy]=useState(false);
+ useEffect(()=>{
+  (async()=>{
+   try{if(localStorage.getItem(ASKED)==="1")return}catch{}
+   if(!("serviceWorker"in navigator)||!("PushManager"in window))return;
+   if(isIos()&&!installed())return;            // 아이폰은 홈 화면에 추가해야 받을 수 있다
+   if(Notification.permission!=="default")return; // 이미 정했으면 묻지 않는다
+   const res=await fetch("/api/push",{cache:"no-store"}).then(r=>r.json() as Promise<State>).catch(()=>null);
+   if(!res?.ready)return;                       // 서버에 푸시 키가 없으면 권할 것이 없다
+   const reg=await navigator.serviceWorker?.getRegistration?.().catch(()=>null);
+   if(await reg?.pushManager?.getSubscription?.().catch(()=>null))return; // 이미 켜져 있다
+   setShow(true);
+  })();
+ },[]);
+ function done(){try{localStorage.setItem(ASKED,"1")}catch{};setShow(false)}
+ async function turnOn(){
+  setBusy(true);
+  try{
+   const res=await fetch("/api/push",{cache:"no-store"}).then(r=>r.json()) as State;
+   const ok=await Notification.requestPermission();
+   if(ok!=="granted")throw new Error("알림을 허용해야 받을 수 있어요. 나중에 MY 에서 켤 수 있어요.");
+   const reg=await navigator.serviceWorker.register("/sw.js");
+   await navigator.serviceWorker.ready;
+   const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:keyBytes(res.key)});
+   const out=await fetch("/api/push",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({action:"subscribe",subscription:sub.toJSON()})});
+   if(!out.ok)throw new Error(((await out.json().catch(()=>({}))) as {error?:string}).error||"알림을 켜지 못했어요.");
+   toast.success("이 기기로 알림을 받아요.");
+   done();
+  }catch(e){toast.error(e instanceof Error?e.message:"알림을 켜지 못했어요.");done()}
+  finally{setBusy(false)}
+ }
+ if(!show)return null;
+ return <div className="notice install-guide" role="status" style={{marginBottom:14}}>
+  <div className="row between" style={{gap:10,alignItems:"flex-start"}}>
+   <div>
+    <p><strong>기기 알림을 켜두세요</strong></p>
+    <span className="small muted">새 경기와 팀 공지를 잠금화면으로 알려드려요. 앱을 열어보지 않아도 놓치지 않아요.</span>
+   </div>
+   <button type="button" className="btn btn-ghost" aria-label="나중에" onClick={done}><X size={16}/></button>
+  </div>
+  <div className="action-strip">
+   <button type="button" className="btn btn-green" disabled={busy} onClick={turnOn}>
+    {busy?<LoaderCircle className="loader" size={16}/>:<Bell size={16}/>}알림 켜기
+   </button>
+  </div>
+ </div>;
+}
 
 export function NotifyToggle(){
  const [s,setS]=useState<State|null>(null);

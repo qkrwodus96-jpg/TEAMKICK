@@ -95,6 +95,10 @@ function localDatabase(){
 // 알림을 누르면 그 소식이 있는 화면으로 가야 한다. 화면 이름을 teamId 자리에 잘못
 // 넣으면 알림이 **아예 보이지 않게** 된다(보이는 알림은 teamId 로 걸러진다).
 const VIEWS=['home','schedule','matching','records','team','admin'];
+// 목적지는 "화면" 또는 "화면:탭" 이다. 매칭은 탭이 여럿이라 탭까지 적는다.
+const TABS=['guest','received','mine','open','confirmed'];
+const viewPart=to=>String(to||'').split(':')[0];
+const tabPart=to=>String(to||'').split(':')[1]||'';
 test('모든 알림이 갈 화면을 들고 있고, 화면 이름이 teamId 자리에 섞이지 않는다',()=>{
   const {s,a,b}=fixture();
   const m=addPlayer(s,a);
@@ -112,7 +116,8 @@ test('모든 알림이 갈 화면을 들고 있고, 화면 이름이 teamId 자�
   // 그 알림은 화면에서 걸러져 **아예 보이지 않는다**(실제로 한 번 그렇게 만들었다).
   const teamIds=new Set(s.teams.map(x=>x.id));
   for(const n of s.notifications){
-    assert.ok(VIEWS.includes(n.to),n.title+' 알림에 갈 화면이 없다: '+n.to);
+    assert.ok(VIEWS.includes(viewPart(n.to)),n.title+' 알림에 갈 화면이 없다: '+n.to);
+    assert.ok(!tabPart(n.to)||TABS.includes(tabPart(n.to)),n.title+' 의 탭 이름이 이상하다: '+n.to);
     assert.ok(!n.teamId||teamIds.has(n.teamId),n.title+' 의 teamId 자리에 엉뚱한 값이 들어갔다: '+n.teamId);
     assert.ok(!VIEWS.includes(n.teamId),n.title+' 의 teamId 자리에 화면 이름이 들어갔다');
   }
@@ -121,6 +126,10 @@ test('모든 알림이 갈 화면을 들고 있고, 화면 이름이 teamId 자�
   assert.equal(g.to,'schedule');
   assert.equal(s.notifications.find(n=>n.title==='새 팀 공지').to,'home');
   assert.equal(s.notifications.find(n=>n.title==='매칭 확정').to,'matching');
+  // 용병·매칭 신청은 매칭 안에서도 갈 탭이 다르다. 화면까지만 보내면 묻힌다.
+  assert.equal(s.notifications.find(n=>n.title==='새 매칭 신청').to,'matching:received');
+  assert.equal(s.notifications.find(n=>n.title==='용병 모집 시작').to,'matching:guest');
+  assert.equal(s.notifications.find(n=>n.title==='새 용병 신청').to,'matching:guest');
   assert.equal(s.notifications.find(n=>n.title==='기록 정정 요청').to,'records');
 });
 
@@ -235,6 +244,21 @@ test('우리 팀이 낸 매칭 신청은 주장뿐 아니라 팀원에게도 보
   // 남의 팀 신청은 보이지 않는다
   assert.ok(!visibleState(f.s,member.id,f.b).requests.some(r=>r.teamId!==f.b));
   assert.ok(m);
+});
+
+// 사용자 제보: 토요일 당일인데 D-1 로 나왔다. 시간 차이를 올림해서 세고 있었다.
+test('남은 날짜는 한국 날짜로 센다 — 당일이면 D-day',()=>{
+  const day=ms=>Math.floor((ms+9*3600e3)/864e5);   // app/teamkick.tsx 의 seoulDay
+  const dday=(start,now)=>Math.max(0,day(Date.parse(start))-day(Date.parse(now)));
+  // 한국 9/19(토) 아침 9시에 본 그날 저녁 7시 경기 → 오늘이다
+  assert.equal(dday('2026-09-19T10:00:00.000Z','2026-09-19T00:00:00.000Z'),0,'같은 날이면 0');
+  // 예전 방식(시간 차이 올림)이라면 1 이 나온다. 그게 제보받은 증상이다.
+  assert.equal(Math.ceil((Date.parse('2026-09-19T10:00:00.000Z')-Date.parse('2026-09-19T00:00:00.000Z'))/864e5),1);
+  assert.equal(dday('2026-09-20T01:00:00.000Z','2026-09-19T23:00:00.000Z'),0,'두 시각 다 한국 9/20 이면 0');
+  assert.equal(dday('2026-09-20T10:00:00.000Z','2026-09-19T10:00:00.000Z'),1,'하루 뒤면 1');
+  // 한국에서 날짜가 넘어가는 자리: UTC 15:00 이 KST 자정이다
+  assert.equal(dday('2026-09-19T15:00:00.000Z','2026-09-19T14:00:00.000Z'),1,'자정을 넘기면 1');
+  assert.equal(dday('2026-09-18T00:00:00.000Z','2026-09-19T00:00:00.000Z'),0,'지난 경기는 0 으로 붙든다');
 });
 
 test('팀 공지는 고정한 것을 먼저, 그다음 최근에 쓴 것부터 보여준다',()=>{

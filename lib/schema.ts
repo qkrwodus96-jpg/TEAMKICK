@@ -37,7 +37,7 @@ export const STATEMENTS=[
 
 // 배포된 코드가 어느 시점 것인지 화면으로 확인하기 위한 표시.
 // 스키마나 진단에 영향을 주는 변경을 할 때 함께 올린다.
-export const BUILD="2026-09-18-social-signup-only";
+export const BUILD="2026-09-19-account-recovery";
 
 export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications","push_subs"];
 

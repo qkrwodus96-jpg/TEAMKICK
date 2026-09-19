@@ -213,7 +213,7 @@ export async function resendVerification(accountId:string,origin:string,now=Date
  ensure(mailReady(),"메일 발송이 아직 설정되지 않았어요. 관리자에게 문의해주세요.",503);
  const account=await db().prepare("SELECT id,email,name,verified_at,provider FROM accounts WHERE id=?")
   .bind(accountId).first<{id:string;email:string;name:string;verified_at:string|null;provider:string}>();
- if(!account||account.verified_at||account.provider==="kakao")return false;
+ if(!account||account.verified_at||account.provider!=="local")return false;
  const recent=await db().prepare("SELECT at FROM email_verifications WHERE account_id=? AND used=0 AND expires>? ORDER BY at DESC")
   .bind(account.id,iso(now)).first<{at:string}>();
  if(recent&&now-Date.parse(recent.at)<VERIFY_COOLDOWN_MINUTES*60000)return false; // 연달아 보내지 않는다
@@ -228,8 +228,15 @@ export async function verifyEmail(input:{token?:unknown},now=Date.now()){
  const row=await db().prepare("SELECT id,account_id,expires,used,at FROM email_verifications WHERE id=?")
   .bind(await hashToken(token)).first<VerifyRow>();
  ensure(row&&!row.used&&Date.parse(row.expires)>now,expired,400);
- await db().prepare("UPDATE accounts SET verified_at=? WHERE id=?").bind(iso(now),row!.account_id).run();
- await db().prepare("UPDATE email_verifications SET used=1 WHERE id=?").bind(row!.id).run();
+ const d=db(),guard="verify:"+crypto.randomUUID();
+ try{
+  await d.batch([
+   d.prepare("INSERT INTO write_guards(id,expected,actual) VALUES(?,1,(SELECT COUNT(*) FROM email_verifications t JOIN accounts a ON a.id=t.account_id WHERE t.id=? AND t.account_id=? AND t.used=0 AND t.expires>? AND a.provider='local'))").bind(guard,row!.id,row!.account_id,iso(now)),
+   d.prepare("UPDATE accounts SET verified_at=? WHERE id=?").bind(iso(now),row!.account_id),
+   d.prepare("UPDATE email_verifications SET used=1 WHERE account_id=?").bind(row!.account_id),
+   d.prepare("DELETE FROM write_guards WHERE id=?").bind(guard),
+  ]);
+ }catch(e){if(String(e).includes("revision_matches"))throw new AppError(expired,400);throw e}
 }
 
 // 카카오 로그인으로 들어온 사람. 이메일과 비밀번호를 쓰지 않는다.
@@ -293,18 +300,24 @@ export async function requestPasswordReset(input:{email?:unknown},origin:string,
  ensure(mailReady(),"메일 발송이 아직 설정되지 않았어요. 관리자에게 문의해주세요.",503);
  const account=await db().prepare("SELECT id,name,provider FROM accounts WHERE email=?").bind(email).first<{id:string;name:string;provider:string}>();
  // 가입 여부를 응답으로 알려주지 않는다. 없는 주소면 조용히 끝낸다.
- // 카카오로 들어온 계정은 실제 메일 주소가 없으므로 보내지 않는다.
- if(!account||account.provider==="kakao")return;
+ // 소셜 계정의 내부 식별 주소에는 메일을 보내지 않는다.
+ if(!account||account.provider!=="local")return;
  const recent=await db().prepare("SELECT at FROM password_resets WHERE account_id=? AND used=0 AND expires>? ORDER BY at DESC")
   .bind(account.id,iso(now)).first<{at:string}>();
  if(recent&&now-Date.parse(recent.at)<RESET_COOLDOWN_MINUTES*60000)return; // 연달아 보내지 않는다
  const token=toBase64(crypto.getRandomValues(new Uint8Array(32))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+ const tokenId=await hashToken(token);
  await db().prepare("INSERT INTO password_resets(id,account_id,expires,used,at) VALUES(?,?,?,0,?)")
-  .bind(await hashToken(token),account.id,iso(now+RESET_MINUTES*60000),iso(now)).run();
+  .bind(tokenId,account.id,iso(now+RESET_MINUTES*60000),iso(now)).run();
  const link=origin+"/?reset="+encodeURIComponent(token);
- await sendMail(email,"팀킥 비밀번호 재설정",
-  account.name+"님, 아래 주소에서 비밀번호를 새로 정할 수 있어요.\n\n"+link+
-  "\n\n이 주소는 "+RESET_MINUTES+"분 동안만, 한 번만 쓸 수 있어요.\n본인이 요청한 것이 아니면 이 메일은 무시해주세요.");
+ try{
+  await sendMail(email,"팀킥 비밀번호 재설정",
+   account.name+"님, 아래 주소에서 비밀번호를 새로 정할 수 있어요.\n\n"+link+
+   "\n\n이 주소는 "+RESET_MINUTES+"분 동안만, 한 번만 쓸 수 있어요.\n본인이 요청한 것이 아니면 이 메일은 무시해주세요.");
+ }catch(e){
+  await db().prepare("DELETE FROM password_resets WHERE id=?").bind(tokenId).run();
+  throw e;
+ }
 }
 
 export async function resetPassword(input:{token?:unknown;password?:unknown},now=Date.now()){
@@ -315,12 +328,22 @@ export async function resetPassword(input:{token?:unknown;password?:unknown},now
  const row=await db().prepare("SELECT id,account_id,expires,used,at FROM password_resets WHERE id=?")
   .bind(await hashToken(token)).first<ResetRow>();
  ensure(row&&!row.used&&Date.parse(row.expires)>now,expired,400);
- await db().prepare("UPDATE accounts SET password=?,failures=0,locked_until=NULL WHERE id=?")
-  .bind(await hashPassword(password),row!.account_id).run();
- await db().prepare("UPDATE password_resets SET used=1 WHERE id=?").bind(row!.id).run();
- // 쓰던 기기에서 모두 로그아웃시킨다.
- await db().prepare("DELETE FROM sessions WHERE account_id=?").bind(row!.account_id).run();
  const account=await db().prepare("SELECT id,name FROM accounts WHERE id=?").bind(row!.account_id).first<{id:string;name:string}>();
  ensure(account,expired,400);
- return {user:{userId:account!.id,fullName:account!.name},token:await startSession(account!.id,now)};
+ const passwordHash=await hashPassword(password);
+ const session=toBase64(crypto.getRandomValues(new Uint8Array(32))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+ const sessionId=await hashToken(session),d=db(),guard="reset:"+crypto.randomUUID();
+ // D1 batch 는 한 트랜잭션이다. 조건 확인도 그 안에서 수행해 같은 링크의 동시 사용을 막는다.
+ // 하나라도 실패하면 비밀번호·토큰·기존 세션·새 세션이 모두 원래 상태로 돌아간다.
+ try{
+  await d.batch([
+   d.prepare("INSERT INTO write_guards(id,expected,actual) VALUES(?,1,(SELECT COUNT(*) FROM password_resets t JOIN accounts a ON a.id=t.account_id WHERE t.id=? AND t.account_id=? AND t.used=0 AND t.expires>? AND a.provider='local'))").bind(guard,row!.id,account!.id,iso(now)),
+   d.prepare("UPDATE accounts SET password=?,failures=0,locked_until=NULL WHERE id=?").bind(passwordHash,account!.id),
+   d.prepare("UPDATE password_resets SET used=1 WHERE account_id=?").bind(account!.id),
+   d.prepare("DELETE FROM sessions WHERE account_id=?").bind(account!.id),
+   d.prepare("INSERT INTO sessions(id,account_id,expires,at) VALUES(?,?,?,?)").bind(sessionId,account!.id,iso(now+maxAge*1000),iso(now)),
+   d.prepare("DELETE FROM write_guards WHERE id=?").bind(guard),
+  ]);
+ }catch(e){if(String(e).includes("revision_matches"))throw new AppError(expired,400);throw e}
+ return {user:{userId:account!.id,fullName:account!.name},token:session};
 }

@@ -12,13 +12,12 @@ import {currentVote,guestStatusOf,REGIONS,FORMATS,LEVELS,DAYS,levelOf,type Row} 
 import {TERMS,PRIVACY} from "@/lib/legal";
 import {APP_VERSION} from "@/lib/version";
 import {NotifyToggle} from "./notify";
-export function AuthPanel({onDemo,mailReady=true,kakaoReady=false,googleReady=false,naverReady=false,resetToken=""}:{onDemo:()=>void;mailReady?:boolean;kakaoReady?:boolean;googleReady?:boolean;naverReady?:boolean;resetToken?:string}){
+export function AuthPanel({onDemo,mailReady=true,kakaoReady=false,googleReady=false,naverReady=false,emailSignupEnabled=false,resetToken="",onResetCancel}:{onDemo:()=>void;onResetCancel?:()=>void;emailSignupEnabled?:boolean;mailReady?:boolean;kakaoReady?:boolean;googleReady?:boolean;naverReady?:boolean;resetToken?:string}){
  const [mode,setMode]=useState(resetToken?"reset":"login"),[form,setForm]=useState<Record<string,string>>({email:"",password:"",password2:"",name:""});
  const [busy,setBusy]=useState(false),[failure,setFailure]=useState("");
  const [token,setToken]=useState(resetToken);
- // T20: 소셜 로그인이 하나라도 준비되어 있으면 새 가입은 소셜로만 받는다.
- // 서버(`/api/auth`)도 같은 기준으로 막는다. 화면에서 감추는 것만으로는 부족하다.
- const socialOnly=kakaoReady||googleReady||naverReady;
+ // 서버가 정한 가입 정책을 사용한다. 소셜 키의 유무로 가입을 다시 열지 않는다.
+ const socialOnly=!emailSignupEnabled;
  const signup=mode==="signup"&&!socialOnly,forgot=mode==="forgot",reset=mode==="reset",[legal,setLegal]=useState("");
  const [sent,setSent]=useState(false);
  const field=(key:string)=>({value:form[key]??"",onChange:(e:ChangeEvent<HTMLInputElement>)=>setForm(f=>({...f,[key]:e.target.value}))});
@@ -41,7 +40,9 @@ export function AuthPanel({onDemo,mailReady=true,kakaoReady=false,googleReady=fa
  }
  return <section className="onboarding panel">
   <h2 className="view-heading">{signup?"팀킥 회원가입":forgot?"비밀번호 찾기":reset?"새 비밀번호 정하기":"팀킥 로그인"}</h2>
-  <p className="small muted" style={{marginBottom:20,lineHeight:1.7}}>{signup?"가입한 뒤 팀을 등록하거나 소속 팀에 가입을 신청할 수 있어요.":forgot?"가입한 이메일로 재설정 링크를 보내드려요.":reset?"새로 쓸 비밀번호를 정해주세요. 다른 기기에서는 모두 로그아웃돼요.":socialOnly?"처음이시면 위 단추로 시작하세요. 따로 가입하지 않아도 돼요.":"가입한 이메일과 비밀번호로 로그인하세요."}</p>
+  <p className="small muted" style={{marginBottom:20,lineHeight:1.7}}>{signup?"가입한 뒤 팀을 등록하거나 소속 팀에 가입을 신청할 수 있어요.":forgot?"가입한 이메일로 재설정 링크를 보내드려요.":reset?"새로 쓸 비밀번호를 정해주세요. 다른 기기에서는 모두 로그아웃돼요.":socialOnly?"처음이시면 아래 소셜 로그인으로 시작하세요.":"가입한 이메일과 비밀번호로 로그인하세요."}</p>
+  {!forgot&&!reset&&socialOnly&&!(kakaoReady||googleReady||naverReady)&&<p className="error-bar" role="status">새 가입을 잠시 이용할 수 없어요. 잠시 후 다시 시도해주세요. 기존 이메일 계정은 아래에서 로그인할 수 있어요.</p>}
+  {!forgot&&!reset&&<p className="data-note">기존에 사용한 로그인 수단으로 접속해야 같은 팀과 기록을 볼 수 있어요.</p>}
   {failure&&<p className="error-bar" role="alert">{failure}</p>}
   {sent&&<p className="data-note" role="status" style={{lineHeight:1.8}}>가입된 주소라면 재설정 링크를 보냈어요. 받은 편지함을 확인해주세요. 링크는 1시간 동안 한 번만 쓸 수 있어요.</p>}
   {!forgot&&!reset&&(kakaoReady||googleReady||naverReady)&&<>
@@ -70,7 +71,7 @@ export function AuthPanel({onDemo,mailReady=true,kakaoReady=false,googleReady=fa
    <button type="submit" className="btn btn-green" disabled={busy}>{busy&&<LoaderCircle className="loader" size={16}/>} {signup?"가입하고 시작하기":forgot?"재설정 링크 받기":reset?"비밀번호 바꾸기":"로그인"}</button>
   </form>
   <div className="action-strip">
-   {reset?<button className="btn" onClick={()=>{setToken("");setMode("login");setFailure("")}}>로그인으로 돌아가기</button>
+   {reset?<button className="btn" onClick={()=>{setToken("");setMode("login");setFailure("");onResetCancel?.()}}>로그인으로 돌아가기</button>
     :socialOnly
      ? (forgot?<button className="btn" onClick={()=>{setMode("login");setFailure("");setSent(false)}}>로그인으로 돌아가기</button>:null)
      :<button className="btn" onClick={()=>{setMode(signup||forgot?"login":"signup");setFailure("");setSent(false)}}>{signup||forgot?"로그인으로 돌아가기":"처음이에요 · 회원가입"}</button>}

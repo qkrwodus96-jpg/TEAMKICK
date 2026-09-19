@@ -38,8 +38,9 @@ export function Fixture({g,v,onClick}:any){const z=v.sides?.find((x:Row)=>x.game
 const SAVE_META=new Set(["ok","output","closed","error"]);
 const nav=[{id:"home",label:"홈",icon:Home},{id:"schedule",label:"일정",icon:CalendarDays},{id:"matching",label:"매칭",icon:Handshake},{id:"records",label:"기록",icon:ChartNoAxesCombined},{id:"team",label:"MY",icon:Users}];
 export default function TeamKick({resetToken="",verifyToken="",kakaoNote=""}:{resetToken?:string;verifyToken?:string;kakaoNote?:string}){
- const [samples,setSamples]=useState(demoState),[demo,setDemo]=useState(true),[demoActor,setDemoActor]=useState("demo-a"),[demoTeam,setDemoTeam]=useState("team-a");
+ const [samples,setSamples]=useState(demoState),[demo,setDemo]=useState(!resetToken&&!verifyToken&&!kakaoNote),[demoActor,setDemoActor]=useState("demo-a"),[demoTeam,setDemoTeam]=useState("team-a");
  const [verifyNote,setVerifyNote]=useState(kakaoNote);
+ const [activeReset,setActiveReset]=useState(resetToken);
  const [real,setReal]=useState<any>(null),[view,setView]=useState("home"),[modal,setModal]=useState<any>(null),[busy,setBusy]=useState(false),[error,setError]=useState(""),[loading,setLoading]=useState(true);
  const today=localDay(new Date().toISOString()),[month,setMonth]=useState(today.slice(0,7)),[selected,setSelected]=useState(today),[scheduleMode,setScheduleMode]=useState("calendar"),[dateFilter,setDateFilter]=useState(false);
  const toolState=useRef<any>(null);
@@ -122,6 +123,9 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote=""}:{re
  },[unread]);
  // 로그인했는지 알기 전에는 아무것도 보여주지 않는다. demo 가 true 로 시작하므로
  // 이 가림막이 없으면 로그인한 사람에게도 샘플 팀이 잠깐 보였다가 바뀐다.
+ // 메일 링크는 로그인 상태·샘플 상태보다 먼저 처리한다. 토큰 자체로 권한을 주지 않는다.
+ function leaveReset(showDemo=false){setActiveReset("");setDemo(showDemo);window.history.replaceState(null,"","/")}
+ if(activeReset)return <main className="page-content"><AuthPanel resetToken={activeReset} onResetCancel={()=>leaveReset()} onDemo={()=>leaveReset(true)} mailReady={real?.mailReady!==false} kakaoReady={real?.kakaoReady===true} googleReady={real?.googleReady===true} naverReady={real?.naverReady===true} emailSignupEnabled={real?.emailSignupEnabled===true}/></main>;
  if(loading)return <div className="app-booting" aria-busy="true" aria-label="불러오는 중"/>;
  return <><SidebarProvider style={{"--sidebar-width":"232px"} as React.CSSProperties}><Sidebar collapsible="none" className="nav-side hidden md:flex sticky top-0 h-svh"><button className="brand" aria-label="홈으로" onClick={()=>setView("home")}><BrandMark/></button><div className="team-select"><div className="nav-label" style={{padding:"0 0 10px"}}>MY TEAM</div>{teamPicker}</div><SidebarContent><div><div className="nav-label">TEAM SPACE</div><SidebarMenu>{nav.map(n=><SidebarMenuItem key={n.id}><SidebarMenuButton className="nav-item" isActive={view===n.id} onClick={()=>setView(n.id)}><n.icon/><span>{n.label}</span>{n.id==="matching"&&v.requests?.some((r:Row)=>r.status==="pending")&&<span className="badge badge-green">N</span>}</SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></div></SidebarContent><div className="side-note"><ShieldCheck size={19} style={{color:"#45955e",marginBottom:8}}/><strong>함께 뛰는 우리 팀</strong><p className="muted">경기 일정부터 기록까지<br/>한 곳에서 이어가세요.</p></div><div className="nav-bottom">{v.isOwner&&<button className="btn btn-ghost" onClick={()=>setView("admin")}><ShieldCheck/>서비스 관리</button>}<button className="btn btn-ghost" onClick={()=>setModal({kind:"settings"})}><Settings/>설정</button></div></Sidebar><div className="workspace"><header className="topbar"><div className="breadcrumb"><Home size={15}/><ChevronRight size={13}/><span>{team?.name??"팀 공간"}</span><ChevronRight size={13}/><strong>{nav.find(n=>n.id===view)?.label??"서비스 관리"}</strong></div><button className="brand mobile-brand" aria-label="홈으로" onClick={()=>setView("home")}><BrandMark/></button>{latestUnread&&<button className="notice-peek" onClick={openNotifications} title={latestUnread.title+" · "+latestUnread.body}><strong>{latestUnread.title}</strong><span>{latestUnread.body}</span></button>}<div className="top-actions"><span className="small muted desktop-only">{koreanDate(new Date().toISOString())}</span><button className="icon-button" aria-label={unread?"알림 "+unread+"개":"알림"} onClick={openNotifications}><Bell size={20}/>{unread>0&&<i className="notification-count">{unread>99?"99+":unread}</i>}</button><button className="row" onClick={()=>setModal({kind:"settings"})}><span className="avatar">{demo?"샘플":v.user?.name?.slice(-2)||"MY"}</span><span className="small top-user-name">{demo?"샘플 주장":v.user?.name||"내 계정"}</span></button></div></header><main className="page-content">
  {error&&<div className="error-bar">{error} <button onClick={()=>refresh(v.teamId).then(()=>setError("")).catch(e=>setError(e.message))}>다시 시도</button></div>}
@@ -130,7 +134,7 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote=""}:{re
  <InstallGuide/>
  {demo&&<div className="demo-strip"><span>샘플 팀 둘러보기 · 변경 사항은 실제 팀에 저장되지 않아요.</span><button onClick={toActual}>우리 팀 시작하기 <span aria-hidden>↗</span></button></div>}
  <div className="md:hidden" style={{marginBottom:20}}>{teamPicker}</div>
- {!demo&&!v.user?<AuthPanel onDemo={()=>setDemo(true)} mailReady={real?.mailReady!==false} kakaoReady={real?.kakaoReady===true} googleReady={real?.googleReady===true} naverReady={real?.naverReady===true} resetToken={resetToken}/>:
+ {!demo&&!v.user?<AuthPanel onDemo={()=>setDemo(true)} mailReady={real?.mailReady!==false} kakaoReady={real?.kakaoReady===true} googleReady={real?.googleReady===true} naverReady={real?.naverReady===true} emailSignupEnabled={real?.emailSignupEnabled===true}/>:
  // 팀이 없으면 온보딩을 보여준다. 다만 MY 는 팀과 상관없는 내 것들이라
  // 팀이 없어도 아래에 함께 보여준다. 안 그러면 문의·공지·버전을 볼 길이 없다.
  !team&&view!=="admin"&&view!=="matching"?<><Management {...common} onboarding/>{view==="team"&&<div className="gap-grid" style={{marginTop:24}}><MyHub {...common}/></div>}</>:

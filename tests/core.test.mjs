@@ -30,13 +30,14 @@ compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:wor
     ts.transpileModule(src.slice(start,end).replace('(t:Row,q:string)','(t,q)'),
       {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText);
 }
+compile('lib/signup-policy.ts','signup-policy.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;'));
 compile('lib/social.ts','social.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/push.ts','push.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {pushReady} from "@/lib/push";','const pushReady=()=>true;').replace('import {socialReady} from "@/lib/social";','const socialReady=(p)=>p==="google";').replace('import {APP_VERSION} from "@/lib/version";','const APP_VERSION="9.9.9";').replace('import {schemaStatus,BUILD} from "@/lib/schema";','const schemaStatus=async()=>globalThis.__teamkickTestSchema??{db:true,tables:{},error:""};const BUILD="test";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady,mailAccount,fromDomain} from "@/lib/mail";','const mailReady=()=>true;const mailAccount=async()=>"ok";const fromDomain=()=>"teamkick.co.kr";').replace('import {hashPassword,currentUser} from "@/lib/auth";','const hashPassword=async()=>"";const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";','const kakaoReady=()=>true;const kakaoSecretSet=()=>true;').replace('import {ownerCodeFromEnv} from "@/lib/owner-config";','const ownerCodeFromEnv=()=>true;').replace('"@/lib/store"','"./store.mjs"'));
 compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./schema"','"./schema.mjs"').replace('"./store"','"./store.mjs"'));
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
-compile('app/api/auth/route.ts','auth-api.mjs',s=>s.replace('import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword,limit,clientKey,verifyEmail,resendVerification,currentUser} from "@/lib/auth";','const signUp=async()=>{(globalThis.__teamkickSignups??=[]).push(1);return {user:{userId:"u",fullName:"새 사람"},token:"t",verificationSent:false}};const signIn=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const signOut=async()=>{};const sessionCookie=()=>"";const clearedCookie=()=>"";const requestPasswordReset=async()=>{};const resetPassword=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const limit=async()=>{};const clientKey=()=>"k";const verifyEmail=async()=>{};const resendVerification=async()=>true;const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>!!globalThis.__teamkickSocial;').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>false;').replace('"@/lib/model"','"./model.mjs"'));
-compile('app/api/app/route.ts','api.mjs',s=>s.replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0}};').replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
+compile('app/api/auth/route.ts','auth-api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword,limit,clientKey,verifyEmail,resendVerification,currentUser} from "@/lib/auth";','const signUp=async()=>{(globalThis.__teamkickSignups??=[]).push(1);return {user:{userId:"u",fullName:"새 사람"},token:"t",verificationSent:false}};const signIn=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const signOut=async()=>{};const sessionCookie=()=>"";const clearedCookie=()=>"";const requestPasswordReset=async()=>{};const resetPassword=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const limit=async()=>{};const clientKey=()=>"k";const verifyEmail=async()=>{};const resendVerification=async()=>true;const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>!!globalThis.__teamkickSocial;').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>false;').replace('"@/lib/model"','"./model.mjs"'));
+compile('app/api/app/route.ts','api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0}};').replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
 const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
@@ -170,7 +171,7 @@ async function authPost(body){
     {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}));
   return {status:res.status,body:await res.json()};
 }
-test('소셜 로그인이 준비되면 서버가 이메일 가입을 거절한다',async()=>{
+test('기본 정책은 이메일 가입을 거절하고 기존 로그인·복구 경로는 유지한다',async()=>{
   globalThis.__teamkickSocial=true;globalThis.__teamkickSignups=[];
   const out=await authPost({action:'signup',email:'a@b.test',password:'12345678',name:'새 사람',agree:true,adult:true});
   assert.equal(out.status,403);
@@ -182,12 +183,13 @@ test('소셜 로그인이 준비되면 서버가 이메일 가입을 거절한�
   assert.equal((await authPost({action:'forgot',email:'a@b.test'})).status,200);
   assert.equal((await authPost({action:'reset',token:'x',password:'12345678'})).status,200);
 });
-test('소셜 로그인이 하나도 없으면 이메일 가입을 막지 않는다',async()=>{
-  // 키를 넣기 전 배포나 로컬에서까지 막으면 아무도 가입할 수 없고 운영자 설정도 못 한다.
+test('이메일 가입을 명시적으로 켠 환경에서만 가입할 수 있다',async()=>{
+  globalThis.__teamkickTestEnv.EMAIL_SIGNUP_ENABLED='true';
   globalThis.__teamkickSocial=false;globalThis.__teamkickSignups=[];
   const out=await authPost({action:'signup',email:'a@b.test',password:'12345678',name:'새 사람',agree:true,adult:true});
   assert.equal(out.status,200);
   assert.equal(globalThis.__teamkickSignups.length,1);
+  delete globalThis.__teamkickTestEnv.EMAIL_SIGNUP_ENABLED;
 });
 
 test('매칭 신청이 언제 확정·거절·철회됐는지 시각이 남는다',()=>{
@@ -2131,5 +2133,152 @@ test('카카오만 있던 계정도 새 열로 옮겨진다',async()=>{
   db.prepare('UPDATE accounts SET provider_id=? WHERE id=?').run('9','old-1');
   const {user}=await auth.signInWithSocial('kakao','9','옛 회원');
   assert.equal(user.userId,'old-1','같은 사람이 새 계정을 만들면 안 된다');
+  db.close();
+});
+
+// T20 검토 후 보완: 정책은 키 유무와 분리하고, 실제 계정·트랜잭션으로 회귀를 검사한다.
+test('소셜 설정 유무·오류와 무관하게 명시적인 true만 이메일 가입을 허용한다',async()=>{
+  globalThis.__teamkickTestIdentity=null;
+  for(const ready of [false,true]){
+    globalThis.__teamkickSocial=ready;
+    for(const value of [undefined,'','false','TRUE','1','invalid','true']){
+      if(value===undefined)delete globalThis.__teamkickTestEnv.EMAIL_SIGNUP_ENABLED;
+      else globalThis.__teamkickTestEnv.EMAIL_SIGNUP_ENABLED=value;
+      const out=await authPost({action:'signup'});
+      assert.equal(out.status,value==='true'?200:403);
+      const visible=await (await api.GET(new Request('https://teamkick.test/api/app'))).json();
+      assert.equal(visible.emailSignupEnabled,value==='true','화면과 API가 같은 정책을 받아야 한다');
+    }
+  }
+  delete globalThis.__teamkickTestEnv.EMAIL_SIGNUP_ENABLED;
+});
+
+const resetLink=()=>decodeURIComponent(globalThis.__teamkickTestMail.at(-1).text.match(/reset=([^\s]+)/)[1]);
+async function recoveryAccount(){
+  const db=localDatabase();globalThis.__teamkickTestMail=[];
+  const registered=await register({email:'recovery@teamkick.test',name:'복구 검사',password:'original-1234'});
+  await auth.requestPasswordReset({email:'recovery@teamkick.test'},'https://teamkick.test',NOW);
+  return {db,registered,token:resetLink()};
+}
+
+test('같은 재설정 링크의 동시 사용은 한 건만 성공하고 이전 링크·세션을 무효화한다',async()=>{
+  const {db,registered,token:older}=await recoveryAccount();
+  const later=NOW+4*60000;
+  await auth.requestPasswordReset({email:'recovery@teamkick.test'},'https://teamkick.test',later);
+  const token=resetLink();
+  const results=await Promise.allSettled([
+    auth.resetPassword({token,password:'concurrent-A'},later),
+    auth.resetPassword({token,password:'concurrent-B'},later),
+  ]);
+  assert.equal(results.filter(x=>x.status==='fulfilled').length,1);
+  assert.equal(results.filter(x=>x.status==='rejected').length,1);
+  const winner=results.find(x=>x.status==='fulfilled').value;
+  assert.equal(winner.user.userId,registered.user.userId);
+  assert.equal(await auth.currentUser(cookieRequest(registered.token),later),null);
+  assert.ok(await auth.currentUser(cookieRequest(winner.token),later));
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n,1);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM write_guards').get().n,0);
+  await assert.rejects(()=>auth.resetPassword({token:older,password:'old-link-again'},later),/만료|사용/);
+  const password=results[0].status==='fulfilled'?'concurrent-A':'concurrent-B';
+  assert.ok(await auth.signIn({email:'recovery@teamkick.test',password},later));
+  db.close();
+});
+
+test('서로 다른 재설정 링크를 동시에 써도 같은 계정의 비밀번호는 한 번만 바뀐다',async()=>{
+  const {db,token:first}=await recoveryAccount();
+  const later=NOW+4*60000;
+  await auth.requestPasswordReset({email:'recovery@teamkick.test'},'https://teamkick.test',later);
+  const results=await Promise.allSettled([
+    auth.resetPassword({token:first,password:'first-link-123'},later),
+    auth.resetPassword({token:resetLink(),password:'second-link-123'},later),
+  ]);
+  assert.equal(results.filter(x=>x.status==='fulfilled').length,1);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM password_resets WHERE used=0').get().n,0);
+  db.close();
+});
+
+test('재설정 중 새 세션 저장이 실패하면 비밀번호·토큰·기존 세션이 모두 복구된다',async()=>{
+  const {db,registered,token}=await recoveryAccount();
+  const original=db.prepare('SELECT password FROM accounts').get().password;
+  db.exec("CREATE TRIGGER fail_reset_session BEFORE INSERT ON sessions BEGIN SELECT RAISE(ABORT,'injected session failure'); END;");
+  await assert.rejects(()=>auth.resetPassword({token,password:'replacement-123'},NOW),/injected session failure/);
+  assert.equal(db.prepare('SELECT password FROM accounts').get().password,original);
+  assert.equal(db.prepare('SELECT used FROM password_resets').get().used,0);
+  assert.ok(await auth.currentUser(cookieRequest(registered.token),NOW));
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM write_guards').get().n,0);
+  db.exec('DROP TRIGGER fail_reset_session');
+  assert.ok(await auth.resetPassword({token,password:'replacement-123'},NOW));
+  db.close();
+});
+
+test('재설정 메일 발송 실패 뒤 바로 다시 요청하면 실제로 재발송한다',async()=>{
+  const db=localDatabase();globalThis.__teamkickTestMail=[];
+  await register({email:'retry@teamkick.test',name:'재시도',password:'original-1234'});
+  globalThis.__teamkickTestMailFail=true;
+  try{await assert.rejects(()=>auth.requestPasswordReset({email:'retry@teamkick.test'},'https://teamkick.test',NOW),/메일/)}
+  finally{globalThis.__teamkickTestMailFail=false}
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM password_resets').get().n,0);
+  await auth.requestPasswordReset({email:'retry@teamkick.test'},'https://teamkick.test',NOW+1000);
+  assert.equal(globalThis.__teamkickTestMail.length,1);
+  assert.ok(await auth.resetPassword({token:resetLink(),password:'retried-1234'},NOW+1000));
+  db.close();
+});
+
+test('카카오·구글·네이버의 내부 주소에는 복구·확인 메일을 발송하지 않는다',async()=>{
+  const db=localDatabase();globalThis.__teamkickTestMail=[];
+  await auth.signInWithKakao('mail-kakao','카카오');
+  await auth.signInWithSocial('google','mail-google','구글');
+  await auth.signInWithSocial('naver','mail-naver','네이버');
+  db.exec('UPDATE accounts SET verified_at=NULL');
+  for(const row of db.prepare('SELECT id,email FROM accounts').all()){
+    await auth.requestPasswordReset({email:row.email},'https://teamkick.test');
+    assert.equal(await auth.resendVerification(row.id,'https://teamkick.test'),false);
+  }
+  assert.equal(globalThis.__teamkickTestMail.length,0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM password_resets').get().n,0);
+  db.close();
+});
+
+test('이메일 확인 링크도 동시에 한 건만 성공하고 새 세션을 만들지 않는다',async()=>{
+  const db=localDatabase();globalThis.__teamkickTestMail=[];
+  await auth.signUp({email:'verify-race@teamkick.test',name:'확인',password:'original-1234',agree:true,adult:true},'https://teamkick.test',NOW);
+  const token=decodeURIComponent(globalThis.__teamkickTestMail.at(-1).text.match(/verify=([^\s]+)/)[1]);
+  const before=db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n;
+  const results=await Promise.allSettled([auth.verifyEmail({token},NOW),auth.verifyEmail({token},NOW)]);
+  assert.equal(results.filter(x=>x.status==='fulfilled').length,1);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n,before);
+  assert.ok(db.prepare('SELECT verified_at FROM accounts').get().verified_at);
+  db.close();
+});
+
+test('백업 복원 뒤 세 소셜 로그인과 기존 이메일 복구는 원래 내부 계정으로 돌아온다',async()=>{
+  let db=localDatabase();globalThis.__teamkickTestMail=[];
+  const local=await register({email:'restored@teamkick.test',name:'이메일',password:'original-1234'});
+  const kakao=await auth.signInWithKakao('backup-kakao','카카오');
+  const google=await auth.signInWithSocial('google','backup-google','구글');
+  const naver=await auth.signInWithSocial('naver','backup-naver','네이버');
+  const file=await backup.exportAll();
+  assert.equal(file.format,2);
+  assert.equal(file.accounts.find(x=>x.provider==='google').provider_id,'backup-google');
+  db.close();db=localDatabase();
+  await backup.restoreAll(file);
+  assert.equal((await auth.signInWithKakao('backup-kakao','다른 이름')).user.userId,kakao.user.userId);
+  assert.equal((await auth.signInWithSocial('google','backup-google','다른 이름')).user.userId,google.user.userId);
+  assert.equal((await auth.signInWithSocial('naver','backup-naver','다른 이름')).user.userId,naver.user.userId);
+  assert.equal(db.prepare('SELECT password FROM accounts WHERE id=?').get(local.user.userId).password,'');
+  await auth.requestPasswordReset({email:'restored@teamkick.test'},'https://teamkick.test');
+  assert.equal((await auth.resetPassword({token:resetLink(),password:'restored-1234'})).user.userId,local.user.userId);
+  db.close();
+});
+
+test('옛 소셜 백업의 식별자가 누락됐으면 데이터를 쓰기 전에 거절한다',async()=>{
+  const db=localDatabase();
+  await auth.signInWithSocial('google','legacy-google','구글');
+  const broken=await backup.exportAll();broken.format=1;delete broken.accounts[0].provider_id;
+  const before=await repository.load();
+  await assert.rejects(()=>backup.restoreAll(broken),/소셜 계정 식별자/);
+  assert.deepEqual(await repository.load(),before);
+  const legacy=await backup.exportAll();legacy.format=1;legacy.accounts=[];
+  await backup.restoreAll(legacy);
   db.close();
 });

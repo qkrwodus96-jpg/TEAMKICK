@@ -30,14 +30,22 @@ export function PlayerPhoto({name="",photo="",className="player-avatar"}:{name?:
 export function Crest({name="",color="",logo=""}:any){if(logo)return <div className={"club-crest "+color}><img className="crest-photo" src={imageUrl(logo)} alt={name+" 로고"} loading="lazy"/></div>;return <div className={"club-crest "+color}><span>{name.includes("한강")?"HG":name.includes("서울")?"SU":name.replace(/\s|FC|유나이티드/g,"").slice(0,2)||"?"}</span></div>}
 export function Empty({title,description,action,onClick}:any){return <div className="empty"><CalendarDays/><h3>{title}</h3><p>{description}</p>{action&&<button className="btn btn-green" onClick={onClick}>{action}</button>}</div>}
 export function opponent(v:any,g:Row){return v.teams.find((t:Row)=>t.id===(g.home===v.teamId?g.away:g.home))?.name??g.external??""}
-export function GuestBadge({z}:{z?:Row}){const st=z?.guestStatus??"none";return st==="none"?null:<span className={"badge "+(st==="open"?"badge-orange":"badge-red")}>{st==="open"?"용병 모집 중":"용병 마감"}</span>}
-export function GameBadge({g}:any){return <span className={"badge "+(g.status==="cancelled"?"badge-red":g.status==="completed"?"":"badge-green")}>{g.status==="cancelled"?"취소":g.status==="completed"?"경기 종료":g.away?"매칭 확정":g.listing==="open"?"상대팀 모집":"경기 예정"}</span>}
+export const ended=(g?:Row)=>!!g&&Date.parse(g.end)<=Date.now();
+export const gameOver=(g?:Row)=>!!g&&(g.status!=="scheduled"||ended(g));
+export function GuestBadge({z,g}:{z?:Row;g?:Row}){const st=z?.guestStatus??"none";
+ if(st==="none"||gameOver(g))return null;
+ return <span className={"badge "+(st==="open"?"badge-orange":"badge-red")}>{st==="open"?"용병 모집 중":"용병 마감"}</span>}
+export function GameBadge({g}:any){
+ const over=g.status==="scheduled"&&ended(g);
+ const text=g.status==="cancelled"?"취소":g.status==="completed"?"경기 종료"
+  :over?"경기 종료 · 기록 전":g.away?"매칭 확정":g.listing==="open"?"상대팀 모집":"경기 예정";
+ return <span className={"badge "+(g.status==="cancelled"?"badge-red":g.status==="completed"||over?"":"badge-green")}>{text}</span>}
 export function Calendar({month,setMonth,selected,onSelect,games,large=false}:any){
  const [y,m]=month.split("-").map(Number),start=new Date(Date.UTC(y,m-1,1)),n=new Date(Date.UTC(y,m,0)).getUTCDate(),offset=start.getUTCDay();
  function shift(by:number){const d=new Date(Date.UTC(y,m-1+by,1));setMonth(d.toISOString().slice(0,7))}
  return <section className={"panel "+(large?"match-calendar":"")}><div className="calendar-head"><strong>{y}년 {m}월</strong><div className="calendar-nav"><button aria-label="이전 달" onClick={()=>shift(-1)}><ChevronLeft/></button><button aria-label="다음 달" onClick={()=>shift(1)}><ChevronRight/></button></div></div><div className="calendar-grid">{days.map((d,i)=><span className="weekday" key={d} style={i===0?{color:"#c69494"}:{}}>{d}</span>)}{Array.from({length:Math.ceil((n+offset)/7)*7},(_,i)=>{const num=i-offset+1,d=new Date(Date.UTC(y,m-1,num)),key=d.toISOString().slice(0,10),has=games.some((g:Row)=>localDay(g.start)===key&&g.status!=="cancelled");return <button aria-label={key+(has?" 경기 있음":"")} key={key} onClick={()=>onSelect(key)} className={(num<1||num>n?"other ":"")+(i%7===0?"weekend ":"")+(selected===key?"selected ":"")+(has?"has-match":"")}>{d.getUTCDate()}</button>})}</div><div className="calendar-legend">● 경기 일정　<span className="muted">날짜를 눌러 확인하세요</span></div></section>
 }
-export function Fixture({g,v,onClick}:any){const z=v.sides?.find((x:Row)=>x.gameId===g.id);return <div role="button" tabIndex={0} onKeyDown={e=>e.key==="Enter"&&onClick()} className="fixture-row" onClick={onClick}><div className="fixture-date"><b>{new Date(new Date(g.start).getTime()+9*3600e3).getUTCDate()}</b><span>{days[new Date(new Date(g.start).getTime()+9*3600e3).getUTCDay()]}요일</span></div><div className="fixture-info"><strong>{v.teams.find((t:Row)=>t.id===v.teamId)?.name} <span className="muted" style={{fontWeight:400}}>vs</span> {opponent(v,g)||"상대팀 미정"}</strong><p>{time(g.start)} · {g.venue}</p></div>{g.result?.status==="confirmed"?<span className="mini-result">{g.home===v.teamId?g.result.a:g.result.b} : {g.home===v.teamId?g.result.b:g.result.a}</span>:<GameBadge g={g}/>}<GuestBadge z={z}/><ChevronRight/></div>}
+export function Fixture({g,v,onClick}:any){const z=v.sides?.find((x:Row)=>x.gameId===g.id);return <div role="button" tabIndex={0} onKeyDown={e=>e.key==="Enter"&&onClick()} className="fixture-row" onClick={onClick}><div className="fixture-date"><b>{new Date(new Date(g.start).getTime()+9*3600e3).getUTCDate()}</b><span>{days[new Date(new Date(g.start).getTime()+9*3600e3).getUTCDay()]}요일</span></div><div className="fixture-info"><strong>{v.teams.find((t:Row)=>t.id===v.teamId)?.name} <span className="muted" style={{fontWeight:400}}>vs</span> {opponent(v,g)||"상대팀 미정"}</strong><p>{time(g.start)} · {g.venue}</p></div>{g.result?.status==="confirmed"&&<span className="mini-result">{g.home===v.teamId?g.result.a:g.result.b} : {g.home===v.teamId?g.result.b:g.result.a}</span>}<GameBadge g={g}/><GuestBadge z={z} g={g}/><ChevronRight/></div>}
 // 저장 응답의 껍데기. 화면 상태가 아니므로 남기지 않는다.
 const SAVE_META=new Set(["ok","output","closed","error"]);
 // 고른 팀을 기기에 적어 둔다. 예전에는 화면을 새로 열 때마다 서버가 "가장 먼저

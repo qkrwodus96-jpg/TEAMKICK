@@ -190,6 +190,51 @@ test('소셜 로그인이 하나도 없으면 이메일 가입을 막지 않는�
   assert.equal(globalThis.__teamkickSignups.length,1);
 });
 
+test('매칭 신청이 언제 확정·거절·철회됐는지 시각이 남는다',()=>{
+  // 지나고 나면 되살릴 수 없는 값이다. 화면에 "확정 시각" 을 보여주려면 여기서 쌓아야 한다.
+  const f=fixture(),gameId=game(f.s,f.a,{listing:true,start:NOW+2*DAY});
+  command(f.s,B,{type:'applyMatch',teamId:f.b,gameId});
+  command(f.s,C,{type:'applyMatch',teamId:f.c,gameId});
+  const req=id=>f.s.requests.find(x=>x.teamId===id&&x.gameId===gameId);
+  assert.ok(!req(f.b).decidedAt,'신청만 했을 때는 결정 시각이 없다');
+  const when=NOW+3600e3;
+  command(f.s,A,{type:'acceptMatch',teamId:f.a,gameId,requestId:req(f.b).id},when);
+  assert.equal(req(f.b).status,'accepted');
+  assert.equal(req(f.b).decidedAt,iso(when),'수락한 시각이 남아야 한다');
+  // 같이 밀려난 다른 신청에도 남는다
+  assert.equal(req(f.c).status,'closed');
+  assert.equal(req(f.c).decidedAt,iso(when));
+
+  // 거절과 철회도 같은 자리에 남는다
+  const g2=game(f.s,f.a,{listing:true,start:NOW+5*DAY});
+  command(f.s,B,{type:'applyMatch',teamId:f.b,gameId:g2});
+  const r2=f.s.requests.find(x=>x.gameId===g2&&x.teamId===f.b);
+  command(f.s,A,{type:'rejectMatch',teamId:f.a,gameId:g2,requestId:r2.id},when+60e3);
+  assert.equal(r2.decidedAt,iso(when+60e3),'거절 시각');
+
+  const g3=game(f.s,f.a,{listing:true,start:NOW+6*DAY});
+  command(f.s,B,{type:'applyMatch',teamId:f.b,gameId:g3});
+  const r3=f.s.requests.find(x=>x.gameId===g3&&x.teamId===f.b);
+  command(f.s,B,{type:'withdrawMatch',teamId:f.b,gameId:g3,requestId:r3.id},when+120e3);
+  assert.equal(r3.decidedAt,iso(when+120e3),'철회 시각');
+});
+
+test('우리 팀이 낸 매칭 신청은 주장뿐 아니라 팀원에게도 보인다',()=>{
+  // 사용자 요청: "내가 신청한 매칭" 을 팀원이 함께 본다. 서버는 이미 그렇게 준다 —
+  // 이 테스트로 고정해 두고, 화면 이름만 바꾸면 된다.
+  const f=fixture(),gameId=game(f.s,f.a,{listing:true,start:NOW+2*DAY});
+  command(f.s,member,{type:'joinTeam',teamId:f.b,name:'선수',position:'MF',number:9});
+  const m=f.s.members.find(x=>x.teamId===f.b&&x.userId===member.id);
+  command(f.s,B,{type:'approveMember',teamId:f.b,memberId:m.id});
+  command(f.s,B,{type:'applyMatch',teamId:f.b,gameId});
+  const asMember=visibleState(f.s,member.id,f.b).requests;
+  assert.equal(asMember.length,1,'팀원도 우리 팀 신청을 본다');
+  assert.equal(asMember[0].teamId,f.b);
+  // 남의 팀 신청은 보이지 않는다
+  assert.ok(!visibleState(f.s,member.id,f.b).requests.some(r=>r.teamId!==f.b));
+  assert.ok(m);
+});
+
 test('팀 공지는 고정한 것을 먼저, 그다음 최근에 쓴 것부터 보여준다',()=>{
   const {s,a}=fixture();
   command(s,A,{type:'createNotice',teamId:a,title:'가장 먼저 쓴 글',body:'1'},NOW-3*DAY);

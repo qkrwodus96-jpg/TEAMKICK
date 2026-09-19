@@ -191,12 +191,12 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    const value={gameId:g!.id,teamId:t,by:a.id,message:textValue(c.message,300,false),status:"pending",version:g!.revision,at:stamp};if(old)Object.assign(old,value);else s.requests.push({id:id(),...value});notice(s,g!.home,"새 매칭 신청",teamOf(s,t)!.name+"에서 경기를 신청했어요.",g!.id,"matching");
   } else {
    const r=s.requests.find(x=>x.id===c.requestId&&x.gameId===g!.id);ensure(r?.status==="pending","이미 처리된 신청이에요.",409);
-   if(type==="withdrawMatch"){ensure(r!.teamId===t,"자신의 신청만 철회할 수 있어요.",403);r!.status="withdrawn";}
+   if(type==="withdrawMatch"){ensure(r!.teamId===t,"자신의 신청만 철회할 수 있어요.",403);r!.status="withdrawn";r!.decidedAt=stamp;}
    else {ensure(g!.home===t,"모집 팀 주장만 처리할 수 있어요.",403);
-    if(type==="rejectMatch")r!.status="rejected";else{
+    if(type==="rejectMatch"){r!.status="rejected";r!.decidedAt=stamp;}else{
      ensure(g!.listing==="open"&&!g!.away&&g!.status==="scheduled"&&Date.parse(g!.start)>now,"이미 종료된 모집이에요.",409);ensure(teamOf(s,r!.teamId)?.status==="active","상대팀의 승인을 확인해주세요.");ensure(r!.version===g!.revision,"조건이 변경되어 상대팀이 다시 신청해야 해요.",409);
      checkConflict(s,t,g!.start,g!.end,g!.id);checkConflict(s,r!.teamId,g!.start,g!.end,g!.id);
-     g!.away=r!.teamId;g!.listing="matched";g!.revision++;s.sides.push(newSide(g!,r!.teamId));for(const v of s.requests.filter(x=>x.gameId===g!.id&&x.status==="pending"))v.status=v.id===r!.id?"accepted":"closed";
+     g!.away=r!.teamId;g!.listing="matched";g!.revision++;s.sides.push(newSide(g!,r!.teamId));for(const v of s.requests.filter(x=>x.gameId===g!.id&&x.status==="pending")){v.status=v.id===r!.id?"accepted":"closed";v.decidedAt=stamp;}
      notice(s,t,"매칭 확정",teamOf(s,r!.teamId)!.name+"와 경기가 확정되었어요.",g!.id,"matching");notice(s,r!.teamId,"매칭 확정",teamOf(s,t)!.name+"와 경기가 확정되었어요.",g!.id,"matching");
     }
    }

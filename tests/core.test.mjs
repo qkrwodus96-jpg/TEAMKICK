@@ -369,6 +369,74 @@ test('수기 득점은 출석·합계를 검증하고 정정 시 덮어쓰며 �
   stats=summaries(visibleState(s,A.id,a),'1970','2100');assert.equal(stats.played,0);assert.equal(stats.winRate,null);assert.equal(stats.players.find(x=>x.id===m.id).goals,0);
 });
 
+// 사장님 요청: 팀 점수를 먼저 확정해야 선수 기록을 넣을 수 있던 순서를 뒤집었다.
+// 이제 우리 팀 점수는 선수 골 + 자책골 + 미상의 **합으로 구하고**, 손으로 넣는
+// 숫자는 상대팀 득점뿐이다. 합이 안 맞아 저장이 막히는 일이 없어야 한다.
+test('경기 기록은 선수 기록을 먼저 받고 우리 팀 점수를 합으로 구한다',()=>{
+  const {s,a}=fixture(),m=addPlayer(s,a),g=game(s,a,{start:NOW-2*DAY}),z=sideOf(s,g,a);
+  command(s,A,{type:'completeGame',teamId:a,gameId:g});
+  // 출석 확정 전에는 받지 않는다. 누가 뛰었는지 모르면 기록할 대상이 없다.
+  assert.throws(()=>command(s,A,{type:'matchRecord',teamId:a,gameId:g,values:{},opponent:0}),/출석 확정/);
+  const attendance=Object.fromEntries(rosterFor(s,z,s.games[0]).map(x=>[x.id,true]));
+  command(s,A,{type:'attendance',teamId:a,gameId:g,values:attendance});
+  // 점수를 한 번도 넣지 않은 상태에서 바로 선수 기록부터 넣을 수 있어야 한다.
+  const out=command(s,A,{type:'matchRecord',teamId:a,gameId:g,
+    values:{[m.id]:{goals:2,assists:1}},ownGoals:1,unknownGoals:0,opponent:1});
+  assert.equal(out.total,3);
+  const game0=s.games.find(x=>x.id===g);
+  assert.equal(game0.result.status,'confirmed');   // 외부 상대팀이라 바로 확정
+  assert.equal(game0.home===a?game0.result.a:game0.result.b,3);
+  assert.equal(game0.home===a?game0.result.b:game0.result.a,1);
+  assert.equal(sideOf(s,g,a).recordsFinal,true);
+  const stats=summaries(visibleState(s,A.id,a),'1970','2100');
+  assert.equal(stats.players.find(x=>x.id===m.id).goals,2);
+  assert.equal(stats.goals,3);assert.equal(stats.against,1);assert.equal(stats.wins,1);
+  // 도움은 우리 선수가 넣은 골에만 붙는다. 자책골에는 도움이 없다.
+  assert.throws(()=>command(s,A,{type:'matchRecord',teamId:a,gameId:g,
+    values:{[m.id]:{goals:0,assists:2}},ownGoals:1,unknownGoals:0,opponent:0}),/도움 합계/);
+  // 출석하지 않은 사람은 기록할 수 없다.
+  command(s,A,{type:'attendance',teamId:a,gameId:g,values:{...attendance,[m.id]:false}});
+  assert.throws(()=>command(s,A,{type:'matchRecord',teamId:a,gameId:g,
+    values:{[m.id]:{goals:1,assists:0}},ownGoals:0,unknownGoals:0,opponent:0}),/출석 확정된 선수/);
+});
+
+test('경기 기록은 주장만 넣고 상대팀이 확인해야 확정된다',()=>{
+  const {s,a,b,gameId}=matchFixture();
+  const m=addPlayer(s,a);
+  s.games[0].start=iso(NOW-2*DAY);s.games[0].end=iso(NOW-2*DAY+7200e3);
+  command(s,A,{type:'completeGame',teamId:a,gameId});
+  const z=sideOf(s,gameId,a),attendance=Object.fromEntries(rosterFor(s,z,s.games[0]).map(x=>[x.id,true]));
+  command(s,A,{type:'attendance',teamId:a,gameId,values:attendance});
+  // 매니저(일반 팀원)는 팀 점수를 정할 수 없다. 점수는 상대팀과 맞물린 값이다.
+  assert.throws(()=>command(s,member,{type:'matchRecord',teamId:a,gameId,
+    values:{[m.id]:{goals:1,assists:0}},ownGoals:0,unknownGoals:0,opponent:0}),/권한|주장/);
+  command(s,A,{type:'matchRecord',teamId:a,gameId,values:{[m.id]:{goals:2,assists:0}},ownGoals:0,unknownGoals:0,opponent:1});
+  const g0=s.games[0];
+  assert.equal(g0.result.status,'pending');            // 아직 확정 아님
+  assert.equal(g0.resultProposal.status,'pending');
+  assert.equal(sideOf(s,gameId,a).recordsFinal,true);  // 우리 기록은 이미 저장됨
+  command(s,B,{type:'confirmResult',teamId:b,gameId,revision:g0.resultProposal.revision,agree:true});
+  assert.equal(s.games[0].result.status,'confirmed');
+  // 확정된 점수와 우리 기록의 합이 같으므로 다시 입력하라고 하지 않는다.
+  assert.equal(sideOf(s,gameId,a).recordsFinal,true);
+});
+
+test('확정된 점수가 우리 기록 합과 다르면 그 팀만 기록을 다시 받는다',()=>{
+  const {s,a,b,gameId}=matchFixture();
+  const m=addPlayer(s,a);
+  s.games[0].start=iso(NOW-2*DAY);s.games[0].end=iso(NOW-2*DAY+7200e3);
+  command(s,A,{type:'completeGame',teamId:a,gameId});
+  const z=sideOf(s,gameId,a),attendance=Object.fromEntries(rosterFor(s,z,s.games[0]).map(x=>[x.id,true]));
+  command(s,A,{type:'attendance',teamId:a,gameId,values:attendance});
+  command(s,A,{type:'matchRecord',teamId:a,gameId,values:{[m.id]:{goals:2,assists:0}},ownGoals:0,unknownGoals:0,opponent:1});
+  // 상대 주장이 다른 점수를 제안하고 우리가 받아들이면 합이 달라진다.
+  command(s,B,{type:'result',teamId:b,gameId,own:1,opponent:5});
+  const proposal=s.games[0].resultProposal;
+  command(s,A,{type:'confirmResult',teamId:a,gameId,revision:proposal.revision,agree:true});
+  assert.equal(s.games[0].result.status,'confirmed');
+  assert.equal(sideOf(s,gameId,a).recordsFinal,false); // 5골인데 기록은 2골 -> 다시 받는다
+});
+
 test('수정 전 결과와 일정 제안은 승인되지 않으며 일정 변경 시 재투표한다',()=>{
   const {s,a,b,gameId}=matchFixture(),g=s.games[0];
   command(s,A,{type:'vote',teamId:a,gameId,value:'yes'});

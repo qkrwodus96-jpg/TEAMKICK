@@ -120,6 +120,18 @@ function notice(s:State,t:string,title:string,body:string,gameId?:string,to?:str
 function userNotice(s:State,u:string,title:string,body:string,t?:string,to?:string){s.notifications.push({id:id(),userId:u,teamId:t,title,body,to:target(to),read:false,at:iso()})}
 function checkConflict(s:State,t:string,start:string,end:string,except:string){ensure(!s.games.some(g=>g.id!==except&&g.status!=="cancelled"&&containsTeam(g,t)&&Date.parse(g.start)<Date.parse(end)&&Date.parse(g.end)>Date.parse(start)),"같은 시간에 등록된 경기가 있어요. 기존 일정을 확인해주세요.",409)}
 function dates(start:any,end:any){const a=Date.parse(start),b=Date.parse(end);ensure(Number.isFinite(a)&&Number.isFinite(b)&&b>a&&b-a<=24*3600e3,"경기 시작·종료 시간을 확인해주세요.");return {start:iso(a),end:iso(b)}}
+// 팀 점수가 확정되거나 바뀌었을 때, 그 팀의 선수 기록 합이 점수와 다르면 그 팀만
+// 다시 입력하게 한다. 예전에는 결과가 확정될 때마다 양 팀의 개인 기록 확정을 모두
+// 풀어서, 기록과 점수를 함께 넣은 팀까지 아무 이유 없이 다시 입력해야 했다.
+function clearStaleRecords(s:State,g:Row){
+ for(const z of s.sides.filter(x=>x.gameId===g.id)){
+  if(!z.recordsFinal)continue;
+  const total=g.home===z.teamId?g.result?.a:g.result?.b;
+  const sum=(Object.values(z.records??{}) as {goals?:number}[])
+   .reduce((n,x)=>n+Number(x?.goals??0),0)+Number(z.ownGoals??0)+Number(z.unknownGoals??0);
+  if(typeof total!=="number"||sum!==total)z.recordsFinal=false;
+ }
+}
 export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  const type=textValue(c.type,50),t=String(c.teamId??""),stamp=iso(now);let output:any={};
  if(!s.users.find(u=>u.id===a.id))s.users.push({id:a.id,name:a.name,at:stamp});
@@ -202,9 +214,9 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    }
   }
  }
- else if(["vote","attendance","records","completeGame","cancelGame","result","confirmResult","changeGame","confirmChange","sideSettings","remindVote","openListing","closeListing","setOpponent"].includes(type)){
+ else if(["vote","attendance","records","matchRecord","completeGame","cancelGame","result","confirmResult","changeGame","confirmChange","sideSettings","remindVote","openListing","closeListing","setOpponent"].includes(type)){
   const g=s.games.find(x=>x.id===c.gameId);ensure(g&&containsTeam(g,t),"팀 경기를 찾을 수 없어요.",404);
-  const captainActions=["cancelGame","result","confirmResult","changeGame","confirmChange","openListing","closeListing","completeGame","setOpponent"];
+  const captainActions=["cancelGame","result","matchRecord","confirmResult","changeGame","confirmChange","openListing","closeListing","completeGame","setOpponent"];
   const m=requireTeam(s,t,a.id,type==="vote"?"member":captainActions.includes(type)?"captain":"manager");
   const side=sideOf(s,g!.id,t);ensure(side,"경기 팀 정보를 찾을 수 없어요.",404);
   ensure(g!.status!=="cancelled","취소된 경기예요.",409);
@@ -239,14 +251,44 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    ensure(goals+own+unknown===total,"선수 득점 + 상대 자책골 + 득점자 미상의 합이 팀 득점과 같아야 해요.");ensure(assists<=total-own,"어시스트 합계가 팀 득점을 초과해요.");
    side!.records=values;side!.ownGoals=own;side!.unknownGoals=unknown;side!.recordsFinal=true;side!.recordsAt=stamp;
   }
+  // 기록 입력 순서를 뒤집는다. 예전에는 팀 점수를 먼저 넣어 확정해야 선수 기록을
+  // 넣을 수 있었고, 둘의 합이 맞지 않으면 저장이 막혔다. 이제 우리 팀 점수는
+  // 선수 득점 + 상대 자책골 + 득점자 미상을 **더해서 구하고**, 손으로 넣는 숫자는
+  // 상대팀 득점 하나뿐이다. 합이 안 맞아 막히는 일이 없어진다.
+  if(type==="matchRecord"){
+   ensure(g!.status==="completed","경기 완료 처리 후 기록을 입력해주세요.");
+   ensure(side!.attendanceFinal,"출석 확정을 먼저 해주세요.");
+   ensure(g!.away||g!.external,"상대팀을 먼저 설정해주세요.");
+   ensure(c.values&&typeof c.values==="object"&&!Array.isArray(c.values),"선수 기록을 확인해주세요.");
+   const values:Record<string,{goals:number;assists:number}>={};
+   for(const [k,row] of Object.entries(c.values as Record<string,{goals?:unknown;assists?:unknown}>)){
+    ensure(side!.attendance[k]===true,"출석 확정된 선수만 기록할 수 있어요.");
+    ensure(row&&typeof row==="object","선수 기록을 확인해주세요.");
+    values[k]={goals:integer(row.goals),assists:integer(row.assists)};
+   }
+   const list=Object.values(values) as {goals:number;assists:number}[];
+   const scored=list.reduce((sum,x)=>sum+x.goals,0),assists=list.reduce((sum,x)=>sum+x.assists,0);
+   const own=integer(c.ownGoals??0),unknown=integer(c.unknownGoals??0);
+   const total=scored+own+unknown,against=integer(c.opponent);
+   ensure(total<=99,"우리 팀 득점 합계를 확인해주세요.");
+   // 어시스트는 우리 선수가 넣은 골에만 붙는다. 자책골에는 도움이 없다.
+   ensure(assists<=total-own,"도움 합계가 우리 팀 득점을 넘을 수 없어요.");
+   side!.records=values;side!.ownGoals=own;side!.unknownGoals=unknown;side!.recordsFinal=true;side!.recordsAt=stamp;
+   const proposed={a:g!.home===t?total:against,b:g!.home===t?against:total,by:t,status:g!.away?"pending":"confirmed",revision:(g!.resultSequence??g!.result?.revision??0)+1,at:stamp};
+   g!.resultSequence=proposed.revision;
+   if(!g!.away){g!.result=proposed;clearStaleRecords(s,g!);}
+   else{g!.resultProposal=proposed;if(!g!.result)g!.result={status:"pending"};
+    notice(s,g!.home===t?g!.away:g!.home,"경기 결과 확인 요청",total+" : "+against+" 결과를 확인해주세요.",g!.id);}
+   output={total,opponent:against};
+  }
   if(type==="result"){
    ensure(g!.status==="completed","경기 완료 후 결과를 입력해주세요.");const own=integer(c.own),opponent=integer(c.opponent);ensure(g!.away||g!.external,"상대팀을 먼저 설정해주세요.");
    const proposed={a:g!.home===t?own:opponent,b:g!.home===t?opponent:own,by:t,status:g!.away?"pending":"confirmed",revision:(g!.resultSequence??g!.result?.revision??0)+1,at:stamp};
    g!.resultSequence=proposed.revision;
-   if(!g!.away){g!.result=proposed;for(const z of s.sides.filter(x=>x.gameId===g!.id))z.recordsFinal=false;}
+   if(!g!.away){g!.result=proposed;clearStaleRecords(s,g!);}
    else {g!.resultProposal=proposed;if(!g!.result)g!.result={status:"pending"};notice(s,g!.home===t?g!.away:g!.home,"경기 결과 확인 요청",own+" : "+opponent+" 결과를 확인해주세요.",g!.id);}
   }
-  if(type==="confirmResult"){const p=g!.resultProposal;ensure(p&&p.by!==t&&c.revision===p.revision,"확인 가능한 상대팀의 최신 결과가 없어요.",409);if(c.agree===false){p.status="disputed";}else{g!.result={...p,status:"confirmed"};g!.resultProposal=null;for(const z of s.sides.filter(x=>x.gameId===g!.id))z.recordsFinal=false;}notice(s,p.by,c.agree===false?"경기 결과 이견":"경기 결과 확정","경기 결과 확인 상태가 변경되었어요.",g!.id);}
+  if(type==="confirmResult"){const p=g!.resultProposal;ensure(p&&p.by!==t&&c.revision===p.revision,"확인 가능한 상대팀의 최신 결과가 없어요.",409);if(c.agree===false){p.status="disputed";}else{g!.result={...p,status:"confirmed"};g!.resultProposal=null;clearStaleRecords(s,g!);}notice(s,p.by,c.agree===false?"경기 결과 이견":"경기 결과 확정","경기 결과 확인 상태가 변경되었어요.",g!.id);}
   if(type==="changeGame"){
    ensure(g!.status==="scheduled"&&now<Date.parse(g!.start),"이미 시작한 경기는 일정 변경을 할 수 없어요.");const d=dates(c.start,c.end);ensure(Date.parse(d.start)>now,"미래 일정을 선택해주세요.");const change={proposalId:id(),...d,venue:textValue(c.venue,100),address:textValue(c.address,200),lat:coord(c.lat,90),lng:coord(c.lng,180),cost:integer(c.cost??g!.cost,0,10000000),by:t,version:g!.revision};
    if(g!.away){g!.change=change;notice(s,g!.home===t?g!.away:g!.home,"일정 변경 제안",change.venue+" · "+change.start,g!.id);}

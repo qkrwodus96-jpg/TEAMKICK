@@ -17,3 +17,6 @@ next-env.d.ts
 /outputs/
 /work/
 *.tsbuildinfo
+
+# Claude Code 의 기기별 설정(브라우저 실행 경로 등). 컨테이너마다 다르므로 올리지 않는다.
+/.claude/settings.local.json

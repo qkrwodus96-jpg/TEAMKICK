@@ -77,26 +77,58 @@ export async function forgetDevices(accountId:string){
 // 한 번에 보내는 양과 기다리는 시간을 묶어 둔다. 저장이 푸시 때문에 느려지면 안 된다.
 export const MAX_DEVICES=20,TIMEOUT_MS=4000;
 
-async function sendOne(sub:Sub){
+// 푸시 서버가 뭐라고 답했는지 남긴다. 예전에는 성공 여부(true/false)만 돌려줘서
+// 안 올 때 원인을 알 수 없었다. 본문은 앞부분만 잘라 둔다.
+export type SendResult={ok:boolean;status:number;detail:string;host:string};
+
+async function sendOne(sub:Sub):Promise<SendResult>{
  const url=new URL(sub.endpoint);
- const res=await fetch(sub.endpoint,{method:"POST",signal:AbortSignal.timeout(TIMEOUT_MS),headers:{
-  Authorization:"vapid t="+await vapidToken(url.origin)+", k="+publicKey(),
-  TTL:"86400",Urgency:"normal","Content-Length":"0"}});
+ let res:Response;
+ try{
+  res=await fetch(sub.endpoint,{method:"POST",signal:AbortSignal.timeout(TIMEOUT_MS),headers:{
+   // Content-Length 는 fetch 가 직접 정하는 값이라 여기서 넣어도 버려진다. 넣지 않는다.
+   Authorization:"vapid t="+await vapidToken(url.origin)+", k="+publicKey(),
+   TTL:"86400",Urgency:"normal"}});
+ }catch(e){
+  // 시간 초과나 연결 실패. 푸시 서버에 닿지도 못한 경우다.
+  return {ok:false,status:0,detail:String(e instanceof Error?e.message:e).slice(0,200),host:url.host};
+ }
  // 410/404 는 기기가 구독을 버렸다는 뜻이다. 그대로 두면 계속 실패한다.
  if(res.status===404||res.status===410)await db().prepare("DELETE FROM push_subs WHERE id=?").bind(sub.id).run();
- return res.ok;
+ let detail="";
+ if(!res.ok)detail=await res.text().then(t=>t.slice(0,200)).catch(()=>"");
+ return {ok:res.ok,status:res.status,detail,host:url.host};
 }
 
 // 알림을 받은 사람들의 기기를 깨운다. 실패해도 저장은 이미 끝난 뒤라 되돌리지 않는다.
 export async function wakeDevices(userIds:string[]){
- if(!pushReady()||!userIds.length)return {sent:0,failed:0};
- const seen=new Set(userIds);let sent=0,failed=0;
+ if(!pushReady()||!userIds.length)return {sent:0,failed:0,results:[] as SendResult[]};
+ const seen=new Set(userIds);
  const subs:Sub[]=[];
  for(const id of seen){
   if(subs.length>=MAX_DEVICES)break;
   subs.push(...(await subscriptionsOf(id)).slice(0,MAX_DEVICES-subs.length));
  }
  const out=await Promise.allSettled(subs.map(sendOne));
- for(const r of out){if(r.status==="fulfilled"&&r.value)sent++;else failed++}
- return {sent,failed};
+ const results:SendResult[]=out.map(r=>r.status==="fulfilled"?r.value
+  :{ok:false,status:0,detail:String(r.reason).slice(0,200),host:""});
+ const sent=results.filter(r=>r.ok).length;
+ // 실패한 것이 있으면 서버 기록에 이유를 남긴다. 예전에는 조용히 사라졌다.
+ for(const r of results)if(!r.ok)console.error("TeamKick push 실패",r.host,r.status,r.detail);
+ return {sent,failed:results.length-sent,results};
+}
+
+// 본인 기기로 보내는 시험 발송.
+// 평소 알림은 **만든 사람 본인에게는 가지 않는다**(자기가 방금 한 일이라). 그래서 혼자
+// 시험하면 푸시가 영영 안 온다. 이 함수만 그 규칙을 건너뛰고, 푸시 서버가 뭐라고
+// 답했는지 그대로 돌려준다.
+export async function testWake(accountId:string){
+ if(!pushReady())throw new AppError("알림이 아직 설정되지 않았어요. 운영자가 푸시 키를 넣어야 해요.",503);
+ const subs=(await subscriptionsOf(accountId)).slice(0,MAX_DEVICES);
+ if(!subs.length)throw new AppError("이 계정에 등록된 기기가 없어요. 먼저 이 기기에서 알림을 켜주세요.",409);
+ const out=await Promise.allSettled(subs.map(sendOne));
+ const results:SendResult[]=out.map(r=>r.status==="fulfilled"?r.value
+  :{ok:false,status:0,detail:String(r.reason).slice(0,200),host:""});
+ for(const r of results)if(!r.ok)console.error("TeamKick push 시험 실패",r.host,r.status,r.detail);
+ return {devices:subs.length,sent:results.filter(r=>r.ok).length,results};
 }

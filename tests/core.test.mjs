@@ -1736,9 +1736,53 @@ test('푸시 키가 없으면 켜지지 않고 아무 데도 보내지 않는다
   globalThis.fetch=async()=>{called=true;return new Response('',{status:201})};
   try{
     const out=await push.wakeDevices(['a']);
-    assert.deepEqual(out,{sent:0,failed:0});
+    assert.deepEqual({sent:out.sent,failed:out.failed},{sent:0,failed:0});
     assert.equal(called,false,'키가 없으면 요청을 보내면 안 된다');
+    // 시험 발송도 같아야 한다. 여기가 뚫리면 키 없이도 요청이 나간다.
+    await assert.rejects(()=>push.testWake('a'),/설정되지 않았어요/);
+    assert.equal(called,false,'시험 발송도 키가 없으면 나가면 안 된다');
   }finally{globalThis.fetch=real;db.close()}
+});
+
+// 평소 알림은 만든 사람 본인에게는 가지 않는다. 그래서 혼자 쓰는 동안에는 푸시가
+// 되는지 확인할 길이 없었고, 실패해도 이유가 조용히 사라졌다.
+test('시험 발송은 본인 기기로 보내고, 실패하면 이유를 돌려준다',async()=>{
+  const db=localDatabase();
+  await withVapid(async()=>{
+    const real=globalThis.fetch;
+    try{
+      await assert.rejects(()=>push.testWake('a'),/등록된 기기가 없어요/,'기기가 없으면 분명히 거절한다');
+
+      await push.saveSubscription('a',{endpoint:'https://push.example/aaa',keys:{p256dh:'p',auth:'a'}});
+      // 성공하는 경우
+      let hit=null;
+      globalThis.fetch=async(url,init)=>{hit={url:String(url),init};return new Response('',{status:201})};
+      const ok=await push.testWake('a');
+      assert.deepEqual({devices:ok.devices,sent:ok.sent},{devices:1,sent:1});
+      assert.equal(hit.url,'https://push.example/aaa','본인 기기로 보낸다');
+      assert.match(hit.init.headers.Authorization,/^vapid t=[\w-]+\.[\w-]+\.[\w-]+, k=/,'VAPID 헤더 모양');
+
+      // 실패하는 경우 — 이유가 그대로 올라와야 한다
+      globalThis.fetch=async()=>new Response('bad key',{status:403});
+      const bad=await push.testWake('a');
+      assert.equal(bad.sent,0);
+      assert.equal(bad.results[0].status,403);
+      assert.equal(bad.results[0].detail,'bad key','푸시 서버가 준 이유를 버리지 않는다');
+      assert.equal(bad.results[0].host,'push.example');
+
+      // 닿지도 못한 경우
+      globalThis.fetch=async()=>{throw new Error('timed out')};
+      const dead=await push.testWake('a');
+      assert.equal(dead.results[0].status,0);
+      assert.match(dead.results[0].detail,/timed out/);
+
+      // 410 이면 그 구독을 지운다
+      globalThis.fetch=async()=>new Response('',{status:410});
+      await push.testWake('a');
+      assert.equal((await push.subscriptionsOf('a')).length,0,'버려진 구독은 지운다');
+    }finally{globalThis.fetch=real}
+  });
+  db.close();
 });
 
 test('VAPID 토큰은 진짜 서명이고 받는 주소마다 다르다',async()=>{

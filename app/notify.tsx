@@ -16,6 +16,20 @@ const installed=()=>{
 };
 const isIos=()=>/iphone|ipad|ipod/i.test(navigator.userAgent);
 
+// 구독은 **만들 때 쓴 공개키에 묶인다.** 서버에서 VAPID 키를 바꾸거나 나중에 넣으면
+// 그 전에 만들어진 구독은 푸시 서버가 403 으로 거절한다. 화면에는 "켜짐" 으로 보이는데
+// 알림만 영영 오지 않는다 — 사용자가 알아챌 방법이 없다. 그래서 켤 때마다 맞춰 본다.
+const toB64url=(b:ArrayBuffer)=>{
+ const bytes=new Uint8Array(b);let out="";
+ for(const x of bytes)out+=String.fromCharCode(x);
+ return btoa(out).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+};
+const sameKey=(sub:PushSubscription,key:string)=>{
+ const cur=(sub.options as {applicationServerKey?:ArrayBuffer|null})?.applicationServerKey;
+ if(!cur||!key)return true;   // 확인할 수 없으면 건드리지 않는다
+ try{return toB64url(cur)===key}catch{return true}
+};
+
 type State={ready:boolean;key:string;devices:number};
 
 // 홈 화면 위에 뜨는 권유 띠. 기기 알림은 브라우저가 사용자에게 직접 묻는 것이라
@@ -95,7 +109,18 @@ export function NotifyToggle(){
     reason="브라우저에서 알림을 막아두셨어요. 브라우저 설정에서 팀킥의 알림을 허용해주세요.";
    const res=await fetch("/api/push",{cache:"no-store"}).then(r=>r.json() as Promise<State>).catch(()=>null);
    const reg=await navigator.serviceWorker?.getRegistration?.().catch(()=>null);
-   const sub=await reg?.pushManager?.getSubscription?.().catch(()=>null);
+   let sub=await reg?.pushManager?.getSubscription?.().catch(()=>null);
+   // 예전 키로 만들어진 구독이면 조용히 다시 등록한다. 이미 허용된 기기라
+   // 다시 묻지 않는다. 이걸 안 하면 "켜짐" 인데 알림이 안 오는 상태가 계속된다.
+   if(sub&&reg&&res?.ready&&res.key&&!sameKey(sub,res.key)){
+    try{
+     await sub.unsubscribe();
+     sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:keyBytes(res.key)});
+     await fetch("/api/push",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({action:"subscribe",subscription:sub.toJSON()})});
+     setTestNote("이 기기의 알림 등록이 서버 키와 달라서 방금 다시 등록했어요. 이제 시험 알림을 눌러보세요.");
+    }catch{sub=null}
+   }
    setWhy(reason||(res&&!res.ready?"알림이 아직 설정되지 않았어요. 운영자가 설정해야 해요.":""));
    setS(res??{ready:false,key:"",devices:0});
    setOn(!!sub);

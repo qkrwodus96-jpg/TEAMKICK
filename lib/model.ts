@@ -232,7 +232,12 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    for(const x of targets)userNotice(s,x.userId,"참여 투표 알림",teamOf(s,t)!.name+" · "+g!.venue+" 경기 참여 여부를 알려주세요.",t,"schedule");
    side!.remindAt=stamp;output={notified:targets.length};
   }
-  if(type==="completeGame"){ensure(now>=Date.parse(g!.end),"경기가 끝난 후 완료 처리할 수 있어요.");g!.status="completed";}
+  if(type==="completeGame"){ensure(now>=Date.parse(g!.end),"경기가 끝난 후 완료 처리할 수 있어요.");g!.status="completed";
+   // 끝난 경기의 용병 모집은 저절로 닫는다. 예전에는 경기가 끝나도 "용병 모집 중" 이
+   // 그대로 남아 일정·기록 화면에 붙어 있었다. 아직 답을 못 받은 신청도 함께 닫는다.
+   for(const z of s.sides.filter(x=>x.gameId===g!.id))if(guestStatusOf(z)==="open")z.guestStatus="closed";
+   for(const r of s.guests.filter(x=>x.gameId===g!.id&&x.status==="pending"))r.status="closed";
+  }
   if(type==="cancelGame"){if(g!.status==="completed")ensure(textValue(c.reason,300),"정정 사유를 입력해주세요.");g!.status="cancelled";g!.reason=textValue(c.reason,300);g!.listing="cancelled";g!.change=null;for(const r of s.requests.filter(x=>x.gameId===g!.id&&x.status==="pending"))r.status="closed";for(const z of s.sides.filter(x=>x.gameId===g!.id))if(guestStatusOf(z)==="open")z.guestStatus="closed";for(const r of s.guests.filter(x=>x.gameId===g!.id&&x.status==="pending"))r.status="closed";for(const tid of [g!.home,g!.away].filter(Boolean))notice(s,tid,"경기 취소",g!.reason,g!.id);}
   if(type==="setOpponent"){ensure(!g!.away&&g!.listing!=="open"&&!g!.result?.status,"외부 상대팀을 입력할 수 없는 경기예요.");g!.external=textValue(c.external,60);}
   if(type==="openListing"){ensure(g!.home===t&&!g!.away&&!g!.external&&Date.parse(g!.start)>now&&g!.status==="scheduled","상대팀 모집을 열 수 없는 경기예요.");g!.listing="open";}

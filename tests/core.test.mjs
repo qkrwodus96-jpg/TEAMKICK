@@ -369,6 +369,26 @@ test('수기 득점은 출석·합계를 검증하고 정정 시 덮어쓰며 �
   stats=summaries(visibleState(s,A.id,a),'1970','2100');assert.equal(stats.played,0);assert.equal(stats.winRate,null);assert.equal(stats.players.find(x=>x.id===m.id).goals,0);
 });
 
+// 경기가 끝나면 용병 모집은 저절로 닫혀야 한다. 예전에는 "용병 모집 중" 이 그대로
+// 남아 지난 경기 줄에 붙어 있었다(사장님 제보).
+test('경기를 완료 처리하면 용병 모집과 대기 중인 용병 신청이 닫힌다',()=>{
+  const {s,a}=guestFixture(),gameId=s.games[0].id;
+  const guestId=applyGuest(s,a,gameId,B);
+  assert.equal(sideOf(s,gameId,a).guestStatus,'open');
+  assert.equal(s.guests.find(x=>x.id===guestId).status,'pending');
+  s.games[0].start=iso(NOW-2*DAY);s.games[0].end=iso(NOW-2*DAY+7200e3);
+  command(s,A,{type:'completeGame',teamId:a,gameId});
+  assert.equal(sideOf(s,gameId,a).guestStatus,'closed');
+  assert.equal(s.guests.find(x=>x.id===guestId).status,'closed');
+  // 이미 승인된 용병은 건드리지 않는다 — 그 경기에 실제로 뛴 사람이다.
+  const f2=guestFixture(),g2=f2.s.games[0].id;
+  const approved=applyGuest(f2.s,f2.a,g2,B);
+  command(f2.s,A,{type:'approveGuest',teamId:f2.a,gameId:g2,guestId:approved});
+  f2.s.games[0].start=iso(NOW-2*DAY);f2.s.games[0].end=iso(NOW-2*DAY+7200e3);
+  command(f2.s,A,{type:'completeGame',teamId:f2.a,gameId:g2});
+  assert.equal(f2.s.guests.find(x=>x.id===approved).status,'approved');
+});
+
 // 사장님 요청: 팀 점수를 먼저 확정해야 선수 기록을 넣을 수 있던 순서를 뒤집었다.
 // 이제 우리 팀 점수는 선수 골 + 자책골 + 미상의 **합으로 구하고**, 손으로 넣는
 // 숫자는 상대팀 득점뿐이다. 합이 안 맞아 저장이 막히는 일이 없어야 한다.

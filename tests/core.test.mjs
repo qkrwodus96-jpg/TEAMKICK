@@ -32,12 +32,12 @@ compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:wor
 }
 compile('lib/signup-policy.ts','signup-policy.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;'));
 compile('lib/social.ts','social.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
-compile('lib/push.ts','push.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
+compile('lib/push.ts','push.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('import * as workers from "cloudflare:workers";','const workers=globalThis.__teamkickTestWorkers??={};').replace('"./model"','"./model.mjs"'));
 compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {pushReady} from "@/lib/push";','const pushReady=()=>true;').replace('import {socialReady} from "@/lib/social";','const socialReady=(p)=>p==="google";').replace('import {APP_VERSION} from "@/lib/version";','const APP_VERSION="9.9.9";').replace('import {schemaStatus,BUILD} from "@/lib/schema";','const schemaStatus=async()=>globalThis.__teamkickTestSchema??{db:true,tables:{},error:""};const BUILD="test";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady,mailAccount,fromDomain} from "@/lib/mail";','const mailReady=()=>true;const mailAccount=async()=>"ok";const fromDomain=()=>"teamkick.co.kr";').replace('import {hashPassword,currentUser} from "@/lib/auth";','const hashPassword=async()=>"";const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";','const kakaoReady=()=>true;const kakaoSecretSet=()=>true;').replace('import {ownerCodeFromEnv} from "@/lib/owner-config";','const ownerCodeFromEnv=()=>true;').replace('"@/lib/store"','"./store.mjs"'));
 compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./schema"','"./schema.mjs"').replace('"./store"','"./store.mjs"'));
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
 compile('app/api/auth/route.ts','auth-api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword,limit,clientKey,verifyEmail,resendVerification,currentUser} from "@/lib/auth";','const signUp=async()=>{(globalThis.__teamkickSignups??=[]).push(1);return {user:{userId:"u",fullName:"새 사람"},token:"t",verificationSent:false}};const signIn=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const signOut=async()=>{};const sessionCookie=()=>"";const clearedCookie=()=>"";const requestPasswordReset=async()=>{};const resetPassword=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const limit=async()=>{};const clientKey=()=>"k";const verifyEmail=async()=>{};const resendVerification=async()=>true;const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>!!globalThis.__teamkickSocial;').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>false;').replace('"@/lib/model"','"./model.mjs"'));
-compile('app/api/app/route.ts','api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0}};').replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
+compile('app/api/app/route.ts','api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices,afterResponse} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0}};const afterResponse=p=>p;').replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
 const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
@@ -1875,6 +1875,13 @@ test('시험 발송은 본인 기기로 보내고, 실패하면 이유를 돌려
       assert.deepEqual({devices:ok.devices,sent:ok.sent},{devices:1,sent:1});
       assert.equal(hit.url,'https://push.example/aaa','본인 기기로 보낸다');
       assert.match(hit.init.headers.Authorization,/^vapid t=[\w-]+\.[\w-]+\.[\w-]+, k=/,'VAPID 헤더 모양');
+      // 내용 없는 푸시라도 길이 0 인 본문을 분명히 실어야 한다(= Content-Length: 0).
+      // 본문을 빼면 길이 표시가 없는 POST 가 되어 푸시 서버가 답하지 않을 수 있다.
+      // 사장님 갤럭시에서 jmt17.google.com 이 "응답 없음 · 시간 초과" 로 떨어졌다(2026-09-24).
+      assert.ok(hit.init.body instanceof Uint8Array,'본문을 빼면 안 된다');
+      assert.equal(hit.init.body.byteLength,0,'내용은 비어 있어야 한다(암호화 안 한 내용을 싣지 않는다)');
+      assert.equal(hit.init.method,'POST');
+      assert.equal(hit.init.headers.TTL,'86400');
 
       // 실패하는 경우 — 이유가 그대로 올라와야 한다
       globalThis.fetch=async()=>new Response('bad key',{status:403});
@@ -1884,11 +1891,26 @@ test('시험 발송은 본인 기기로 보내고, 실패하면 이유를 돌려
       assert.equal(bad.results[0].detail,'bad key','푸시 서버가 준 이유를 버리지 않는다');
       assert.equal(bad.results[0].host,'push.example');
 
-      // 닿지도 못한 경우
-      globalThis.fetch=async()=>{throw new Error('timed out')};
+      // 닿지도 못한 경우 — 길이 뚫려 있는지 함께 본다(푸시 서버·구글 둘 다)
+      const probed=[];
+      globalThis.fetch=async(url,init)=>{
+        if((init?.method??'GET')==='GET'){probed.push(String(url));return new Response('',{status:404})}
+        throw new Error('timed out');
+      };
       const dead=await push.testWake('a');
       assert.equal(dead.results[0].status,0);
       assert.match(dead.results[0].detail,/timed out/);
+      assert.equal(typeof dead.results[0].ms,'number','얼마나 기다렸는지 남긴다');
+      assert.deepEqual(probed.sort(),['https://fcm.googleapis.com/','https://push.example/','https://www.google.com/'],
+        '닿지 못한 푸시 서버와 구글을 GET 으로 두드려 본다');
+      assert.equal(dead.probe.length,3);
+      assert.match(dead.probe.find(x=>x.startsWith('push.example')),/연결됨 404/,'길이 뚫려 있으면 그렇다고 적는다');
+      // 성공하거나 거절(4xx)된 경우에는 두드리지 않는다 — 시간만 든다
+      probed.length=0;
+      globalThis.fetch=async()=>new Response('bad key',{status:403});
+      const refused=await push.testWake('a');
+      assert.deepEqual(refused.probe,[]);
+      assert.equal(probed.length,0);
 
       // 410 이면 그 구독을 지운다
       globalThis.fetch=async()=>new Response('',{status:410});
@@ -1897,6 +1919,68 @@ test('시험 발송은 본인 기기로 보내고, 실패하면 이유를 돌려
     }finally{globalThis.fetch=real}
   });
   db.close();
+});
+
+// 사장님 갤럭시(크롬)의 푸시 주소는 jmt17.google.com 이었고, 서버에서 보내면
+// "응답 없음 · 시간 초과" 로 떨어졌다(2026-09-24). 같은 토큰을 fcm.googleapis.com 으로
+// 한 번 더 보내 본다. 거절(4xx)이면 돌지 않는다 — 돌아도 같은 답이다.
+test('구글 푸시 주소에 닿지 못하면 fcm.googleapis.com 으로 한 번 더 보낸다',async()=>{
+  assert.equal(push.fcmAlias('https://jmt17.google.com/fcm/send/abc:DEF'),'https://fcm.googleapis.com/fcm/send/abc:DEF');
+  assert.equal(push.fcmAlias('https://fcm.googleapis.com/fcm/send/abc'),'','이미 그 주소면 돌지 않는다');
+  assert.equal(push.fcmAlias('https://web.push.apple.com/abc'),'','애플은 해당 없음');
+  assert.equal(push.fcmAlias('https://evil.example/fcm/send/abc'),'','구글이 아닌 곳으로 새지 않는다');
+  assert.equal(push.fcmAlias('https://jmt17.google.com/other/abc'),'','모양이 다르면 건드리지 않는다');
+  const db=localDatabase();
+  await withVapid(async()=>{
+    const real=globalThis.fetch;
+    try{
+      await push.saveSubscription('a',{endpoint:'https://jmt17.google.com/fcm/send/tok1',keys:{p256dh:'p',auth:'a'}});
+      const hits=[];
+      globalThis.fetch=async(url,init)=>{
+        hits.push({url:String(url),auth:init?.headers?.Authorization??''});
+        if(String(url).startsWith('https://jmt17.google.com/'))throw new Error('The operation was aborted due to timeout');
+        return new Response('',{status:201});
+      };
+      const out=await push.testWake('a');
+      assert.equal(out.sent,1,'돌아서라도 보냈으면 성공이다');
+      assert.equal(out.results[0].via,'fcm.googleapis.com');
+      assert.deepEqual(hits.map(h=>h.url),['https://jmt17.google.com/fcm/send/tok1','https://fcm.googleapis.com/fcm/send/tok1']);
+      // VAPID 토큰은 받는 곳마다 따로 서명해야 한다(aud 가 다르다).
+      assert.notEqual(hits[0].auth,hits[1].auth,'돌아간 주소에 맞는 서명을 다시 만든다');
+      assert.equal(out.probe.length,0,'결국 닿았으면 연결 확인은 하지 않는다');
+
+      // 돌아간 곳이 404/410 이라도 구독을 지우지 않는다 — 그 답은 확신할 수 없다.
+      globalThis.fetch=async(url)=>{if(String(url).startsWith('https://jmt17.'))throw new Error('timeout');return new Response('',{status:404})};
+      const gone=await push.testWake('a');
+      assert.equal(gone.sent,0);
+      assert.equal((await push.subscriptionsOf('a')).length,1,'우회 주소의 404 로는 지우지 않는다');
+
+      // 원래 주소가 거절(403)하면 돌지 않는다.
+      hits.length=0;
+      globalThis.fetch=async(url)=>{hits.push(String(url));return new Response('bad key',{status:403})};
+      await push.testWake('a');
+      assert.deepEqual(hits,['https://jmt17.google.com/fcm/send/tok1'],'거절이면 한 번만 보낸다');
+    }finally{globalThis.fetch=real}
+  });
+  db.close();
+});
+
+test('푸시는 응답을 붙잡지 않도록 뒤에서 보낸다(가능한 실행기에서)',async()=>{
+  const w=globalThis.__teamkickTestWorkers;
+  const handed=[];
+  w.waitUntil=p=>{handed.push(p)};
+  try{
+    let finished=false;
+    const slow=new Promise(r=>setTimeout(()=>{finished=true;r()},30));
+    await push.afterResponse(slow);
+    assert.equal(finished,false,'waitUntil 이 있으면 기다리지 않고 바로 돌아온다');
+    assert.equal(handed.length,1,'대신 실행기에 맡긴다');
+    await slow;
+  }finally{delete w.waitUntil}
+  // 없으면 예전처럼 기다린다
+  let done=false;
+  await push.afterResponse(new Promise(r=>setTimeout(()=>{done=true;r()},10)));
+  assert.equal(done,true,'waitUntil 이 없으면 끝날 때까지 기다린다');
 });
 
 test('VAPID 토큰은 진짜 서명이고 받는 주소마다 다르다',async()=>{

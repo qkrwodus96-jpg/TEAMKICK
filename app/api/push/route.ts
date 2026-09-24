@@ -42,8 +42,12 @@ export async function POST(req:Request){
    // 성공했는데도 안 오는 경우가 있다(기기 설정·잠금화면 규칙). 그때 어디로 보냈는지
    // 알아야 원인을 좁힐 수 있어서 푸시 서버 주소도 함께 돌려준다.
    const hosts=[...new Set(out.results.map(r=>r.host).filter(Boolean))].join(", ");
-   return json({ok:out.sent>0,devices:out.devices,sent:out.sent,hosts,
-    reason:bad?(bad.host+" 가 "+(bad.status||"응답 없음")+(bad.detail?" · "+bad.detail:"")):""});
+   // 원래 주소에 닿지 못해 다른 구글 주소로 돌아서 간 경우. 이게 채워지면 원인이 확정된다.
+   const via=[...new Set(out.results.map(r=>r.via).filter(Boolean))].join(", ");
+   return json({ok:out.sent>0,devices:out.devices,sent:out.sent,hosts,via,
+    reason:bad?(bad.host+" 가 "+(bad.status||"응답 없음")+" ("+bad.ms+"ms)"+(bad.detail?" · "+bad.detail:"")):"",
+    // 닿지 못했을 때만 채워진다. 길이 막힌 것인지 요청 모양이 문제인지 가른다.
+    probe:out.probe});
   }
   if(body?.action==="unsubscribe"){
    await removeSubscription(user.userId,String(body.endpoint??""));

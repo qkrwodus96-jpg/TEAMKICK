@@ -31,6 +31,7 @@ export function Crest({name="",color="",logo=""}:any){if(logo)return <div classN
 export function Empty({title,description,action,onClick}:any){return <div className="empty"><CalendarDays/><h3>{title}</h3><p>{description}</p>{action&&<button className="btn btn-green" onClick={onClick}>{action}</button>}</div>}
 export function opponent(v:any,g:Row){return v.teams.find((t:Row)=>t.id===(g.home===v.teamId?g.away:g.home))?.name??g.external??""}
 export const ended=(g?:Row)=>!!g&&Date.parse(g.end)<=Date.now();
+export const started=(g?:Row)=>!!g&&Date.parse(g.start)<=Date.now();
 export const gameOver=(g?:Row)=>!!g&&(g.status!=="scheduled"||ended(g));
 export function GuestBadge({z,g}:{z?:Row;g?:Row}){const st=z?.guestStatus??"none";
  if(st==="none"||gameOver(g))return null;

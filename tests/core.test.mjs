@@ -1995,19 +1995,26 @@ test('시험 발송은 화면이 알려 준 이 기기로만 보내고, 남의 �
   db.close();
 });
 
-test('푸시는 응답을 붙잡지 않도록 뒤에서 보낸다(가능한 실행기에서)',async()=>{
+test('푸시는 보통 응답 전에 끝내고, 오래 걸릴 때만 뒤로 넘긴다',async()=>{
   const w=globalThis.__teamkickTestWorkers;
   const handed=[];
   w.waitUntil=p=>{handed.push(p)};
   try{
-    let finished=false;
-    const slow=new Promise(r=>setTimeout(()=>{finished=true;r()},30));
-    await push.afterResponse(slow);
-    assert.equal(finished,false,'waitUntil 이 있으면 기다리지 않고 바로 돌아온다');
-    assert.equal(handed.length,1,'대신 실행기에 맡긴다');
+    // 빨리 끝나는 푸시(보통): 응답 전에 끝까지 기다린다 — waitUntil 이 안 지켜져도 나간다
+    let quick=false;
+    await push.afterResponse(new Promise(r=>setTimeout(()=>{quick=true;r()},20)),200);
+    assert.equal(quick,true,'제한 안에 끝나는 푸시는 응답 전에 끝낸다');
+    assert.equal(handed.length,1,'그래도 실행기에는 맡겨 둔다');
+    // 오래 걸리는 푸시: 제한 시간만 기다리고 돌아온다(나머지는 실행기가 마저)
+    let slowDone=false;const slow=new Promise(r=>setTimeout(()=>{slowDone=true;r()},400));
+    const t0=Date.now();await push.afterResponse(slow,50);
+    assert.ok(Date.now()-t0<300,'저장이 푸시 때문에 오래 멈추지 않는다');
+    assert.equal(slowDone,false);
     await slow;
+    // 실패해도 저장을 깨지 않는다
+    await push.afterResponse(Promise.reject(new Error('push down')).catch(()=>{}),50);
   }finally{delete w.waitUntil}
-  // 없으면 예전처럼 기다린다
+  // waitUntil 이 없는 실행기: 끝날 때까지 기다린다
   let done=false;
   await push.afterResponse(new Promise(r=>setTimeout(()=>{done=true;r()},10)));
   assert.equal(done,true,'waitUntil 이 없으면 끝날 때까지 기다린다');
@@ -2082,6 +2089,49 @@ test('죽은 구독(410)은 치우고 나머지에는 계속 보낸다',async()=
     }finally{globalThis.fetch=real}
     assert.deepEqual((await push.subscriptionsOf('u1')).map(x=>x.endpoint),['https://push.example/live'],
       '죽은 구독은 지워져야 한다');
+  });
+  db.close();
+});
+
+// 1.9.3 에서 만든 회귀. sendOne 에 두 번째 인자(제한 시간)를 더했는데 실제 알림 경로는
+// `subs.map(sendOne)` 이라 map 이 넘기는 **순번(0,1,2…)** 이 제한 시간이 됐다. 첫 기기는 0ms 로
+// 보내자마자 스스로 끊겼다. 시험 버튼은 제한 시간을 따로 넘겨서 멀쩡했다 — 사장님이 두 번째
+// 계정으로 확인해 "폰 알림도 갔다고 뜨는데 안 온다" 고 알려 줬다(2026-09-24).
+// 가짜 fetch 가 진짜처럼 **signal 을 지키고 조금 기다려야** 이런 걸 잡는다.
+// 사장님 제보: 처음 가입해서 "가입할 팀 찾기" 를 열면 FCOZ 로고가 안 보였다(2026-09-24).
+// 가입 전 사람에게는 팀 정보를 줄여서 주는데, 거기서 로고가 빠져 있었다. 이미지 서버는
+// 팀 로고를 로그인한 누구에게나 주므로 주소만 넘기면 된다. 줄여 주는 건 그대로 줄여야 한다.
+test('가입 전 사람도 팀 찾기에서 로고를 본다(다른 내부 정보는 여전히 숨긴다)',()=>{
+  const {s,a}=fixture();
+  const key='teams/'+a+'/logo-'+'x'.repeat(8)+'.png';
+  s.teams.find(t=>t.id===a).logo=key;
+  const stranger=visibleState(s,'new-person');
+  const seen=stranger.teams.find(t=>t.id===a);
+  assert.equal(seen.logo,key,'로고 주소가 있어야 한다');
+  assert.equal(seen.applicant,undefined,'신청자는 숨긴다');
+  assert.deepEqual(Object.keys(seen).sort(),['color','days','description','format','id','level','logo','name','region','status'].filter(k=>k in seen).sort());
+  // 우리 팀 주장에게는 전부
+  assert.equal(visibleState(s,A.id,a).teams.find(t=>t.id===a).logo,key);
+});
+
+test('실제 알림 경로는 제대로 된 제한 시간으로 보낸다(순번을 제한 시간으로 쓰지 않는다)',async()=>{
+  const db=localDatabase();
+  await withVapid(async()=>{
+    const real=globalThis.fetch;
+    try{
+      await push.saveSubscription('m1',{endpoint:'https://push.example/first',keys:{p256dh:'p',auth:'a'}});
+      await push.saveSubscription('m2',{endpoint:'https://push.example/second',keys:{p256dh:'p',auth:'a'}});
+      // 진짜 푸시 서버처럼 20ms 뒤에 답하고, 그 사이 signal 이 끊기면 실패한다.
+      globalThis.fetch=(url,init)=>new Promise((resolve,reject)=>{
+        const sig=init?.signal;
+        if(sig?.aborted)return reject(new Error('aborted before send'));
+        const t=setTimeout(()=>resolve(new Response('',{status:201})),20);
+        sig?.addEventListener('abort',()=>{clearTimeout(t);reject(new Error('The operation was aborted due to timeout'))});
+      });
+      const out=await push.wakeDevices(['m1','m2']);
+      assert.deepEqual({sent:out.sent,failed:out.failed},{sent:2,failed:0},
+        '두 기기 모두 가야 한다: '+JSON.stringify(out.results.map(r=>r.detail)));
+    }finally{globalThis.fetch=real}
   });
   db.close();
 });

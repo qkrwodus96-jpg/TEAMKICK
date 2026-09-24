@@ -8,3 +8,5 @@ export const sessions=sqliteTable("sessions",{id:text("id").primaryKey(),account
 export const passwordResets=sqliteTable("password_resets",{id:text("id").primaryKey(),accountId:text("account_id").notNull(),expires:text("expires").notNull(),used:integer("used").notNull().default(0),at:text("at").notNull()},t=>[index("idx_password_resets_account").on(t.accountId)]);
 export const rateLimits=sqliteTable("rate_limits",{id:text("id").primaryKey(),count:integer("count").notNull().default(0),resetAt:text("reset_at").notNull()},t=>[index("idx_rate_limits_reset").on(t.resetAt)]);
 export const emailVerifications=sqliteTable("email_verifications",{id:text("id").primaryKey(),accountId:text("account_id").notNull(),expires:text("expires").notNull(),used:integer("used").notNull().default(0),at:text("at").notNull()},t=>[index("idx_email_verifications_account").on(t.accountId)]);
+// 탈퇴한 계정 번호만(이름·이메일 없음). 백업 복원 때 되살리지 않기 위해 1년 보관.
+export const closedAccounts=sqliteTable("closed_accounts",{id:text("id").primaryKey(),at:text("at").notNull()},t=>[index("idx_closed_accounts_at").on(t.at)]);

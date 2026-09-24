@@ -42,13 +42,19 @@ export const STATEMENTS=[
  `ALTER TABLE push_subs ADD COLUMN last_ok_at text`,
  `ALTER TABLE push_subs ADD COLUMN last_seen_at text`,
  `ALTER TABLE push_subs ADD COLUMN last_shown integer`,
+ // 탈퇴한 계정의 번호(무작위 UUID)와 탈퇴 시각만 둔다. 이름·이메일은 없다.
+ // 백업 파일로 복원할 때 탈퇴한 사람을 되살리지 않기 위해서다. 백업 보관 기간(최대 1년)이
+ // 지나면 필요 없으므로 1년 뒤 지운다. entities 밖에 두는 이유: 복원이 entities 를 통째로
+ // 바꾸므로 그 안에 두면 복원과 함께 사라진다.
+ `CREATE TABLE IF NOT EXISTS closed_accounts (id text PRIMARY KEY NOT NULL, at text NOT NULL)`,
+ `CREATE INDEX IF NOT EXISTS idx_closed_accounts_at ON closed_accounts (at)`,
 ];
 
 // 배포된 코드가 어느 시점 것인지 화면으로 확인하기 위한 표시.
 // 스키마나 진단에 영향을 주는 변경을 할 때 함께 올린다.
-export const BUILD="2026-09-24-push-trace";
+export const BUILD="2026-09-24-closed-accounts";
 
-export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications","push_subs"];
+export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications","push_subs","closed_accounts"];
 
 // 카카오만 있던 시절의 계정을 새 열로 옮긴다. 여러 번 돌아도 안전하다.
 export async function backfillAccounts(){

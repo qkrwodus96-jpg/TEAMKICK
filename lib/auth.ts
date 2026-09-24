@@ -51,7 +51,7 @@ export async function verifyPassword(password:string,stored:string){
 
 type Credentials={email?:unknown;password?:unknown;name?:unknown;agree?:unknown;adult?:unknown};
 type AccountRow={id:string;name:string;password:string;failures:number;locked_until:string|null};
-type SessionRow={id:string;name:string;expires:string;verified_at:string|null};
+type SessionRow={id:string;name:string;expires:string;verified_at:string|null;provider?:string|null};
 const hashToken=async(token:string)=>toHex(await crypto.subtle.digest("SHA-256",encode(token)));
 
 // 남용 제한. 같은 접속 주소에서 짧은 시간에 반복되는 요청을 막는다.
@@ -167,11 +167,24 @@ export async function currentUser(req:Request,now=Date.now()){
  const token=cookieValue(req.headers.get("cookie"),COOKIE);
  if(!token)return null;
  const row=await db().prepare(
-  "SELECT a.id AS id, a.name AS name, a.verified_at AS verified_at, s.expires AS expires FROM sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=?"
+  "SELECT a.id AS id, a.name AS name, a.verified_at AS verified_at, a.provider AS provider, s.expires AS expires FROM sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=?"
  ).bind(await hashToken(token)).first<SessionRow>();
  if(!row)return null;
  if(Date.parse(row.expires)<=now){await db().prepare("DELETE FROM sessions WHERE id=?").bind(await hashToken(token)).run();return null}
- return {userId:row.id,fullName:row.name,verified:!!row.verified_at};
+ return {userId:row.id,fullName:row.name,verified:!!row.verified_at,provider:row.provider??"local"};
+}
+
+// 이 팀킥 계정이 그 사업자의 그 사람으로 가입한 것인지. 탈퇴 전에 본인 확인으로 쓴다.
+export async function socialAccountOwner(accountId:string,provider:string,subject:string){
+ if(!subject)return false;
+ return !!await db().prepare("SELECT id FROM accounts WHERE id=? AND provider=? AND (provider_id=? OR (provider='kakao' AND kakao_id=?))")
+  .bind(accountId,provider,subject,subject).first();
+}
+
+// 이 계정이 어떤 방법으로 가입했는지. 화면이 탈퇴 방법을 고르는 데 쓴다.
+export async function accountProvider(accountId:string){
+ const row=await db().prepare("SELECT provider FROM accounts WHERE id=?").bind(accountId).first<{provider:string}>();
+ return row?.provider??"local";
 }
 
 export async function accountExists(accountId:string){
@@ -179,7 +192,11 @@ export async function accountExists(accountId:string){
 }
 
 // 탈퇴. 로그인 수단과 세션을 지운다. 팀 활동 기록은 model 의 closeAccount 가 먼저 정리한다.
-export async function closeAccount(accountId:string){
+// 탈퇴한 계정 번호는 1년 남긴다(백업 파일 최대 보관 기간). 복원이 그 사람을 되살리지 않게 한다.
+export const CLOSED_KEEP_DAYS=365;
+export async function closeAccount(accountId:string,now=Date.now()){
+ await db().prepare("INSERT OR REPLACE INTO closed_accounts(id,at) VALUES(?,?)").bind(accountId,new Date(now).toISOString()).run();
+ await db().prepare("DELETE FROM closed_accounts WHERE at<?").bind(new Date(now-CLOSED_KEEP_DAYS*864e5).toISOString()).run();
  await db().prepare("DELETE FROM sessions WHERE account_id=?").bind(accountId).run();
  await db().prepare("DELETE FROM email_verifications WHERE account_id=?").bind(accountId).run();
  // 기기 푸시 구독도 함께 지운다. 남겨두면 떠난 사람 기기로 알림이 계속 간다.

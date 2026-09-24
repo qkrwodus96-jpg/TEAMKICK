@@ -1,5 +1,5 @@
 import {env} from "cloudflare:workers";
-import {AppError,blank,collections,iso,type State} from "./model";
+import {AppError,blank,collections,iso,forgetAccount,type State} from "./model";
 import {BUILD} from "./schema";
 import {load,commit} from "./store";
 
@@ -75,19 +75,30 @@ export function readBackup(input:unknown):Backup{
  return {...file,accounts,data:filled}as Backup;
 }
 
+// 백업을 받은 뒤에 탈퇴한 사람. 복원해도 되살리지 않는다(처리방침 3항).
+async function closedIds(){
+ const rows=(await db().prepare("SELECT id FROM closed_accounts").all<{id:string}>()).results??[];
+ return new Set(rows.map(r=>r.id));
+}
+
 export async function restoreAll(input:unknown){
  const file=readBackup(input);
  const {state,version}=await load();
  const after=blank();
  for(const kind of collections)(after[kind as keyof State] as unknown[]).push(...file.data[kind]);
+ const closed=await closedIds(),stamp=iso();
+ const inFile=new Set([...file.accounts.map(a=>a.id),...after.users.map(u=>String(u.id)),...after.members.map(m=>String(m.userId))]);
+ let forgotten=0;
+ for(const userId of inFile)if(closed.has(userId)){forgetAccount(after,userId,stamp);forgotten++}
  await commit(state,after,version);
  // 계정은 덮어쓰지 않는다. 지금 쓰고 있는 계정을 백업 시점으로 되돌리면
  // 그 사이에 바꾼 비밀번호와 이메일 확인이 사라진다.
  let restored=0;
  for(const a of file.accounts){
+  if(closed.has(a.id))continue;
   const done=await db().prepare("INSERT OR IGNORE INTO accounts(id,email,name,password,provider,provider_id,kakao_id,verified_at,at) VALUES(?,?,?,'',?,?,?,?,?)")
    .bind(a.id,a.email,a.name,a.provider??"local",a.provider_id??(a.provider==="kakao"?a.kakao_id:null),a.kakao_id??null,a.verified_at??null,a.at??iso()).run();
   if(done.meta?.changes)restored++;
  }
- return {counts:file.counts??{},accounts:restored,exportedAt:file.exportedAt??""};
+ return {counts:file.counts??{},accounts:restored,forgotten,exportedAt:file.exportedAt??""};
 }

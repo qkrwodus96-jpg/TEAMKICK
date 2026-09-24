@@ -18,6 +18,20 @@ export const KEEP={receipts:7,audit:90,readNotice:30,unreadNotice:180,inquiry:36
 // 한 요청에서 지우는 양을 제한한다. 오래 쌓인 상태에서 배포하면 첫 요청이
 // 수만 건을 한꺼번에 지우려 들어 저장이 실패할 수 있다. 여러 요청에 나눠 지운다.
 export const PRUNE_LIMIT=200;
+// 탈퇴한 사람을 상태에서 지운다. 탈퇴할 때와, 백업 파일로 복원할 때(그 뒤에 탈퇴한
+// 사람이 파일에 남아 있으면) 같은 방법으로 지워야 해서 한곳에 둔다. 조건 확인(주장 등)은
+// 부르는 쪽이 한다 — 복원 때는 이미 탈퇴가 끝난 사람이라 막을 이유가 없다.
+export function forgetAccount(s:State,userId:string,stamp:string){
+ for(const x of s.members.filter(y=>y.userId===userId&&y.status==="active")){x.status="left";if(x.periods?.at(-1))x.periods.at(-1).end=stamp;}
+ for(const x of s.members.filter(y=>y.userId===userId&&y.status==="pending"))x.status="left";
+ for(const x of s.guests.filter(y=>y.userId===userId&&["pending","approved"].includes(y.status)))x.status="withdrawn";
+ // 남는 기록에서 개인 식별 정보를 지운다. 과거 경기·출석·기록의 선수 표시 이름은 그대로 둔다.
+ s.users=s.users.filter(x=>x.id!==userId);
+ s.notifications=s.notifications.filter(x=>x.userId!==userId);
+ s.inquiries=s.inquiries.filter(x=>x.userId!==userId);
+ for(const x of s.members.filter(y=>y.userId===userId))x.photo="";
+}
+
 export function prune(s:State,now=Date.now()){
  let budget=PRUNE_LIMIT;
  const sweep=(rows:Row[],days:(r:Row)=>number)=>{
@@ -375,14 +389,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   ensure(!mine.some(x=>x.role==="captain"),"주장을 맡은 팀이 있어요. 먼저 주장을 인계한 뒤 탈퇴할 수 있어요.",409);
   ensure(!s.teams.some(x=>x.applicant===a.id&&x.status==="pending"),"승인 대기 중인 팀 신청이 있어요. 처리된 뒤에 탈퇴할 수 있어요.",409);
   ensure(!isOwner(s,a.id),"서비스 운영자 계정은 이 화면에서 탈퇴할 수 없어요.",409);
-  for(const x of mine){x.status="left";if(x.periods.at(-1))x.periods.at(-1).end=stamp;}
-  for(const x of s.members.filter(y=>y.userId===a.id&&y.status==="pending"))x.status="left";
-  for(const x of s.guests.filter(y=>y.userId===a.id&&["pending","approved"].includes(y.status)))x.status="withdrawn";
-  // 남는 기록에서 개인 식별 정보를 지운다. 과거 경기·출석·기록의 선수 표시 이름은 그대로 둔다.
-  s.users=s.users.filter(x=>x.id!==a.id);
-  s.notifications=s.notifications.filter(x=>x.userId!==a.id);
-  s.inquiries=s.inquiries.filter(x=>x.userId!==a.id);
-  for(const x of s.members.filter(y=>y.userId===a.id))x.photo="";
+  forgetAccount(s,a.id,stamp);
  }
  // --- 1:1 문의 ---
  // 팀 안이 아니라 서비스 운영자에게 직접 보내는 창구. 팀에 속하지 않아도 쓸 수 있다.

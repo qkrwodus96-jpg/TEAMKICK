@@ -38,6 +38,8 @@ compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
 compile('app/api/auth/route.ts','auth-api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword,limit,clientKey,verifyEmail,resendVerification,currentUser} from "@/lib/auth";','const signUp=async()=>{(globalThis.__teamkickSignups??=[]).push(1);return {user:{userId:"u",fullName:"새 사람"},token:"t",verificationSent:false}};const signIn=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const signOut=async()=>{};const sessionCookie=()=>"";const clearedCookie=()=>"";const requestPasswordReset=async()=>{};const resetPassword=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const limit=async()=>{};const clientKey=()=>"k";const verifyEmail=async()=>{};const resendVerification=async()=>true;const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>!!globalThis.__teamkickSocial;').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>false;').replace('"@/lib/model"','"./model.mjs"'));
 compile('app/api/app/route.ts','api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices,devicesAmong,pushReady} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);const hook=globalThis.__teamkickTestWake;if(hook)return hook(ids);return {sent:ids.length,failed:0,results:[]}};const devicesAmong=async(ids)=>ids.filter(x=>(globalThis.__teamkickTestDevices??[]).includes(x)).length;const pushReady=()=>true;').replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
+compile('lib/unlink.ts','unlink.mjs',s=>s.replace('"./social"','"./social.mjs"'));
+compile('lib/close.ts','close.mjs',s=>s.replace('"./store"','"./store.mjs"').replace('"./model"','"./model.mjs"').replace('"./auth"','"./auth.mjs"').replace('"./unlink"','"./unlink.mjs"'));
 globalThis.__teamkickTestEnv={};
 const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
@@ -54,6 +56,8 @@ const push=await import(path.join(runtime,'push.mjs'));
 const social=await import(path.join(runtime,'social.mjs'));
 const screens=await import(path.join(runtime,'screens-bits.mjs'));
 const api=await import(path.join(runtime,'api.mjs'));
+const unlinkLib=await import(path.join(runtime,'unlink.mjs'));
+const closeLib=await import(path.join(runtime,'close.mjs'));
 const authApi=await import(path.join(runtime,'auth-api.mjs'));
 const NOW=Date.now(),DAY=864e5;
 const owner={id:'owner',name:'운영자',ownerSetup:true},A={id:'a',name:'A 주장'},B={id:'b',name:'B 주장'},C={id:'c',name:'C 주장'},member={id:'player',name:'선수'};
@@ -660,7 +664,7 @@ test('자체 회원가입은 비밀번호를 해시로만 저장하고 세션으
   assert.equal(row.password.includes('teamkick-1234'),false,'비밀번호 원문이 저장되면 안 된다');
   const stored=db.prepare('SELECT id FROM sessions').get();
   assert.notEqual(stored.id,token,'세션 토큰 원문이 저장되면 안 된다');
-  assert.deepEqual(await auth.currentUser(cookieRequest(token)),{userId:user.userId,fullName:'박재연',verified:false},'확인 메일을 거치지 않은 계정은 미확인 상태다');
+  assert.deepEqual(await auth.currentUser(cookieRequest(token)),{userId:user.userId,fullName:'박재연',verified:false,provider:'local'},'확인 메일을 거치지 않은 계정은 미확인 상태다');
   assert.equal(await auth.currentUser(cookieRequest('')),null);
   assert.equal(await auth.currentUser(cookieRequest('not-a-real-token')),null);
   db.close();
@@ -1304,6 +1308,45 @@ test('백업 파일로 팀과 경기를 되살리고, 계정은 비밀번호 없
 
   // 비밀번호는 담기지 않았으므로 예전 비밀번호로는 못 들어간다.
   await assert.rejects(()=>auth.signIn({email:'keeper@teamkick.test',password:'teamkick-1234'}),/이메일 또는 비밀번호/,'복원된 계정으로 로그인되면 안 된다');
+  db.close();
+});
+
+// 결정 ②(2026-09-24): 백업 파일은 보관 기간이 끝날 때 파기하되, 그 사이에 복원하더라도
+// 백업 뒤에 탈퇴한 사람은 되살리지 않는다. 되살리면 탈퇴 요청을 어긴 것이 된다.
+test('백업 뒤에 탈퇴한 사람은 복원해도 되살아나지 않는다',async()=>{
+  const {db,f}=await seedForBackup();
+  const m=addPlayer(f.s,f.a);
+  const {state,version}=await repository.load();
+  await repository.commit(state,f.s,version);
+  const keeper=db.prepare('SELECT id FROM accounts').get().id;
+  const file=await backup.exportAll();
+  assert.ok(file.data.members.some(x=>x.userId===member.id&&x.status==='active'),'백업에는 선수가 활동 중으로 담긴다');
+
+  // 백업 뒤 두 사람이 탈퇴한다(한 명은 로그인 계정, 한 명은 팀 선수).
+  await auth.closeAccount(keeper);
+  await auth.closeAccount(member.id);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM closed_accounts').get().n,2,'탈퇴한 번호만 남긴다');
+  assert.deepEqual(Object.keys(db.prepare('SELECT * FROM closed_accounts').get()).sort(),['at','id'],'이름·이메일은 남기지 않는다');
+
+  const out=await backup.restoreAll(file);
+  assert.equal(out.accounts,0,'탈퇴한 계정은 되살리지 않는다');
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM accounts WHERE id=?').get(keeper).n,0);
+  assert.ok(out.forgotten>=1,'몇 명을 뺐는지 알려준다');
+  const back=(await repository.load()).state;
+  assert.ok(!back.users.some(u=>u.id===member.id),'사용자 정보가 돌아오면 안 된다');
+  const row=back.members.find(x=>x.id===m.id);
+  assert.equal(row.status,'left','팀 활동도 탈퇴 상태로 둔다');
+  assert.equal(row.photo,'','사진도 지운다');
+  assert.ok(back.teams.length===file.data.teams.length,'나머지는 그대로 되살아난다');
+  db.close();
+});
+
+test('탈퇴한 번호는 1년이 지나면 지운다',async()=>{
+  const db=localDatabase();
+  await auth.closeAccount('old-one',NOW-400*DAY);
+  await auth.closeAccount('recent',NOW-10*DAY);
+  await auth.closeAccount('today',NOW);
+  assert.deepEqual(db.prepare('SELECT id FROM closed_accounts ORDER BY id').all().map(r=>r.id),['recent','today'],'1년 넘은 번호는 남기지 않는다');
   db.close();
 });
 
@@ -2657,3 +2700,108 @@ test('옛 소셜 백업의 식별자가 누락됐으면 데이터를 쓰기 전�
   await backup.restoreAll(legacy);
   db.close();
 });
+
+// --- 탈퇴할 때 소셜 연결 끊기 (2026-09-24) ---
+// 토큰을 저장하지 않으므로 탈퇴 때 그 사업자로 한 번 더 로그인해 받은 토큰으로 끊는다.
+// 여기서는 (1) 요청 모양 (2) 본인 확인 (3) 순서: 팀킥 탈퇴가 먼저, 끊기는 그다음 (4) 끊기 실패에도 탈퇴는 끝남 을 본다.
+// 실제 카카오·구글·네이버 응답은 이 환경에서 확인할 수 없다(외부 접속 차단).
+
+test('연결 끊기 요청은 사업자마다 정해진 모양으로 보낸다',async()=>{
+  const calls=[],real=globalThis.fetch;
+  globalThis.__teamkickTestEnv.NAVER_CLIENT_ID='nid';globalThis.__teamkickTestEnv.NAVER_CLIENT_SECRET='nsecret';
+  try{
+    globalThis.fetch=async(url,init)=>{calls.push({url:String(url),init});return {ok:true,status:200,json:async()=>({result:'success'})}};
+    assert.equal(await unlinkLib.unlink('kakao','KTOKEN'),true);
+    assert.equal(calls[0].url,'https://kapi.kakao.com/v1/user/unlink');
+    assert.equal(calls[0].init.method,'POST');
+    assert.equal(calls[0].init.headers.Authorization,'Bearer KTOKEN');
+    assert.equal(await unlinkLib.unlink('google','GTOKEN'),true);
+    assert.equal(calls[1].url,'https://oauth2.googleapis.com/revoke');
+    assert.equal(new URLSearchParams(calls[1].init.body).get('token'),'GTOKEN');
+    assert.equal(await unlinkLib.unlink('naver','N+TOKEN/='),true);
+    const q=new URL(calls[2].url);
+    assert.equal(q.origin+q.pathname,'https://nid.naver.com/oauth2.0/token');
+    assert.equal(q.searchParams.get('grant_type'),'delete');
+    assert.equal(q.searchParams.get('access_token'),'N+TOKEN/=','토큰은 주소에 안전하게 인코딩돼야 한다');
+    assert.equal(q.searchParams.get('client_id'),'nid');
+    assert.equal(q.searchParams.get('service_provider'),'NAVER');
+    // 네이버는 실패해도 200 을 줄 수 있다.
+    globalThis.fetch=async()=>({ok:true,status:200,json:async()=>({error:'invalid_request'})});
+    assert.equal(await unlinkLib.unlink('naver','x'),false,'본문이 success 가 아니면 실패로 본다');
+    globalThis.fetch=async()=>({ok:false,status:401,json:async()=>({})});
+    assert.equal(await unlinkLib.unlink('kakao','x'),false);
+  }finally{globalThis.fetch=real;delete globalThis.__teamkickTestEnv.NAVER_CLIENT_ID;delete globalThis.__teamkickTestEnv.NAVER_CLIENT_SECRET}
+});
+
+async function kakaoPlayer(kakaoId){
+  const db=localDatabase();
+  const f=fixture();
+  const acc=(await auth.signInWithKakao(kakaoId,'카카오 선수')).user.userId;
+  const m=addPlayer(f.s,f.a,{id:acc,name:'카카오 선수'});
+  const {state,version}=await repository.load();
+  await repository.commit(state,f.s,version);
+  return {db,f,acc,m};
+}
+
+test('다른 카카오 계정으로 돌아오면 탈퇴하지도, 연결을 끊지도 않는다',async()=>{
+  const {db,acc}=await kakaoPlayer('k-real');
+  const calls=[],real=globalThis.fetch;
+  try{
+    globalThis.fetch=async(url)=>{calls.push(String(url));return {ok:true,status:200}};
+    await assert.rejects(()=>closeLib.finishSocialClose({userId:acc,fullName:'카카오 선수'},'kakao','k-someone-else','T'),/다른 계정/);
+    assert.equal(calls.length,0,'남의 카카오 연결을 끊으면 안 된다');
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM accounts WHERE id=?').get(acc).n,1,'계정은 그대로');
+    await assert.rejects(()=>closeLib.finishSocialClose({userId:acc},'google','k-real','T'),/다른 계정/,'사업자가 다르면 같은 번호여도 다른 사람이다');
+  }finally{globalThis.fetch=real}
+  db.close();
+});
+
+test('본인이 확인되면 팀킥에서 먼저 지우고 카카오 연결을 끊는다',async()=>{
+  const {db,acc,m}=await kakaoPlayer('k-me');
+  const order=[],real=globalThis.fetch;
+  try{
+    globalThis.fetch=async(url)=>{order.push({url:String(url),accountLeft:db.prepare('SELECT COUNT(*) n FROM accounts WHERE id=?').get(acc).n});return {ok:true,status:200}};
+    const msg=await closeLib.finishSocialClose({userId:acc,fullName:'카카오 선수'},'kakao','k-me','T');
+    assert.match(msg,/카카오 연결도 끊었어요/);
+    assert.equal(order.length,1);
+    assert.equal(order[0].url,'https://kapi.kakao.com/v1/user/unlink');
+    assert.equal(order[0].accountLeft,0,'팀킥 쪽 삭제가 끊기보다 먼저다');
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM closed_accounts WHERE id=?').get(acc).n,1);
+    const back=(await repository.load()).state;
+    assert.equal(back.members.find(x=>x.id===m.id).status,'left');
+    assert.ok(!back.users.some(u=>u.id===acc));
+  }finally{globalThis.fetch=real}
+  db.close();
+});
+
+test('연결 끊기가 실패해도 탈퇴는 끝나고, 직접 끊는 곳을 알려준다',async()=>{
+  const {db,acc}=await kakaoPlayer('k-fail');
+  const real=globalThis.fetch;
+  try{
+    globalThis.fetch=async()=>{throw new Error('network')};
+    const msg=await closeLib.finishSocialClose({userId:acc},'kakao','k-fail','T');
+    assert.match(msg,/끊지 못했어요/);assert.match(msg,/연결된 서비스 관리/);
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM accounts WHERE id=?').get(acc).n,0,'탈퇴는 끝났다');
+  }finally{globalThis.fetch=real}
+  db.close();
+});
+
+test('주장은 소셜 탈퇴도 시작 단계에서 막고, 연결을 건드리지 않는다',async()=>{
+  const db=localDatabase();
+  const f=fixture();
+  const acc=(await auth.signInWithKakao('k-captain','주장')).user.userId;
+  const {teamId}=command(f.s,{id:acc,name:'주장'},{type:'createTeam',name:'카카오 팀',region:'서울',description:'테스트'});
+  command(f.s,owner,{type:'approveTeam',teamId});
+  const {state,version}=await repository.load();
+  await repository.commit(state,f.s,version);
+  await assert.rejects(()=>closeLib.checkClosable(acc),/주장/,'카카오에 다녀오기 전에 알려준다');
+  const calls=[],real=globalThis.fetch;
+  try{
+    globalThis.fetch=async(url)=>{calls.push(String(url));return {ok:true,status:200}};
+    await assert.rejects(()=>closeLib.finishSocialClose({userId:acc},'kakao','k-captain','T'),/주장/);
+    assert.equal(calls.length,0,'탈퇴가 막혔으면 연결도 그대로 둔다');
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM accounts WHERE id=?').get(acc).n,1);
+  }finally{globalThis.fetch=real}
+  db.close();
+});
+

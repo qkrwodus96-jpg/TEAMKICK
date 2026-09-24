@@ -2,6 +2,7 @@ import {authorizeUrl,exchange,profile,kakaoReady,STATE_COOKIE} from "@/lib/kakao
 import {signInWithKakao,sessionCookie} from "@/lib/auth";
 import {ensureSchema} from "@/lib/schema";
 import {AppError} from "@/lib/model";
+import {startClose,finishClose,CLOSE_PREFIX} from "@/lib/close-route";
 export const dynamic="force-dynamic";
 
 // 시작과 콜백을 한 경로에서 처리한다. 카카오 개발자 콘솔에는 이 주소를 등록한다.
@@ -26,7 +27,10 @@ export async function GET(req:Request){
   // 콜백: 우리가 시작한 요청인지 확인한다.
   const expected=cookieValue(req.headers.get("cookie"),STATE_COOKIE);
   if(!expected||expected!==url.searchParams.get("state"))throw new AppError("로그인 요청을 확인할 수 없어요. 다시 시도해주세요.",403);
-  const person=await profile(await exchange(code,origin));
+  const accessToken=await exchange(code,origin);
+  const person=await profile(accessToken);
+  // 탈퇴하려고 카카오에 다녀온 경우. 로그인 대신 탈퇴하고 연결을 끊는다.
+  if(expected.startsWith(CLOSE_PREFIX))return await finishClose(req,"kakao",person,accessToken);
   const {token}=await signInWithKakao(person.id,person.nickname);
   return new Response(null,{status:302,headers:{Location:origin+"/","Cache-Control":"no-store","Set-Cookie":sessionCookie(token)}});
  }catch(e){
@@ -34,3 +38,6 @@ export async function GET(req:Request){
   return back(origin,e instanceof AppError?e.message:"카카오 로그인에 실패했어요. 다시 시도해주세요.");
  }
 }
+
+// 탈퇴 시작. 화면에서만 부른다(POST, 같은 출처). 카카오 로그인 주소를 돌려준다.
+export const POST=(req:Request)=>startClose(req,"kakao",authorizeUrl,stateCookie);

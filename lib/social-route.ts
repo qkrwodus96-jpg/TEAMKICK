@@ -2,6 +2,7 @@ import {authorizeUrl,exchange,profile,socialReady,stateCookieName,config,type Pr
 import {signInWithSocial,sessionCookie} from "@/lib/auth";
 import {ensureSchema} from "@/lib/schema";
 import {AppError} from "@/lib/model";
+import {startClose,finishClose,CLOSE_PREFIX} from "@/lib/close-route";
 
 // 구글·네이버 콜백 처리. 제공자만 다르고 흐름은 같아 한곳에 둔다.
 // 카카오(`app/api/kakao/route.ts`)와 같은 방식이다.
@@ -29,7 +30,10 @@ export async function handle(req:Request,p:Provider){
   const sent=url.searchParams.get("state")??"";
   const expected=cookieValue(req.headers.get("cookie"),stateCookieName(p));
   if(!expected||expected!==sent)throw new AppError("로그인 요청을 확인할 수 없어요. 다시 시도해주세요.",403);
-  const person=await profile(p,await exchange(p,code,origin,sent));
+  const accessToken=await exchange(p,code,origin,sent);
+  const person=await profile(p,accessToken);
+  // 탈퇴하려고 다녀온 경우. 로그인 대신 탈퇴하고 연결을 끊는다.
+  if(expected.startsWith(CLOSE_PREFIX))return await finishClose(req,p,person,accessToken);
   const {token}=await signInWithSocial(p,person.id,person.nickname);
   return new Response(null,{status:302,headers:{
    Location:origin+"/","Cache-Control":"no-store","Set-Cookie":sessionCookie(token)}});
@@ -38,3 +42,7 @@ export async function handle(req:Request,p:Provider){
   return fail(e instanceof AppError?e.message:config(p).label+" 로그인에 실패했어요. 다시 시도해주세요.");
  }
 }
+
+// 탈퇴 시작. 화면에서만 부른다(POST, 같은 출처).
+export const startSocialClose=(req:Request,p:Provider)=>
+ startClose(req,p,(origin,state)=>authorizeUrl(p,origin,state),(value,seconds)=>stateCookie(p,value,seconds));

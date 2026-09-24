@@ -1,5 +1,5 @@
 "use client";
-import {useState,useEffect} from "react";
+import {useState,useEffect,type ReactNode} from "react";
 import {Bell,BellOff,LoaderCircle,X} from "lucide-react";
 import {toast} from "sonner";
 
@@ -40,6 +40,25 @@ const sameKey=(sub:PushSubscription,key:string)=>{
 };
 
 type State={ready:boolean;key:string;devices:number};
+
+function NotifyHelp(){
+ const name=browserName();
+ const tips:Record<string,ReactNode>={
+  "삼성 인터넷":<>삼성 인터넷 <strong>☰ 메뉴 → 설정 → 사이트 및 다운로드 → 알림</strong> 에서
+   <strong> ‘웹사이트 알림 자동 차단’ 을 끄고</strong>, 아래 목록에 <strong>teamkick.co.kr 이 켜져</strong> 있는지 보세요.
+   자동 차단이 켜져 있으면 알림을 몇 번 안 눌렀다는 이유로 조용히 막아 버려요.</>,
+  "크롬":<>크롬 <strong>⋮ 메뉴 → 설정 → 사이트 설정 → 알림</strong> 에서 <strong>teamkick.co.kr</strong> 을 허용으로 두세요.
+   오래 안 들어간 사이트는 크롬이 권한을 스스로 지우기도 해요 — 그때는 여기서 다시 켜면 돼요.</>,
+  "사파리":<>아이폰은 <strong>사파리 → 공유 → 홈 화면에 추가</strong> 한 뒤, <strong>그 아이콘으로 연 팀킥</strong>에서
+   알림을 켜야 와요(iOS 16.4 이상). 켠 뒤에는 <strong>아이폰 설정 → 알림 → 팀킥</strong> 에서 잠금화면·배지를 고를 수 있어요.</>,
+ };
+ return <details className="notify-help">
+  <summary>알림이 안 와요?</summary>
+  <p className="data-note">{tips[name]??<>브라우저 설정의 <strong>사이트 권한 → 알림</strong> 에서 teamkick.co.kr 을 허용해주세요.</>}</p>
+  <p className="data-note">위 <strong>이 폰에서 바로 띄워보기</strong> 가 안 보이면 폰(브라우저) 설정 문제이고,
+   보이는데 시험 알림만 안 오면 배달 문제예요. 결과 줄을 운영자에게 보내주세요.</p>
+ </details>;
+}
 
 // 홈 화면 위에 뜨는 권유 띠. 기기 알림은 브라우저가 사용자에게 직접 묻는 것이라
 // 앱이 대신 켜 줄 수 없다. 대신 켜야 한다는 것을 놓치지 않게 한 번 크게 권한다.
@@ -85,6 +104,7 @@ export function NotifyInvite(){
    <div>
     <p><strong>기기 알림을 켜두세요</strong></p>
     <span className="small muted">새 경기와 팀 공지를 잠금화면으로 알려드려요. 앱을 열어보지 않아도 놓치지 않아요.</span>
+    {browserName()==="삼성 인터넷"&&<span className="small muted" style={{display:"block",marginTop:4}}>삼성 인터넷은 켠 뒤 <strong>설정 → 사이트 및 다운로드 → 알림</strong> 에서 <strong>‘웹사이트 알림 자동 차단’</strong> 을 꺼 두세요.</span>}
    </div>
    <button type="button" className="btn btn-ghost" aria-label="나중에" onClick={done}><X size={16}/></button>
   </div>
@@ -250,5 +270,6 @@ export function NotifyToggle(){
    <p className="data-note">평소 알림은 <strong>내가 한 일에는 오지 않아요.</strong> 다른 팀원이 공지를 올리거나 경기를 만들 때 옵니다. 혼자 확인하실 때는 위 단추를 눌러주세요.</p>
    {isIos()&&<p className="data-note">아이폰은 <strong>홈 화면에 추가한 아이콘으로 연 창</strong>에서만 알림과 아이콘 숫자가 나와요. 사파리 탭에서는 오지 않아요.</p>}
   </>}
+  <NotifyHelp/>
  </div>;
 }

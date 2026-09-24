@@ -48,7 +48,7 @@ export function Calendar({month,setMonth,selected,onSelect,games,large=false}:an
 }
 export function Fixture({g,v,onClick}:any){const z=v.sides?.find((x:Row)=>x.gameId===g.id);return <div role="button" tabIndex={0} onKeyDown={e=>e.key==="Enter"&&onClick()} className="fixture-row" onClick={onClick}><div className="fixture-date"><b>{new Date(new Date(g.start).getTime()+9*3600e3).getUTCDate()}</b><span>{days[new Date(new Date(g.start).getTime()+9*3600e3).getUTCDay()]}요일</span></div><div className="fixture-info"><strong>{v.teams.find((t:Row)=>t.id===v.teamId)?.name} <span className="muted" style={{fontWeight:400}}>vs</span> {opponent(v,g)||"상대팀 미정"}</strong><p>{time(g.start)} · {g.venue}</p></div>{g.result?.status==="confirmed"&&<span className="mini-result">{g.home===v.teamId?g.result.a:g.result.b} : {g.home===v.teamId?g.result.b:g.result.a}</span>}<GameBadge g={g}/><GuestBadge z={z} g={g}/><ChevronRight/></div>}
 // 저장 응답의 껍데기. 화면 상태가 아니므로 남기지 않는다.
-const SAVE_META=new Set(["ok","output","closed","error"]);
+const SAVE_META=new Set(["ok","output","closed","error","pushed"]);
 // 고른 팀을 기기에 적어 둔다. 예전에는 화면을 새로 열 때마다 서버가 "가장 먼저
 // 가입한 팀" 으로 되돌려서, 팀이 여러 개면 고른 팀이 자꾸 바뀌었다. 권한은 여기서
 // 정하지 않는다 — 서버가 이 값을 받아 내가 속한 팀인지 다시 확인한다.
@@ -117,7 +117,12 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote=""}:{re
    let output:any;if(demo){const copy=structuredClone(samples);output=applyCommand(copy,{id:demoActor,name:"샘플 주장"},c);setSamples(copy);toast.success("샘플에 반영했어요.");}
    else{const r=await fetch("/api/app",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...c,viewTeam:v.teamId||"",mutationId:crypto.randomUUID()})});const data:any=await r.json();if(!r.ok)throw Error(data.error);output=data.output;
     if(needsReload(c.type))await refresh(c.teamId||v.teamId);else applySaved(data);
-    toast.success("저장했어요.");}
+    // 알림이 걸린 저장이면 몇 명에게 갔는지, 그중 폰으로도 간 사람이 몇 명인지 알려 준다.
+    // 폰 알림을 켠 팀원이 없으면 알림함에만 쌓인다 — 주장이 그걸 알아야 팀원에게 권할 수 있다.
+    const pu=data.pushed as {people?:number;withDevice?:number}|undefined;
+    if(pu?.people)toast.success("저장했어요 · 팀원 "+pu.people+"명 알림함에 전달"+
+     ((pu.withDevice??-1)>=0?" · 그중 "+pu.withDevice+"명은 폰 알림도":""));
+    else toast.success("저장했어요.");}
    return output??{};
  }catch(e:any){toast.error(e.message);throw e}finally{setBusy(false)}}
  function run(c:any){action(c).catch(()=>{})}

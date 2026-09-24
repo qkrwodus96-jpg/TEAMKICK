@@ -9,7 +9,7 @@ import {ensureSchema} from "@/lib/schema";
 import {kakaoReady} from "@/lib/kakao";
 import {socialReady} from "@/lib/social";
 import {emailSignupEnabled} from "@/lib/signup-policy";
-import {wakeDevices,afterResponse} from "@/lib/push";
+import {wakeDevices,afterResponse,devicesAmong,pushReady} from "@/lib/push";
 export const dynamic="force-dynamic";
 const json=(x:any,status=200,cookie?:string)=>Response.json(x,{status,headers:cookie?{"Cache-Control":"no-store","Set-Cookie":cookie}:{"Cache-Control":"no-store"}});
 export async function GET(req:Request){try{await ensureSchema();const user=await currentUser(req);if(!user)return json({user:null,mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver")});const {state}=await load();const teamId=new URL(req.url).searchParams.get("team")??undefined;const token=new URL(req.url).searchParams.get("invite");const invite=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());
@@ -46,7 +46,10 @@ export async function POST(req:Request){
     const had=new Set(state.notifications.map(x=>x.id));
     const woken=[...new Set(after.notifications.filter(x=>!had.has(x.id)&&x.userId!==user.userId).map(x=>String(x.userId)))];
     if(woken.length)await afterResponse(wakeDevices(woken).catch(e=>console.error("TeamKick push",e)));
-    return json({ok:true,output,...visibleState(after,user.userId,seen)});
+    // 알림이 몇 명에게 갔고 그중 몇 명이 폰 알림을 켜 뒀는지 알려 준다(숫자만).
+    // 세다가 실패해도 저장은 이미 끝났으니 숫자만 뺀다.
+    const pushed=woken.length?{people:woken.length,withDevice:pushReady()?await devicesAmong(woken).catch(()=>-1):0}:undefined;
+    return json({ok:true,output,...(pushed?{pushed}:{}),...visibleState(after,user.userId,seen)});
    }catch(e){if(String(e).includes("revision_matches")||String(e).includes("CHECK constraint")){if(attempt<3)continue;throw new AppError("다른 변경이 먼저 저장되었어요. 새로고침 후 다시 시도해주세요.",409)}throw e}
   }
  }catch(e){console.error("TeamKick mutation",e instanceof AppError?e.message:e);return json({error:e instanceof AppError?e.message:setupIncomplete(e)?SETUP_MESSAGE:"저장하지 못했어요. 입력 내용을 유지한 채 다시 시도해주세요."},e instanceof AppError?e.status:503)}

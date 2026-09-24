@@ -57,6 +57,16 @@ export async function vapidToken(audience:string,now=Date.now()){
 export type Sub={id:string;endpoint:string};
 function db(){if(!env.DB)throw new AppError("데이터 연결을 준비하고 있어요. 잠시 후 다시 시도해주세요.",503);return env.DB}
 
+// 알림을 받을 사람들 중 **폰 알림을 켜 둔 사람이 몇 명인지**만 센다(누구인지는 돌려주지
+// 않는다). 주장이 공지를 올리고 "몇 명 폰에 갔는지" 알 수 있게 한다. 예전에는 알림함에만
+// 쌓이고 폰에는 아무도 안 갔는데도 알 방법이 없었다.
+export async function devicesAmong(userIds:string[]){
+ const ids=[...new Set(userIds.map(String))].slice(0,100);
+ if(!ids.length)return 0;
+ const row=await db().prepare("SELECT COUNT(DISTINCT account_id) AS n FROM push_subs WHERE account_id IN ("+ids.map(()=>"?").join(",")+")")
+  .bind(...ids).first<{n:number}>();
+ return Number(row?.n??0);
+}
 export async function subscriptionsOf(accountId:string){
  return ((await db().prepare("SELECT id,endpoint FROM push_subs WHERE account_id=?").bind(accountId).all<Sub>()).results??[]) as Sub[];
 }

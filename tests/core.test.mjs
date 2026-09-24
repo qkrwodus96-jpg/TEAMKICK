@@ -37,7 +37,7 @@ compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {pushReady} 
 compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./schema"','"./schema.mjs"').replace('"./store"','"./store.mjs"'));
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
 compile('app/api/auth/route.ts','auth-api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword,limit,clientKey,verifyEmail,resendVerification,currentUser} from "@/lib/auth";','const signUp=async()=>{(globalThis.__teamkickSignups??=[]).push(1);return {user:{userId:"u",fullName:"새 사람"},token:"t",verificationSent:false}};const signIn=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const signOut=async()=>{};const sessionCookie=()=>"";const clearedCookie=()=>"";const requestPasswordReset=async()=>{};const resetPassword=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const limit=async()=>{};const clientKey=()=>"k";const verifyEmail=async()=>{};const resendVerification=async()=>true;const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>!!globalThis.__teamkickSocial;').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>false;').replace('"@/lib/model"','"./model.mjs"'));
-compile('app/api/app/route.ts','api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices,afterResponse} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0}};const afterResponse=p=>p;').replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
+compile('app/api/app/route.ts','api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices,afterResponse,devicesAmong,pushReady} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0}};const afterResponse=p=>p;const devicesAmong=async(ids)=>ids.filter(x=>(globalThis.__teamkickTestDevices??[]).includes(x)).length;const pushReady=()=>true;').replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
 const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
@@ -2099,6 +2099,42 @@ test('알림을 받은 사람만 깨우고 본인은 깨우지 않는다',async(
   assert.ok(woken.includes('mgr')&&woken.includes('mem'),'팀원들을 깨워야 한다: '+JSON.stringify(woken));
   assert.ok(!woken.includes('a'),'명령을 실행한 본인은 깨우지 않는다');
   globalThis.__teamkickTestIdentity=null;db.close();
+});
+
+// 주장이 공지를 올리면 "몇 명에게 갔고 그중 몇 명이 폰 알림을 켰는지" 를 숫자로 받는다.
+// 이름은 주지 않는다. 폰 알림을 켠 팀원이 없으면 알림함에만 쌓인다는 걸 알아야 권할 수 있다.
+test('알림이 걸린 저장은 받은 사람 수와 폰 알림을 켠 사람 수를 돌려준다',async()=>{
+  const db=localDatabase();
+  const f=teamWithRoles();
+  await repository.commit(blank(),f.s,(await repository.load()).version);
+  globalThis.__teamkickTestWoken=[];
+  globalThis.__teamkickTestDevices=['mgr'];
+  globalThis.__teamkickTestIdentity={userId:'a',fullName:'A 주장'};
+  try{
+    const res=await api.POST(new Request('https://teamkick.co.kr/api/app',{method:'POST',
+      body:JSON.stringify({mutationId:'push-count-1',...gameArgs(f.a)})}));
+    const out=await res.json();
+    assert.equal(res.status,200);
+    assert.equal(out.pushed.people,globalThis.__teamkickTestWoken.length,'깨운 사람 수와 같다');
+    assert.equal(out.pushed.withDevice,1,'폰 알림을 켠 사람만 센다');
+    assert.ok(!JSON.stringify(out.pushed).includes('mgr'),'누구인지는 알려주지 않는다');
+    // 알림이 없는 저장에는 붙지 않는다
+    const quiet=await api.POST(new Request('https://teamkick.co.kr/api/app',{method:'POST',
+      body:JSON.stringify({mutationId:'push-count-2',type:'readNotifications'})}));
+    assert.equal((await quiet.json()).pushed,undefined);
+  }finally{globalThis.__teamkickTestIdentity=null;globalThis.__teamkickTestDevices=[];db.close()}
+});
+
+test('폰 알림을 켠 사람 수는 실제 등록으로 센다(한 사람이 기기 여럿이어도 한 명)',async()=>{
+  const db=localDatabase();
+  try{
+    await push.saveSubscription('u1',{endpoint:'https://push.example/1a',keys:{p256dh:'p',auth:'a'}});
+    await push.saveSubscription('u1',{endpoint:'https://push.example/1b',keys:{p256dh:'p',auth:'a'}});
+    await push.saveSubscription('u2',{endpoint:'https://push.example/2',keys:{p256dh:'p',auth:'a'}});
+    assert.equal(await push.devicesAmong(['u1','u2','u3']),2);
+    assert.equal(await push.devicesAmong(['u3']),0);
+    assert.equal(await push.devicesAmong([]),0);
+  }finally{db.close()}
 });
 
 // --- 개인정보 처리방침의 법정 기재사항 ---

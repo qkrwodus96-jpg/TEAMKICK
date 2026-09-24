@@ -15,6 +15,15 @@ const installed=()=>{
  return ios===true||window.matchMedia?.("(display-mode: standalone)")?.matches===true;
 };
 const isIos=()=>/iphone|ipad|ipod/i.test(navigator.userAgent);
+// 알림 설정을 어디서 바꾸는지가 브라우저마다 다르다. 결과 줄에 함께 적는다.
+const browserName=()=>{
+ const ua=navigator.userAgent;
+ if(/SamsungBrowser/i.test(ua))return "삼성 인터넷";
+ if(/EdgA?\//i.test(ua))return "엣지";
+ if(/Chrome\//i.test(ua))return "크롬";
+ if(/Safari\//i.test(ua))return "사파리";
+ return "브라우저";
+};
 
 // 구독은 **만들 때 쓴 공개키에 묶인다.** 서버에서 VAPID 키를 바꾸거나 나중에 넣으면
 // 그 전에 만들어진 구독은 푸시 서버가 403 으로 거절한다. 화면에는 "켜짐" 으로 보이는데
@@ -95,6 +104,21 @@ export function NotifyToggle(){
  // 시험 발송 결과는 화면에 남겨 둔다. 토스트는 몇 초 만에 사라져서
  // "뭐라고 떴는지" 를 물어볼 수가 없었다.
  const [testNote,setTestNote]=useState("");
+ // 폰이 신호를 받았는지는 서비스 워커만 안다. 받으면 이 화면에 알려 준다(sw.js).
+ const [heard,setHeard]=useState("");
+ useEffect(()=>{
+  const sw=navigator.serviceWorker;if(!sw)return;
+  const on=(e:MessageEvent)=>{
+   const d=e.data as {type?:string;at?:number;shown?:boolean;why?:string;permission?:string}|null;
+   if(d?.type!=="teamkick-push")return;
+   const at=new Date(d.at??Date.now()).toLocaleTimeString("ko-KR");
+   setHeard(d.shown
+    ?"📱 "+at+" 폰이 신호를 받아 알림을 띄웠어요. 그런데도 화면에 안 보이면 "+browserName()+" 의 알림 표시 설정 문제예요."
+    :"📱 "+at+" 폰이 신호는 받았는데 알림을 못 띄웠어요 · "+(d.why||"이유 모름")+" · 권한 "+(d.permission||"?"));
+  };
+  sw.addEventListener("message",on);
+  return()=>sw.removeEventListener("message",on);
+ },[]);
 
  useEffect(()=>{
   (async()=>{
@@ -148,17 +172,24 @@ export function NotifyToggle(){
  // 푸시가 되는지 확인할 길이 없었다. 이 단추만 그 규칙을 건너뛴다.
  async function sendTest(){
   setBusy(true);
+  setHeard("");
   setTestNote("보내는 중이에요 · 푸시 서버가 늦으면 20초쯤 걸릴 수 있어요.");
   try{
+   // 이 기기 등록을 서버에 다시 한 번 올린다(같은 주소면 덮어쓴다). 다른 브라우저에서
+   // 켰던 등록만 남아 있으면 시험이 엉뚱한 곳으로 가서 "보냈어요" 만 뜬다.
+   const reg=await navigator.serviceWorker?.getRegistration?.().catch(()=>null);
+   const mine=await reg?.pushManager?.getSubscription?.().catch(()=>null);
+   if(mine)await fetch("/api/push",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({action:"subscribe",subscription:mine.toJSON()})}).catch(()=>null);
    const res=await fetch("/api/push",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({action:"test"})});
+    body:JSON.stringify({action:"test",endpoint:mine?.endpoint??""})});
    const out=await res.json().catch(()=>({})) as {ok?:boolean;sent?:number;devices?:number;hosts?:string;via?:string;reason?:string;probe?:string[];error?:string};
    if(!res.ok)throw new Error(out.error||"시험 알림을 보내지 못했어요.");
    if(out.ok){
     toast.success((out.sent??0)+"대에 보냈어요. 잠시 뒤 잠금화면을 확인해주세요.");
-    setTestNote("보냈어요 · 기기 "+(out.sent??0)+"대 · 푸시 서버 "+(out.hosts||"알 수 없음")+
+    setTestNote("보냈어요 · "+browserName()+" · 이 기기 "+(out.sent??0)+"대 · 푸시 서버 "+(out.hosts||"알 수 없음")+
      (out.via?" (닿지 않아 "+out.via+" 로 돌아서 보냄)":"")+
-     " · "+new Date().toLocaleTimeString("ko-KR")+". 몇 초 안에 잠금화면에 뜨지 않으면 이 줄을 그대로 알려주세요.");
+     " · "+new Date().toLocaleTimeString("ko-KR")+". 이 화면을 열어 둔 채 30초만 기다려 주세요. 폰이 신호를 받으면 아래에 한 줄이 더 생겨요.");
    }else{
     toast.error(out.reason?"보내지 못했어요 · "+out.reason:"보내지 못했어요.");
     setTestNote("보내지 못했어요 · "+(out.reason||"이유를 알 수 없어요")+
@@ -166,6 +197,18 @@ export function NotifyToggle(){
    }
   }catch(e){const m=e instanceof Error?e.message:"시험 알림을 보내지 못했어요.";toast.error(m);setTestNote("보내지 못했어요 · "+m)}
   finally{setBusy(false)}
+ }
+ // 서버도 구글도 거치지 않고 이 폰에서 바로 알림을 띄워 본다. 이게 안 보이면
+ // 폰(브라우저)의 알림 표시가 막힌 것이고, 보이면 표시는 정상이라 배달 쪽 문제다.
+ async function showHere(){
+  try{
+   if(Notification.permission!=="granted")throw new Error("알림 권한이 "+Notification.permission+" 상태예요");
+   const reg=await navigator.serviceWorker.ready;
+   await reg.showNotification("팀킥 시험 알림",{body:"이 알림이 보이면 폰의 알림 표시는 정상이에요.",
+    icon:"/icon-192.png",badge:"/icon-192.png",tag:"teamkick-local"});
+   setTestNote("이 폰에서 바로 띄웠어요 · "+browserName()+" · "+new Date().toLocaleTimeString("ko-KR")+
+    ". 알림창(위에서 끌어내리기)에 ‘팀킥 시험 알림’ 이 보이는지 알려주세요.");
+  }catch(e){setTestNote("이 폰에서 바로 띄우지 못했어요 · "+browserName()+" · "+(e instanceof Error?e.message:String(e)))}
  }
  async function turnOff(){
   setBusy(true);
@@ -198,8 +241,12 @@ export function NotifyToggle(){
    </button>}
   </div>
   {on&&!blocked&&<>
-   <div className="action-strip"><button type="button" className="btn" disabled={busy} onClick={sendTest}>이 기기로 시험 알림 보내기</button></div>
+   <div className="action-strip">
+    <button type="button" className="btn" disabled={busy} onClick={sendTest}>이 기기로 시험 알림 보내기</button>
+    <button type="button" className="btn" disabled={busy} onClick={showHere}>이 폰에서 바로 띄워보기</button>
+   </div>
    {testNote&&<p className="data-note" role="status" style={{userSelect:"text"}}><strong>시험 결과</strong> · {testNote}</p>}
+   {heard&&<p className="data-note" role="status" style={{userSelect:"text"}}>{heard}</p>}
    <p className="data-note">평소 알림은 <strong>내가 한 일에는 오지 않아요.</strong> 다른 팀원이 공지를 올리거나 경기를 만들 때 옵니다. 혼자 확인하실 때는 위 단추를 눌러주세요.</p>
    {isIos()&&<p className="data-note">아이폰은 <strong>홈 화면에 추가한 아이콘으로 연 창</strong>에서만 알림과 아이콘 숫자가 나와요. 사파리 탭에서는 오지 않아요.</p>}
   </>}

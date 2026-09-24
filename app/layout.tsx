@@ -2,7 +2,7 @@ import type {Metadata,Viewport} from "next";
 import "./globals.css";
 import {SPLASH_MS,SPLASH_ID,SPLASH_KEY,SplashMark,LOGO} from "./splash";
 
-export const metadata:Metadata={title:"팀킥 · 우리 팀의 모든 경기",description:"일정부터 참여 투표, 팀 매칭과 선수 기록까지.",manifest:"/manifest.webmanifest",icons:{icon:"/icon-192.png",shortcut:"/icon-192.png",apple:"/icon-192.png"}};
+export const metadata:Metadata={title:"팀킥 · 우리 팀의 모든 경기",description:"일정부터 참여 투표, 팀 매칭과 선수 기록까지.",manifest:"/manifest.webmanifest",icons:{icon:"/app-icon-192.png",shortcut:"/app-icon-192.png",apple:"/app-icon-180.png"}};
 export const viewport:Viewport={width:"device-width",initialScale:1,themeColor:"#168b53"};
 
 // 브라우저는 화면을 그리기 전에 설치 창(beforeinstallprompt)을 띄우겠다고 알린다.

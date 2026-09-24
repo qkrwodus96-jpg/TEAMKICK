@@ -65,9 +65,12 @@ function NotifyHelp(){
  const tips:Record<string,ReactNode>={
   "삼성 인터넷":<>삼성 인터넷 <strong>☰ 메뉴 → 설정 → 사이트 및 다운로드 → 알림</strong> 에서
    <strong> ‘웹사이트 알림 자동 차단’ 을 끄고</strong>, 아래 목록에 <strong>teamkick.co.kr 이 켜져</strong> 있는지 보세요.
-   자동 차단이 켜져 있으면 알림을 몇 번 안 눌렀다는 이유로 조용히 막아 버려요.</>,
+   자동 차단이 켜져 있으면 알림을 몇 번 안 눌렀다는 이유로 조용히 막아 버려요.
+   삼성 인터넷으로 만든 홈 화면 아이콘에는 알림 숫자가 붙지 않아요(숫자는 크롬에서 ‘앱 설치’ 로 만든 아이콘에 붙어요).</>,
   "크롬":<>크롬 <strong>⋮ 메뉴 → 설정 → 사이트 설정 → 알림</strong> 에서 <strong>teamkick.co.kr</strong> 을 허용으로 두세요.
-   오래 안 들어간 사이트는 크롬이 권한을 스스로 지우기도 해요 — 그때는 여기서 다시 켜면 돼요.</>,
+   오래 안 들어간 사이트는 크롬이 권한을 스스로 지우기도 해요 — 그때는 여기서 다시 켜면 돼요.
+   일부 갤럭시에서는 크롬이 꺼져 있으면 <strong>크롬을 다시 열 때 알림이 한꺼번에</strong> 와요(배터리 ‘제한 없음’ 이어도).
+   그런 폰은 <strong>삼성 인터넷</strong>으로 팀킥을 열어 알림을 켜면 바로 받아요.</>,
   "사파리":<>아이폰은 <strong>사파리 → 공유 → 홈 화면에 추가</strong> 한 뒤, <strong>그 아이콘으로 연 팀킥</strong>에서
    알림을 켜야 와요(iOS 16.4 이상). 켠 뒤에는 <strong>아이폰 설정 → 알림 → 팀킥</strong> 에서 잠금화면·배지를 고를 수 있어요.</>,
  };
@@ -289,7 +292,7 @@ export function NotifyToggle(){
    if(Notification.permission!=="granted")throw new Error("알림 권한이 "+Notification.permission+" 상태예요");
    const reg=await navigator.serviceWorker.ready;
    await reg.showNotification("팀킥 시험 알림",{body:"이 알림이 보이면 폰의 알림 표시는 정상이에요.",
-    icon:"/icon-192.png",badge:"/icon-192.png",tag:"teamkick-local"});
+    icon:"/app-icon-192.png",badge:"/app-icon-192.png",tag:"teamkick-local"});
    setTestNote("이 폰에서 바로 띄웠어요 · "+browserName()+" · "+new Date().toLocaleTimeString("ko-KR")+
     ". 알림창(위에서 끌어내리기)에 ‘팀킥 시험 알림’ 이 보이는지 알려주세요.");
   }catch(e){setTestNote("이 폰에서 바로 띄우지 못했어요 · "+browserName()+" · "+(e instanceof Error?e.message:String(e)))}

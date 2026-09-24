@@ -34,7 +34,7 @@ async function showLatest(){
  let shown=true,why="";
  try{
   await self.registration.showNotification(title,{
-   body,icon:"/icon-192.png",badge:"/icon-192.png",tag:"teamkick",renotify:true,data:{url}});
+   body,icon:"/app-icon-192.png",badge:"/app-icon-192.png",tag:"teamkick",renotify:true,data:{url}});
  }catch(e){shown=false;why=String(e&&e.message||e).slice(0,120)}
  try{
   const wins=await self.clients.matchAll({type:"window",includeUncontrolled:true});

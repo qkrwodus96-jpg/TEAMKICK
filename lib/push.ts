@@ -147,13 +147,17 @@ async function sendOne(sub:Sub,timeout=TIMEOUT_MS):Promise<SendResult>{
  return {ok:res.ok,status:res.status,detail,host:first.host,ms:got.ms,...(via?{via}:{})};
 }
 
-// 저장 응답을 푸시 때문에 붙잡아 두지 않는다. 실행기가 지원하면 응답을 먼저 돌려주고
-// 푸시는 뒤에서 마저 보낸다. 지원하지 않으면 예전처럼 기다린다.
-// 예전에는 푸시가 시간 초과로 떨어지면 알림이 걸린 저장이 그만큼 늦어졌다.
-export function afterResponse(p:Promise<unknown>):Promise<unknown>{
+// 푸시는 **보통은 응답 전에 끝낸다**(대개 1초 안에 끝난다). 오래 걸리면 그때만 실행기의
+// waitUntil 에 맡기고 응답을 돌려준다 — 저장이 푸시 때문에 몇 초씩 멈추지 않게.
+// 뒤로 넘기기만 하던 1.9.3~1.9.5 는 운영 실행기에서 waitUntil 이 실제로 지켜지는지 확인할
+// 수 없었다. 먼저 기다려 두면 waitUntil 이 없거나 안 지켜져도 보통의 알림은 나간다.
+export async function afterResponse(p:Promise<unknown>,cap=1500):Promise<void>{
  const wu=(workers as unknown as {waitUntil?:(p:Promise<unknown>)=>void}).waitUntil;
- if(typeof wu==="function"){try{wu(p);return Promise.resolve()}catch{/* 아래로 */}}
- return p;
+ const handed=typeof wu==="function"&&(()=>{try{wu(p);return true}catch{return false}})();
+ if(!handed){await p;return}
+ let timer:ReturnType<typeof setTimeout>|undefined;
+ await Promise.race([p.then(()=>undefined,()=>undefined),new Promise<void>(r=>{timer=setTimeout(r,cap)})]);
+ if(timer)clearTimeout(timer);
 }
 
 // 푸시 서버까지 길이 뚫려 있는지 따로 본다. "응답 없음" 이 **우리 요청 모양 때문**인지
@@ -178,7 +182,9 @@ export async function wakeDevices(userIds:string[]){
   if(subs.length>=MAX_DEVICES)break;
   subs.push(...(await subscriptionsOf(id)).slice(0,MAX_DEVICES-subs.length));
  }
- const out=await Promise.allSettled(subs.map(sendOne));
+ // `subs.map(sendOne)` 으로 넘기면 안 된다 — map 이 주는 순번(0,1,2…)이 제한 시간 자리로
+ // 들어가 첫 기기가 0ms 만에 끊긴다(1.9.3~1.9.5 의 회귀, 테스트가 지킨다).
+ const out=await Promise.allSettled(subs.map(x=>sendOne(x)));
  const results:SendResult[]=out.map(r=>r.status==="fulfilled"?r.value
   :{ok:false,status:0,detail:String(r.reason).slice(0,200),host:"",ms:0});
  const sent=results.filter(r=>r.ok).length;

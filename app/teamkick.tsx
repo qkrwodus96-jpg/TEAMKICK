@@ -120,8 +120,10 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote=""}:{re
     // 알림이 걸린 저장이면 몇 명에게 갔는지, 그중 폰으로도 간 사람이 몇 명인지 알려 준다.
     // 폰 알림을 켠 팀원이 없으면 알림함에만 쌓인다 — 주장이 그걸 알아야 팀원에게 권할 수 있다.
     const pu=data.pushed as {people?:number;withDevice?:number}|undefined;
+    // "폰으로 갔다" 가 아니라 "폰 알림을 켜 둔 사람 수" 다. 도착까지는 알 수 없다 —
+    // 1.9.5 의 "그중 N명은 폰 알림도" 는 실제로는 안 갔는데도 간 것처럼 읽혔다.
     if(pu?.people)toast.success("저장했어요 · 팀원 "+pu.people+"명 알림함에 전달"+
-     ((pu.withDevice??-1)>=0?" · 그중 "+pu.withDevice+"명은 폰 알림도":""));
+     ((pu.withDevice??-1)>=0?" · 폰 알림 켠 팀원 "+pu.withDevice+"명":""));
     else toast.success("저장했어요.");}
    return output??{};
  }catch(e:any){toast.error(e.message);throw e}finally{setBusy(false)}}

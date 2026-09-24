@@ -32,12 +32,12 @@ compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:wor
 }
 compile('lib/signup-policy.ts','signup-policy.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;'));
 compile('lib/social.ts','social.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
-compile('lib/push.ts','push.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('import * as workers from "cloudflare:workers";','const workers=globalThis.__teamkickTestWorkers??={};').replace('"./model"','"./model.mjs"'));
+compile('lib/push.ts','push.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {pushReady} from "@/lib/push";','const pushReady=()=>true;').replace('import {socialReady} from "@/lib/social";','const socialReady=(p)=>p==="google";').replace('import {APP_VERSION} from "@/lib/version";','const APP_VERSION="9.9.9";').replace('import {schemaStatus,BUILD} from "@/lib/schema";','const schemaStatus=async()=>globalThis.__teamkickTestSchema??{db:true,tables:{},error:""};const BUILD="test";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady,mailAccount,fromDomain} from "@/lib/mail";','const mailReady=()=>true;const mailAccount=async()=>"ok";const fromDomain=()=>"teamkick.co.kr";').replace('import {hashPassword,currentUser} from "@/lib/auth";','const hashPassword=async()=>"";const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";','const kakaoReady=()=>true;const kakaoSecretSet=()=>true;').replace('import {ownerCodeFromEnv} from "@/lib/owner-config";','const ownerCodeFromEnv=()=>true;').replace('"@/lib/store"','"./store.mjs"'));
 compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./schema"','"./schema.mjs"').replace('"./store"','"./store.mjs"'));
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
 compile('app/api/auth/route.ts','auth-api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword,limit,clientKey,verifyEmail,resendVerification,currentUser} from "@/lib/auth";','const signUp=async()=>{(globalThis.__teamkickSignups??=[]).push(1);return {user:{userId:"u",fullName:"새 사람"},token:"t",verificationSent:false}};const signIn=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const signOut=async()=>{};const sessionCookie=()=>"";const clearedCookie=()=>"";const requestPasswordReset=async()=>{};const resetPassword=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const limit=async()=>{};const clientKey=()=>"k";const verifyEmail=async()=>{};const resendVerification=async()=>true;const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>!!globalThis.__teamkickSocial;').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>false;').replace('"@/lib/model"','"./model.mjs"'));
-compile('app/api/app/route.ts','api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices,afterResponse,devicesAmong,pushReady} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0}};const afterResponse=p=>p;const devicesAmong=async(ids)=>ids.filter(x=>(globalThis.__teamkickTestDevices??[]).includes(x)).length;const pushReady=()=>true;').replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
+compile('app/api/app/route.ts','api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices,devicesAmong,pushReady} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);const hook=globalThis.__teamkickTestWake;if(hook)return hook(ids);return {sent:ids.length,failed:0,results:[]}};const devicesAmong=async(ids)=>ids.filter(x=>(globalThis.__teamkickTestDevices??[]).includes(x)).length;const pushReady=()=>true;').replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 globalThis.__teamkickTestEnv={};
 const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
@@ -1995,30 +1995,6 @@ test('시험 발송은 화면이 알려 준 이 기기로만 보내고, 남의 �
   db.close();
 });
 
-test('푸시는 보통 응답 전에 끝내고, 오래 걸릴 때만 뒤로 넘긴다',async()=>{
-  const w=globalThis.__teamkickTestWorkers;
-  const handed=[];
-  w.waitUntil=p=>{handed.push(p)};
-  try{
-    // 빨리 끝나는 푸시(보통): 응답 전에 끝까지 기다린다 — waitUntil 이 안 지켜져도 나간다
-    let quick=false;
-    await push.afterResponse(new Promise(r=>setTimeout(()=>{quick=true;r()},20)),200);
-    assert.equal(quick,true,'제한 안에 끝나는 푸시는 응답 전에 끝낸다');
-    assert.equal(handed.length,1,'그래도 실행기에는 맡겨 둔다');
-    // 오래 걸리는 푸시: 제한 시간만 기다리고 돌아온다(나머지는 실행기가 마저)
-    let slowDone=false;const slow=new Promise(r=>setTimeout(()=>{slowDone=true;r()},400));
-    const t0=Date.now();await push.afterResponse(slow,50);
-    assert.ok(Date.now()-t0<300,'저장이 푸시 때문에 오래 멈추지 않는다');
-    assert.equal(slowDone,false);
-    await slow;
-    // 실패해도 저장을 깨지 않는다
-    await push.afterResponse(Promise.reject(new Error('push down')).catch(()=>{}),50);
-  }finally{delete w.waitUntil}
-  // waitUntil 이 없는 실행기: 끝날 때까지 기다린다
-  let done=false;
-  await push.afterResponse(new Promise(r=>setTimeout(()=>{done=true;r()},10)));
-  assert.equal(done,true,'waitUntil 이 없으면 끝날 때까지 기다린다');
-});
 
 test('VAPID 토큰은 진짜 서명이고 받는 주소마다 다르다',async()=>{
   const db=localDatabase();
@@ -2134,6 +2110,85 @@ test('실제 알림 경로는 제대로 된 제한 시간으로 보낸다(순번
     }finally{globalThis.fetch=real}
   });
   db.close();
+});
+
+// --- 알림 한 통의 길을 기록한다 (2026-09-24) ---
+// 실제 알림이 안 올 때 어디서 끊겼는지 볼 방법이 없어 추측과 배포를 되풀이했다.
+// 기기마다 ① 보내기 시작 ② 푸시 서버의 답 ③ 폰이 받음 ④ 화면에 띄움 을 남긴다.
+
+test('발송마다 기기 줄에 시작·결과를 남기고, 시작할 때 지난 결과를 지운다',async()=>{
+  const db=localDatabase();
+  await withVapid(async()=>{
+    const real=globalThis.fetch;
+    const row=()=>db.prepare("SELECT last_try_at,last_status,last_detail,last_ok_at FROM push_subs WHERE endpoint=?").get('https://push.example/t1');
+    try{
+      await push.saveSubscription('u1',{endpoint:'https://push.example/t1',keys:{p256dh:'p',auth:'a'}});
+      assert.equal(row().last_try_at,null,'처음엔 기록이 없다');
+      // 성공: 시작·상태·성공 시각이 남는다
+      let midFlight=null;
+      globalThis.fetch=async()=>{midFlight=row();return new Response('',{status:201})};
+      await push.wakeDevices(['u1']);
+      assert.ok(midFlight.last_try_at,'보내는 도중에도 "시작했다" 가 이미 남아 있다');
+      assert.equal(midFlight.last_status,null,'도중에는 결과가 비어 있다 — 끊기면 이 상태로 남는다');
+      const ok=row();
+      assert.equal(ok.last_status,201);assert.ok(ok.last_ok_at,'성공 시각');
+      const firstOk=ok.last_ok_at;
+      // 다음 발송이 시작되면 지난 결과는 지운다(새 시도의 결과로 착각하지 않게)
+      globalThis.fetch=async()=>{midFlight=row();return new Response('bad key',{status:403})};
+      await push.wakeDevices(['u1']);
+      assert.equal(midFlight.last_status,null,'새 시도가 시작되면 지난 결과를 지운다');
+      const bad=row();
+      assert.equal(bad.last_status,403);assert.match(bad.last_detail,/bad key/);
+      assert.equal(bad.last_ok_at,firstOk,'실패해도 마지막 성공 시각은 남긴다');
+      // 닿지 못함: 상태 0 과 이유
+      globalThis.fetch=async()=>{throw new Error('connect failed')};
+      await push.wakeDevices(['u1']);
+      assert.equal(row().last_status,0);assert.match(row().last_detail,/connect failed/);
+      // 시험 발송도 똑같이 남긴다
+      globalThis.fetch=async()=>new Response('',{status:201});
+      await push.testWake('u1');
+      assert.equal(row().last_status,201);
+    }finally{globalThis.fetch=real}
+  });
+  db.close();
+});
+
+test('폰이 받았다는 기록은 자기 계정의 자기 기기에만 남고, 기록도 자기 것만 읽는다',async()=>{
+  const db=localDatabase();
+  try{
+    await push.saveSubscription('u1',{endpoint:'https://push.example/mine',keys:{p256dh:'p',auth:'a'}});
+    await push.saveSubscription('u2',{endpoint:'https://push.example/theirs',keys:{p256dh:'p',auth:'a'}});
+    assert.equal(await push.recordSeen('u1','https://push.example/mine',true),true);
+    assert.equal(await push.recordSeen('u1','https://push.example/theirs',true),false,'남의 기기 줄은 못 고친다');
+    const theirs=db.prepare("SELECT last_seen_at FROM push_subs WHERE endpoint=?").get('https://push.example/theirs');
+    assert.equal(theirs.last_seen_at,null);
+    const t=await push.deviceTrace('u1','https://push.example/mine');
+    assert.equal(t.registered,true);assert.ok(t.seenAt);assert.equal(t.shown,true);
+    const peek=await push.deviceTrace('u1','https://push.example/theirs');
+    assert.equal(peek.registered,false,'남의 기기 기록은 없는 것처럼 보인다');
+    assert.equal(peek.seenAt,null);
+  }finally{db.close()}
+});
+
+// 실제 알림도 시험 발송처럼 **끝까지 기다린 뒤** 응답한다. 1.9.3~1.9.6 은 응답 뒤로 넘겨
+// 운영 호스트에서 지켜지는지 알 수 없었고, 실제 알림만 안 왔다.
+test('알림이 걸린 저장은 푸시를 끝까지 보낸 뒤 응답하고, 결과를 숫자로 돌려준다',async()=>{
+  const db=localDatabase();
+  const f=teamWithRoles();
+  await repository.commit(blank(),f.s,(await repository.load()).version);
+  globalThis.__teamkickTestWoken=[];
+  let finished=false;
+  globalThis.__teamkickTestWake=async()=>{await new Promise(r=>setTimeout(r,60));finished=true;
+    return {sent:1,failed:1,results:[{ok:true,status:201,host:'fcm.googleapis.com'},{ok:false,status:403,host:'fcm.googleapis.com',detail:'x'}]}};
+  globalThis.__teamkickTestIdentity={userId:'a',fullName:'A 주장'};
+  try{
+    const res=await api.POST(new Request('https://teamkick.co.kr/api/app',{method:'POST',
+      body:JSON.stringify({mutationId:'wait-1',...gameArgs(f.a)})}));
+    const out=await res.json();
+    assert.equal(finished,true,'응답하기 전에 푸시가 끝나 있어야 한다');
+    assert.equal(out.pushed.sent,1);assert.equal(out.pushed.failed,1);
+    assert.equal(out.pushed.reason,'fcm.googleapis.com 403','첫 실패의 푸시 서버와 상태만(누구인지는 없다)');
+  }finally{globalThis.__teamkickTestIdentity=null;globalThis.__teamkickTestWake=null;db.close()}
 });
 
 test('알림을 받은 사람만 깨우고 본인은 깨우지 않는다',async()=>{

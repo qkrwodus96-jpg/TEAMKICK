@@ -41,6 +41,13 @@ async function showLatest(){
   const perm=(self.Notification&&self.Notification.permission)||"";
   for(const c of wins)c.postMessage({type:"teamkick-push",at:Date.now(),shown,why,permission:perm});
  }catch{}
+ // 서버에도 "이 기기가 받았다" 를 남긴다. 화면이 닫혀 있어도 기록이 남아서, 나중에
+ // MY → 기기 알림에서 "폰이 받은 시각" 을 볼 수 있다. 실패해도 알림에는 영향이 없다.
+ try{
+  const sub=await self.registration.pushManager.getSubscription();
+  if(sub)await fetch("/api/push",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({action:"ack",endpoint:sub.endpoint,shown})});
+ }catch{}
 }
 self.addEventListener("push",event=>{event.waitUntil(showLatest())});
 

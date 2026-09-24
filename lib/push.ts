@@ -1,7 +1,4 @@
 import {env} from "cloudflare:workers";
-// 이름으로 꺼내지 않고 통째로 받는다. 오래된 실행기에 waitUntil 이 없으면 이름으로
-// 꺼내는 순간 서버 전체가 뜨지 않는다. 통째로 받으면 없을 때 undefined 일 뿐이다.
-import * as workers from "cloudflare:workers";
 import {AppError} from "./model";
 
 // 기기 푸시(웹 푸시). 잠금화면까지 알림이 가게 한다.
@@ -129,7 +126,25 @@ export const fcmAlias=(endpoint:string)=>{
  }catch{return ""}
 };
 
+// 기기마다 마지막 발송을 남긴다. 알림이 안 올 때 어느 단계에서 끊겼는지 보려면
+// "보내기 시작했다" 와 "푸시 서버가 뭐라고 답했다" 가 따로 남아야 한다 — 시작만 있고
+// 답이 없으면 서버가 도중에 끊긴 것이다. 기록이 실패해도 발송은 막지 않는다.
+async function note(sql:string,...args:unknown[]){
+ try{await db().prepare(sql).bind(...args).run()}catch(e){console.error("TeamKick push 기록",e)}
+}
+
 async function sendOne(sub:Sub,timeout=TIMEOUT_MS):Promise<SendResult>{
+ await note("UPDATE push_subs SET last_try_at=?,last_status=NULL,last_detail=NULL WHERE id=?",new Date().toISOString(),sub.id);
+ const result=await deliver(sub,timeout);
+ await note("UPDATE push_subs SET last_status=?,last_detail=?,last_ok_at=CASE WHEN ?=1 THEN ? ELSE last_ok_at END WHERE id=?",
+  result.status,(result.detail||"")+(result.via?" · 우회 "+result.via:"")+" · "+result.ms+"ms",result.ok?1:0,new Date().toISOString(),sub.id);
+ // 410/404 는 기기가 구독을 버렸다는 뜻이다. 그대로 두면 계속 실패한다.
+ // 다만 우회 주소에서 받은 답이면 확신할 수 없으니 지우지 않는다.
+ if(!result.via&&(result.status===404||result.status===410))await db().prepare("DELETE FROM push_subs WHERE id=?").bind(sub.id).run();
+ return result;
+}
+
+async function deliver(sub:Sub,timeout:number):Promise<SendResult>{
  const first=await post(sub.endpoint,timeout);
  let got=first,via="";
  if(!first.res){
@@ -139,26 +154,11 @@ async function sendOne(sub:Sub,timeout=TIMEOUT_MS):Promise<SendResult>{
  }
  if(!got.res)return {ok:false,status:0,detail:first.error??"",host:first.host,ms:first.ms};
  const res=got.res;
- // 410/404 는 기기가 구독을 버렸다는 뜻이다. 그대로 두면 계속 실패한다.
- // 다만 우회 주소에서 받은 답이면 확신할 수 없으니 지우지 않는다.
- if(!via&&(res.status===404||res.status===410))await db().prepare("DELETE FROM push_subs WHERE id=?").bind(sub.id).run();
  let detail="";
  if(!res.ok)detail=await res.text().then(t=>t.slice(0,200)).catch(()=>"");
  return {ok:res.ok,status:res.status,detail,host:first.host,ms:got.ms,...(via?{via}:{})};
 }
 
-// 푸시는 **보통은 응답 전에 끝낸다**(대개 1초 안에 끝난다). 오래 걸리면 그때만 실행기의
-// waitUntil 에 맡기고 응답을 돌려준다 — 저장이 푸시 때문에 몇 초씩 멈추지 않게.
-// 뒤로 넘기기만 하던 1.9.3~1.9.5 는 운영 실행기에서 waitUntil 이 실제로 지켜지는지 확인할
-// 수 없었다. 먼저 기다려 두면 waitUntil 이 없거나 안 지켜져도 보통의 알림은 나간다.
-export async function afterResponse(p:Promise<unknown>,cap=1500):Promise<void>{
- const wu=(workers as unknown as {waitUntil?:(p:Promise<unknown>)=>void}).waitUntil;
- const handed=typeof wu==="function"&&(()=>{try{wu(p);return true}catch{return false}})();
- if(!handed){await p;return}
- let timer:ReturnType<typeof setTimeout>|undefined;
- await Promise.race([p.then(()=>undefined,()=>undefined),new Promise<void>(r=>{timer=setTimeout(r,cap)})]);
- if(timer)clearTimeout(timer);
-}
 
 // 푸시 서버까지 길이 뚫려 있는지 따로 본다. "응답 없음" 이 **우리 요청 모양 때문**인지
 // **이 서버가 밖으로 못 나가서**인지 가려 준다. 주소를 GET 으로 두드려 보고
@@ -171,6 +171,24 @@ async function reach(host:string){
  }catch(e){
   return host+" 연결 안 됨 ("+(Date.now()-began)+"ms · "+String(e instanceof Error?e.message:e).slice(0,60)+")";
  }
+}
+
+// 폰의 서비스 워커가 "받았다" 고 알려 오면 그 기기 줄에 남긴다. 자기 계정의 자기 기기만
+// 고칠 수 있다(남의 기기 주소를 넣어도 아무것도 바뀌지 않는다).
+export async function recordSeen(accountId:string,endpoint:string,shown:boolean){
+ const r=await db().prepare("UPDATE push_subs SET last_seen_at=?,last_shown=? WHERE account_id=? AND endpoint=?")
+  .bind(new Date().toISOString(),shown?1:0,accountId,String(endpoint??"").slice(0,800)).run();
+ return Number((r as {meta?:{changes?:number}})?.meta?.changes??0)>0;
+}
+export type Trace={registered:boolean;tryAt:string|null;status:number|null;detail:string|null;okAt:string|null;seenAt:string|null;shown:boolean|null};
+// 이 기기 하나의 알림 기록. 자기 계정의 자기 기기만 읽는다.
+export async function deviceTrace(accountId:string,endpoint:string):Promise<Trace>{
+ const row=await db().prepare("SELECT last_try_at,last_status,last_detail,last_ok_at,last_seen_at,last_shown FROM push_subs WHERE account_id=? AND endpoint=?")
+  .bind(accountId,String(endpoint??"").slice(0,800)).first<Record<string,string|number|null>>();
+ if(!row)return {registered:false,tryAt:null,status:null,detail:null,okAt:null,seenAt:null,shown:null};
+ return {registered:true,tryAt:(row.last_try_at as string)??null,status:row.last_status==null?null:Number(row.last_status),
+  detail:(row.last_detail as string)??null,okAt:(row.last_ok_at as string)??null,seenAt:(row.last_seen_at as string)??null,
+  shown:row.last_shown==null?null:Number(row.last_shown)===1};
 }
 
 // 알림을 받은 사람들의 기기를 깨운다. 실패해도 저장은 이미 끝난 뒤라 되돌리지 않는다.

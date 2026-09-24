@@ -1,6 +1,6 @@
 "use client";
 import {InstallGuide} from "./install";
-import {NotifyInvite} from "./notify";
+import {NotifyInvite,KeepSubscription} from "./notify";
 import {BrandMark} from "./splash";
 import {useState,useEffect,useMemo,useCallback,useRef} from "react";
 import {Home,CalendarDays,Handshake,ChartNoAxesCombined,Users,Bell,ChevronRight,ChevronLeft,Plus,MapPin,Clock,ArrowUpRight,CheckCircle2,XCircle,HelpCircle,ShieldCheck,Settings,LogOut,Goal,Flag,ClipboardCheck,TrendingUp,Pin,ArrowLeft,LoaderCircle,Search} from "lucide-react";
@@ -119,11 +119,12 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote=""}:{re
     if(needsReload(c.type))await refresh(c.teamId||v.teamId);else applySaved(data);
     // 알림이 걸린 저장이면 몇 명에게 갔는지, 그중 폰으로도 간 사람이 몇 명인지 알려 준다.
     // 폰 알림을 켠 팀원이 없으면 알림함에만 쌓인다 — 주장이 그걸 알아야 팀원에게 권할 수 있다.
-    const pu=data.pushed as {people?:number;withDevice?:number}|undefined;
-    // "폰으로 갔다" 가 아니라 "폰 알림을 켜 둔 사람 수" 다. 도착까지는 알 수 없다 —
+    const pu=data.pushed as {people?:number;withDevice?:number;sent?:number;failed?:number;reason?:string}|undefined;
+    // 푸시 서버가 실제로 받은 통수까지 보여준다(폰 도착은 받는 사람의 MY → 기기 알림 기록에서).
     // 1.9.5 의 "그중 N명은 폰 알림도" 는 실제로는 안 갔는데도 간 것처럼 읽혔다.
-    if(pu?.people)toast.success("저장했어요 · 팀원 "+pu.people+"명 알림함에 전달"+
-     ((pu.withDevice??-1)>=0?" · 폰 알림 켠 팀원 "+pu.withDevice+"명":""));
+    if(pu?.people)(pu.failed?toast.warning:toast.success)("저장했어요 · 팀원 "+pu.people+"명 알림함에 전달"+
+     ((pu.withDevice??-1)>=0?" · 폰 알림 켠 팀원 "+pu.withDevice+"명":"")+
+     (pu.sent||pu.failed?" · 푸시 발송 성공 "+(pu.sent??0)+"통"+(pu.failed?" / 실패 "+pu.failed+"통 ("+(pu.reason??"")+")":""):""));
     else toast.success("저장했어요.");}
    return output??{};
  }catch(e:any){toast.error(e.message);throw e}finally{setBusy(false)}}
@@ -168,7 +169,7 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote=""}:{re
  {verifyNote&&<div className="data-note" role="status" style={{marginBottom:14}}>{verifyNote}</div>}
  {!demo&&v.user&&real?.needsVerification&&<div className="error-bar">이메일 확인이 아직 안 됐어요. 확인해야 팀을 만들거나 가입을 신청할 수 있어요. <button onClick={resendVerify}>확인 메일 다시 보내기</button></div>}
  <InstallGuide/>
- {!demo&&v.user&&v.teamId&&<NotifyInvite/>}
+ {!demo&&v.user&&<KeepSubscription/>}{!demo&&v.user&&v.teamId&&<NotifyInvite/>}
  {demo&&<div className="demo-strip"><span>샘플 팀 둘러보기 · 변경 사항은 실제 팀에 저장되지 않아요.</span><button onClick={toActual}>우리 팀 시작하기 <span aria-hidden>↗</span></button></div>}
  <div className="md:hidden" style={{marginBottom:20}}>{teamPicker}</div>
  {!demo&&!v.user?<AuthPanel onDemo={()=>setDemo(true)} mailReady={real?.mailReady!==false} kakaoReady={real?.kakaoReady===true} googleReady={real?.googleReady===true} naverReady={real?.naverReady===true} emailSignupEnabled={real?.emailSignupEnabled===true}/>:

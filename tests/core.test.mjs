@@ -2371,6 +2371,14 @@ test('앱 아이콘이 홈 화면에서 잘리지 않게 준비되어 있다',()
     const [w,h]=String(icon.sizes).split('x').map(Number);
     assert.deepEqual(pngSize(file),{w,h},icon.src+' 의 실제 크기가 manifest 와 다르다');
   }
+  // 브라우저마다 any 와 maskable 중 고르는 쪽이 달라, 둘의 그림이 다르면 홈 화면 아이콘이
+  // 브라우저마다 달라 보인다(크롬은 작은 로고, 웨일은 글자가 가장자리에 닿음 — 사장님 제보).
+  // 512 크기는 두 목적이 **같은 파일 내용**이어야 한다.
+  const any512=manifest.icons.find(i=>i.sizes==='512x512'&&String(i.purpose||'any').split(/\s+/).includes('any'));
+  const mask512=maskable.find(i=>i.sizes==='512x512');
+  const read=i=>fs.readFileSync(path.join('public',i.src.replace(/^\//,'')));
+  assert.ok(any512&&mask512,'512 크기의 any·maskable 이 모두 있어야 한다');
+  assert.ok(read(any512).equals(read(mask512)),'any 와 maskable 아이콘은 같은 그림이어야 한다');
 });
 
 // --- 팀 찾기 ---

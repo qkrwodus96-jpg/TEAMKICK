@@ -1882,6 +1882,9 @@ test('시험 발송은 본인 기기로 보내고, 실패하면 이유를 돌려
       assert.equal(hit.init.body.byteLength,0,'내용은 비어 있어야 한다(암호화 안 한 내용을 싣지 않는다)');
       assert.equal(hit.init.method,'POST');
       assert.equal(hit.init.headers.TTL,'86400');
+      // 사람이 볼 알림이라 high. normal 이면 안드로이드 절전 중에 FCM 이 전달을 미룬다
+      // — 서버에선 "보냈어요" 인데 폰에 안 뜬다(사장님 갤럭시, 2026-09-24 2차 시험).
+      assert.equal(hit.init.headers.Urgency,'high');
 
       // 실패하는 경우 — 이유가 그대로 올라와야 한다
       globalThis.fetch=async()=>new Response('bad key',{status:403});
@@ -1960,6 +1963,33 @@ test('구글 푸시 주소에 닿지 못하면 fcm.googleapis.com 으로 한 번
       globalThis.fetch=async(url)=>{hits.push(String(url));return new Response('bad key',{status:403})};
       await push.testWake('a');
       assert.deepEqual(hits,['https://jmt17.google.com/fcm/send/tok1'],'거절이면 한 번만 보낸다');
+    }finally{globalThis.fetch=real}
+  });
+  db.close();
+});
+
+// 등록된 기기가 여럿이거나 다른 브라우저에서 켰던 등록이 남아 있으면, 시험이 엉뚱한
+// 곳으로 가서 "보냈어요" 만 뜬다. 화면이 알려 준 **이 기기** 로만 보낸다.
+test('시험 발송은 화면이 알려 준 이 기기로만 보내고, 남의 주소는 받지 않는다',async()=>{
+  const db=localDatabase();
+  await withVapid(async()=>{
+    const real=globalThis.fetch;
+    try{
+      await push.saveSubscription('a',{endpoint:'https://push.example/chrome',keys:{p256dh:'p',auth:'a'}});
+      await push.saveSubscription('a',{endpoint:'https://push.example/samsung',keys:{p256dh:'p',auth:'a'}});
+      await push.saveSubscription('b',{endpoint:'https://push.example/other-person',keys:{p256dh:'p',auth:'a'}});
+      const hits=[];
+      globalThis.fetch=async(url)=>{hits.push(String(url));return new Response('',{status:201})};
+      const one=await push.testWake('a','https://push.example/samsung');
+      assert.equal(one.sent,1);
+      assert.deepEqual(hits,['https://push.example/samsung'],'이 기기로만 간다');
+      // 남의 기기 주소를 넣으면 거절 — 내 등록 중에서만 고른다
+      hits.length=0;
+      await assert.rejects(()=>push.testWake('a','https://push.example/other-person'),/등록돼 있지 않아요/);
+      assert.equal(hits.length,0,'남의 기기로는 한 통도 안 나간다');
+      // 주소를 안 주면 예전처럼 내 기기 전부
+      const all=await push.testWake('a');
+      assert.equal(all.sent,2);
     }finally{globalThis.fetch=real}
   });
   db.close();

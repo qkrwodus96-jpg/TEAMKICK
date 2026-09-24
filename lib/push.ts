@@ -97,7 +97,10 @@ async function post(endpoint:string,timeout:number):Promise<Attempt>{
    // 참고: 운영과 같은 실행기(workerd)로 확인해 보니 본문을 빼도 길이 0 이 붙었다.
    // 그러니 2026-09-24 의 "응답 없음" 은 이것 때문이 아니다 — 아래 우회를 보라.
    body:new Uint8Array(0),
-   headers:{Authorization:auth,TTL:"86400",Urgency:"normal"}});
+   // 사람이 바로 봐야 하는 알림이라 high 로 보낸다. normal 이면 안드로이드가 절전(Doze)
+   // 중일 때 FCM 이 전달을 미룬다 — 서버에선 "보냈어요" 인데 폰에는 안 뜨는 모양이 된다
+   // (사장님 갤럭시, 2026-09-24). RFC 8030 의 값: very-low / low / normal / high.
+   headers:{Authorization:auth,TTL:"86400",Urgency:"high"}});
   return {res,ms:Date.now()-began,host:url.host};
  }catch(e){
   return {error:String(e instanceof Error?e.message:e).slice(0,160),ms:Date.now()-began,host:url.host};
@@ -181,10 +184,15 @@ export async function wakeDevices(userIds:string[]){
 // 시험 발송은 평소보다 오래 기다린다. 느리지만 되는 것과 아예 안 되는 것을 가리려면
 // 제한 시간이 넉넉해야 한다. 평소 발송(4초)은 저장을 늦추지 않도록 그대로 둔다.
 export const TEST_TIMEOUT_MS=8000;
-export async function testWake(accountId:string){
+export async function testWake(accountId:string,only?:string){
  if(!pushReady())throw new AppError("알림이 아직 설정되지 않았어요. 운영자가 푸시 키를 넣어야 해요.",503);
- const subs=(await subscriptionsOf(accountId)).slice(0,MAX_DEVICES);
+ let subs=(await subscriptionsOf(accountId)).slice(0,MAX_DEVICES);
  if(!subs.length)throw new AppError("이 계정에 등록된 기기가 없어요. 먼저 이 기기에서 알림을 켜주세요.",409);
+ // 화면이 자기 기기 주소를 알려 주면 그 기기로만 보낸다. 없으면 예전처럼 전부.
+ if(only){
+  subs=subs.filter(x=>x.endpoint===only);
+  if(!subs.length)throw new AppError("이 기기는 아직 등록돼 있지 않아요. 알림을 껐다가 다시 켜주세요.",409);
+ }
  const out=await Promise.allSettled(subs.map(x=>sendOne(x,TEST_TIMEOUT_MS)));
  const results:SendResult[]=out.map(r=>r.status==="fulfilled"?r.value
   :{ok:false,status:0,detail:String(r.reason).slice(0,200),host:"",ms:0});

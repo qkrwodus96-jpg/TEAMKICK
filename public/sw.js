@@ -29,8 +29,18 @@ async function showLatest(){
    try{if(unread.length)await self.navigator.setAppBadge?.(unread.length);else await self.navigator.clearAppBadge?.()}catch{}
   }
  }catch{/* 네트워크가 끊겼어도 알림은 띄워야 한다 */}
- return self.registration.showNotification(title,{
-  body,icon:"/icon-192.png",badge:"/icon-192.png",tag:"teamkick",renotify:true,data:{url}});
+ // 알림을 띄운 결과를 열려 있는 팀킥 화면에 알려 준다. 시험 알림을 눌렀는데 폰에
+ // 아무것도 안 뜰 때, "신호가 폰까지 왔는지" 와 "왔는데 표시가 막혔는지" 를 가른다.
+ let shown=true,why="";
+ try{
+  await self.registration.showNotification(title,{
+   body,icon:"/icon-192.png",badge:"/icon-192.png",tag:"teamkick",renotify:true,data:{url}});
+ }catch(e){shown=false;why=String(e&&e.message||e).slice(0,120)}
+ try{
+  const wins=await self.clients.matchAll({type:"window",includeUncontrolled:true});
+  const perm=(self.Notification&&self.Notification.permission)||"";
+  for(const c of wins)c.postMessage({type:"teamkick-push",at:Date.now(),shown,why,permission:perm});
+ }catch{}
 }
 self.addEventListener("push",event=>{event.waitUntil(showLatest())});
 

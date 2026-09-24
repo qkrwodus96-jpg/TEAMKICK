@@ -36,7 +36,9 @@ export async function POST(req:Request){
   // 본인 기기로 시험 발송. 평소 알림은 만든 사람 본인에게는 가지 않아서,
   // 혼자 쓰는 동안에는 푸시가 되는지 확인할 방법이 없었다.
   if(body?.action==="test"){
-   const out=await testWake(user.userId);
+   // 본인 계정의 등록 중에서만 고른다(남의 기기 주소를 넣어도 걸러진다).
+   const only=typeof body.endpoint==="string"&&body.endpoint?body.endpoint.slice(0,800):undefined;
+   const out=await testWake(user.userId,only);
    // 실패한 이유를 화면까지 그대로 올린다. "안 와요" 만으로는 고칠 수 없다.
    const bad=out.results.find(r=>!r.ok);
    // 성공했는데도 안 오는 경우가 있다(기기 설정·잠금화면 규칙). 그때 어디로 보냈는지

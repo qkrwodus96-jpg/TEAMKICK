@@ -9,7 +9,7 @@ import {ensureSchema} from "@/lib/schema";
 import {kakaoReady} from "@/lib/kakao";
 import {socialReady} from "@/lib/social";
 import {emailSignupEnabled} from "@/lib/signup-policy";
-import {wakeDevices,afterResponse,devicesAmong,pushReady} from "@/lib/push";
+import {wakeDevices,devicesAmong,pushReady} from "@/lib/push";
 export const dynamic="force-dynamic";
 const json=(x:any,status=200,cookie?:string)=>Response.json(x,{status,headers:cookie?{"Cache-Control":"no-store","Set-Cookie":cookie}:{"Cache-Control":"no-store"}});
 export async function GET(req:Request){try{await ensureSchema();const user=await currentUser(req);if(!user)return json({user:null,mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver")});const {state}=await load();const teamId=new URL(req.url).searchParams.get("team")??undefined;const token=new URL(req.url).searchParams.get("invite");const invite=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());
@@ -45,10 +45,17 @@ export async function POST(req:Request){
     // 이번 저장으로 새로 생긴 알림을 받은 사람만 대상이다.
     const had=new Set(state.notifications.map(x=>x.id));
     const woken=[...new Set(after.notifications.filter(x=>!had.has(x.id)&&x.userId!==user.userId).map(x=>String(x.userId)))];
-    if(woken.length)await afterResponse(wakeDevices(woken).catch(e=>console.error("TeamKick push",e)));
-    // 알림이 몇 명에게 갔고 그중 몇 명이 폰 알림을 켜 뒀는지 알려 준다(숫자만).
-    // 세다가 실패해도 저장은 이미 끝났으니 숫자만 뺀다.
-    const pushed=woken.length?{people:woken.length,withDevice:pushReady()?await devicesAmong(woken).catch(()=>-1):0}:undefined;
+    // 실제 알림도 시험 발송과 **똑같이 끝까지 기다린다.** 1.9.3~1.9.6 은 응답을 먼저 돌려주고
+    // 나머지를 실행기(waitUntil)에 맡겼는데, 운영 호스트에서 그게 지켜지는지 확인할 방법이
+    // 없었고 실제 알림만 안 왔다. 시험 발송은 끝까지 기다려서 늘 됐다. 저장이 조금 늦더라도
+    // 확실히 보내는 쪽을 고른다(한 기기 최대 4초, 대개 1초 안).
+    const delivery=woken.length?await wakeDevices(woken).catch(e=>{console.error("TeamKick push",e);return null}):null;
+    // 알림이 몇 명에게 갔고, 폰 알림을 켠 사람이 몇 명이고, 푸시 서버가 몇 통을 받았는지(숫자만).
+    // 실패가 있으면 첫 실패의 푸시 서버와 답(상태 번호)만 붙인다 — 누구인지는 담지 않는다.
+    const bad=delivery?.results?.find(r=>!r.ok);
+    const pushed=woken.length?{people:woken.length,withDevice:pushReady()?await devicesAmong(woken).catch(()=>-1):0,
+     sent:delivery?.sent??0,failed:delivery?.failed??0,
+     ...(bad?{reason:(bad.host||"푸시 서버")+" "+(bad.status||"응답 없음")}:{})}:undefined;
     return json({ok:true,output,...(pushed?{pushed}:{}),...visibleState(after,user.userId,seen)});
    }catch(e){if(String(e).includes("revision_matches")||String(e).includes("CHECK constraint")){if(attempt<3)continue;throw new AppError("다른 변경이 먼저 저장되었어요. 새로고침 후 다시 시도해주세요.",409)}throw e}
   }

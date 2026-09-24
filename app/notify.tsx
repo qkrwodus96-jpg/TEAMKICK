@@ -41,6 +41,25 @@ const sameKey=(sub:PushSubscription,key:string)=>{
 
 type State={ready:boolean;key:string;devices:number};
 
+type Trace={registered:boolean;tryAt:string|null;status:number|null;detail:string|null;okAt:string|null;seenAt:string|null;shown:boolean|null};
+const stamp=(iso:string)=>new Date(iso).toLocaleString("ko-KR",{timeZone:"Asia/Seoul",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit",second:"2-digit"});
+// 알림 한 통이 지나가는 네 단계를 그대로 적는다: 서버가 보냈나 → 푸시 서버가 받았나 →
+// 폰이 받았나 → 화면에 띄웠나. 어디서 끊겼는지가 한눈에 보여야 한다.
+function traceLines(t:Trace):string[]{
+ if(!t.registered)return ["이 기기가 서버에 등록돼 있지 않아요. 알림을 껐다가 다시 켜주세요."];
+ if(!t.tryAt)return ["아직 이 기기로 보낸 알림이 없어요."];
+ const out=["① "+stamp(t.tryAt)+" 서버가 이 기기로 보냄"];
+ if(t.status==null)out.push("② 결과가 기록되지 않았어요 — 서버가 보내는 도중에 끊겼어요.");
+ else if(t.status>=200&&t.status<300)out.push("② 푸시 서버가 받음 ("+t.status+")");
+ else if(t.status===0)out.push("② 푸시 서버에 닿지 못함 · "+(t.detail??""));
+ else out.push("② 푸시 서버가 거절 ("+t.status+") · "+(t.detail??""));
+ // 보낸 뒤 폰이 받기까지 걸린 시간. "몇 분 뒤에 온다" 가 서버 탓인지 폰·푸시 서버 탓인지 가른다.
+ const took=(a:string,b:string)=>{const sec=Math.max(0,Math.round((Date.parse(b)-Date.parse(a))/1000));return sec<60?sec+"초":Math.floor(sec/60)+"분 "+(sec%60)+"초"};
+ if(t.seenAt&&t.seenAt>=t.tryAt)out.push("③ "+stamp(t.seenAt)+" 폰이 받음 (보낸 지 "+took(t.tryAt,t.seenAt)+")","④ "+(t.shown?"알림을 띄움":"알림을 못 띄움 — 폰(브라우저) 알림 설정을 봐주세요"));
+ else if(t.status!=null&&t.status>=200&&t.status<300)out.push("③ 폰이 받았다는 신호가 아직 없어요 — 폰이 꺼져 있거나 브라우저가 알림을 막고 있을 수 있어요.");
+ return out;
+}
+
 function NotifyHelp(){
  const name=browserName();
  const tips:Record<string,ReactNode>={
@@ -58,6 +77,36 @@ function NotifyHelp(){
   <p className="data-note">위 <strong>이 폰에서 바로 띄워보기</strong> 가 안 보이면 폰(브라우저) 설정 문제이고,
    보이는데 시험 알림만 안 오면 배달 문제예요. 결과 줄을 운영자에게 보내주세요.</p>
  </details>;
+}
+
+// 앱을 열 때마다 이 브라우저의 알림 등록을 서버에 다시 올린다(같은 주소면 덮어쓴다).
+// 시험 발송은 보내기 직전에 이렇게 해서 늘 됐고, 실제 알림은 저장돼 있던 등록을 그대로
+// 써서 안 왔다 — 둘의 차이를 없앤다. 서버 키와 다르면 새로 등록한다(예전 키로 만든 등록은
+// 푸시 서버가 거절한다). 화면에는 아무것도 그리지 않는다.
+export function KeepSubscription(){
+ useEffect(()=>{
+  (async()=>{
+   try{
+    if(!("serviceWorker"in navigator)||!("PushManager"in window))return;
+    if(Notification.permission!=="granted")return;
+    const reg=await navigator.serviceWorker.getRegistration();
+    let sub=await reg?.pushManager?.getSubscription();
+    if(!reg||!sub)return;
+    const res=await fetch("/api/push",{cache:"no-store"}).then(r=>r.json() as Promise<State>).catch(()=>null);
+    if(!res?.ready||!res.key)return;
+    if(!sameKey(sub,res.key)){
+     // 예전 등록은 서버에서도 지운다. 남겨 두면 실제 알림이 죽은 주소로 한 번씩 더 나간다.
+     await fetch("/api/push",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({action:"unsubscribe",endpoint:sub.endpoint})}).catch(()=>null);
+     await sub.unsubscribe();
+     sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:keyBytes(res.key)});
+    }
+    await fetch("/api/push",{method:"POST",headers:{"Content-Type":"application/json"},
+     body:JSON.stringify({action:"subscribe",subscription:sub.toJSON()})});
+   }catch{/* 알림 등록을 못 고쳐도 앱은 그대로 쓴다 */}
+  })();
+ },[]);
+ return null;
 }
 
 // 홈 화면 위에 뜨는 권유 띠. 기기 알림은 브라우저가 사용자에게 직접 묻는 것이라
@@ -126,11 +175,23 @@ export function NotifyToggle(){
  const [testNote,setTestNote]=useState("");
  // 폰이 신호를 받았는지는 서비스 워커만 안다. 받으면 이 화면에 알려 준다(sw.js).
  const [heard,setHeard]=useState("");
+ const [trace,setTrace]=useState<Trace|null>(null);
+ async function loadTrace(){
+  try{
+   const reg=await navigator.serviceWorker?.getRegistration?.();
+   const sub=await reg?.pushManager?.getSubscription?.();
+   if(!sub){setTrace(null);return}
+   const r=await fetch("/api/push",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({action:"trace",endpoint:sub.endpoint})});
+   if(r.ok)setTrace(await r.json() as Trace);
+  }catch{/* 기록을 못 읽어도 알림 켜기·끄기는 된다 */}
+ }
  useEffect(()=>{
   const sw=navigator.serviceWorker;if(!sw)return;
   const on=(e:MessageEvent)=>{
    const d=e.data as {type?:string;at?:number;shown?:boolean;why?:string;permission?:string}|null;
    if(d?.type!=="teamkick-push")return;
+   setTimeout(()=>{loadTrace()},1500); // 서비스 워커가 서버에 "받음" 을 남긴 뒤에 읽는다
    const at=new Date(d.at??Date.now()).toLocaleTimeString("ko-KR");
    setHeard(d.shown
     ?"📱 "+at+" 폰이 신호를 받아 알림을 띄웠어요. 그런데도 화면에 안 보이면 "+browserName()+" 의 알림 표시 설정 문제예요."
@@ -158,6 +219,8 @@ export function NotifyToggle(){
    // 다시 묻지 않는다. 이걸 안 하면 "켜짐" 인데 알림이 안 오는 상태가 계속된다.
    if(sub&&reg&&res?.ready&&res.key&&!sameKey(sub,res.key)){
     try{
+     await fetch("/api/push",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({action:"unsubscribe",endpoint:sub.endpoint})}).catch(()=>null);
      await sub.unsubscribe();
      sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:keyBytes(res.key)});
      await fetch("/api/push",{method:"POST",headers:{"Content-Type":"application/json"},
@@ -168,6 +231,7 @@ export function NotifyToggle(){
    setWhy(reason||(res&&!res.ready?"알림이 아직 설정되지 않았어요. 운영자가 설정해야 해요.":""));
    setS(res??{ready:false,key:"",devices:0});
    setOn(!!sub);
+   if(sub)loadTrace();
   })();
  },[]);
 
@@ -216,7 +280,7 @@ export function NotifyToggle(){
      (out.probe?.length?" · 연결 확인: "+out.probe.join(" / "):"")+" · 이 줄을 그대로 알려주세요.");
    }
   }catch(e){const m=e instanceof Error?e.message:"시험 알림을 보내지 못했어요.";toast.error(m);setTestNote("보내지 못했어요 · "+m)}
-  finally{setBusy(false)}
+  finally{setBusy(false);loadTrace()}
  }
  // 서버도 구글도 거치지 않고 이 폰에서 바로 알림을 띄워 본다. 이게 안 보이면
  // 폰(브라우저)의 알림 표시가 막힌 것이고, 보이면 표시는 정상이라 배달 쪽 문제다.
@@ -267,6 +331,12 @@ export function NotifyToggle(){
    </div>
    {testNote&&<p className="data-note" role="status" style={{userSelect:"text"}}><strong>시험 결과</strong> · {testNote}</p>}
    {heard&&<p className="data-note" role="status" style={{userSelect:"text"}}>{heard}</p>}
+   {trace&&<div className="push-trace" role="status" style={{userSelect:"text"}}>
+    <div className="row between"><strong>이 기기 알림 기록</strong>
+     <button type="button" className="text-link" onClick={()=>loadTrace()}>새로고침</button></div>
+    {traceLines(trace).map(x=><p key={x} className="data-note">{x}</p>)}
+    <p className="data-note">다른 팀원이 공지를 올린 뒤 이 화면을 열면, 그 알림이 어디까지 왔는지 보여요.</p>
+   </div>}
    <p className="data-note">평소 알림은 <strong>내가 한 일에는 오지 않아요.</strong> 다른 팀원이 공지를 올리거나 경기를 만들 때 옵니다. 혼자 확인하실 때는 위 단추를 눌러주세요.</p>
    {isIos()&&<p className="data-note">아이폰은 <strong>홈 화면에 추가한 아이콘으로 연 창</strong>에서만 알림과 아이콘 숫자가 나와요. 사파리 탭에서는 오지 않아요.</p>}
   </>}

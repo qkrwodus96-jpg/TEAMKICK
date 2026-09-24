@@ -1,7 +1,7 @@
 import {currentUser} from "@/lib/auth";
 import {AppError,setupIncomplete,SETUP_MESSAGE} from "@/lib/model";
 import {ensureSchema} from "@/lib/schema";
-import {pushReady,pushPublicKey,saveSubscription,removeSubscription,subscriptionsOf,testWake} from "@/lib/push";
+import {pushReady,pushPublicKey,saveSubscription,removeSubscription,subscriptionsOf,testWake,recordSeen,deviceTrace} from "@/lib/push";
 
 export const dynamic="force-dynamic";
 const json=(x:unknown,status=200)=>Response.json(x,{status,headers:{"Cache-Control":"no-store"}});
@@ -26,7 +26,7 @@ export async function POST(req:Request){
   if(!user)throw new AppError("먼저 로그인해주세요.",401);
   const raw=await req.text();
   if(raw.length>4000)throw new AppError("입력 내용이 너무 커요.",413);
-  let body:{action?:unknown;subscription?:{endpoint?:unknown;keys?:{p256dh?:unknown;auth?:unknown}};endpoint?:unknown};
+  let body:{action?:unknown;subscription?:{endpoint?:unknown;keys?:{p256dh?:unknown;auth?:unknown}};endpoint?:unknown;shown?:unknown};
   try{body=JSON.parse(raw)}catch{throw new AppError("입력 형식을 확인해주세요.")}
   if(body?.action==="subscribe"){
    if(!pushReady())throw new AppError("알림이 아직 설정되지 않았어요.",503);
@@ -50,6 +50,15 @@ export async function POST(req:Request){
     reason:bad?(bad.host+" 가 "+(bad.status||"응답 없음")+" ("+bad.ms+"ms)"+(bad.detail?" · "+bad.detail:"")):"",
     // 닿지 못했을 때만 채워진다. 길이 막힌 것인지 요청 모양이 문제인지 가른다.
     probe:out.probe});
+  }
+  // 폰의 서비스 워커가 알림을 받았다고 알려 온다(sw.js). 자기 기기 줄에만 남는다.
+  if(body?.action==="ack"){
+   const ok=await recordSeen(user.userId,String(body.endpoint??""),body.shown===true);
+   return json({ok});
+  }
+  // 이 기기의 알림 기록(마지막 발송·푸시 서버의 답·폰이 받은 시각). 자기 기기만 읽는다.
+  if(body?.action==="trace"){
+   return json(await deviceTrace(user.userId,String(body.endpoint??"")));
   }
   if(body?.action==="unsubscribe"){
    await removeSubscription(user.userId,String(body.endpoint??""));

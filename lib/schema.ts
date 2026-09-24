@@ -33,11 +33,20 @@ export const STATEMENTS=[
  // 소셜 로그인이 늘어 제공자별 열을 계속 만들 수 없다. (provider, provider_id) 로 묶는다.
  `ALTER TABLE accounts ADD COLUMN provider_id text`,
  `CREATE UNIQUE INDEX IF NOT EXISTS accounts_provider_unique ON accounts (provider,provider_id)`,
+ // 기기마다 "마지막으로 보낸 알림이 어떻게 됐는지" 를 남긴다. 알림이 안 올 때
+ // 서버가 보냈는지 → 푸시 서버가 받았는지 → 폰이 받았는지 → 화면에 띄웠는지를 가른다.
+ // 예전에는 이걸 볼 방법이 없어 추측하고 배포하기를 되풀이했다(2026-09-24).
+ `ALTER TABLE push_subs ADD COLUMN last_try_at text`,
+ `ALTER TABLE push_subs ADD COLUMN last_status integer`,
+ `ALTER TABLE push_subs ADD COLUMN last_detail text`,
+ `ALTER TABLE push_subs ADD COLUMN last_ok_at text`,
+ `ALTER TABLE push_subs ADD COLUMN last_seen_at text`,
+ `ALTER TABLE push_subs ADD COLUMN last_shown integer`,
 ];
 
 // 배포된 코드가 어느 시점 것인지 화면으로 확인하기 위한 표시.
 // 스키마나 진단에 영향을 주는 변경을 할 때 함께 올린다.
-export const BUILD="2026-09-24-push-regression";
+export const BUILD="2026-09-24-push-trace";
 
 export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications","push_subs"];
 

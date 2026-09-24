@@ -44,3 +44,5 @@ html[data-splash="skip"] #teamkick-splash{display:none}
 @media(prefers-reduced-motion:reduce){#teamkick-splash{animation:none}}
 
 .app-booting{position:fixed;inset:0;background:var(--background)}
+
+.legal-page{max-width:720px;margin:0 auto;padding:28px 16px 60px}.legal-page h1{font-size:24px;font-weight:750;margin:14px 0 18px}.legal-text{white-space:pre-wrap;line-height:1.8;font-size:15px}

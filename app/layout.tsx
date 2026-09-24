@@ -14,7 +14,8 @@ const CATCH=`(function(){window.__teamkickInstall=null;window.addEventListener("
 //
 // 그래서 첫 화면을 HTML 에 그대로 넣어 두고, 이 스크립트가 화면을 칠하기 전에
 // 보여줄지 말지 정한다. 이미 본 사람은 <html> 에 표시를 남겨 CSS 가 즉시 숨긴다.
-const SPLASH=`(function(){try{if(sessionStorage.getItem(${JSON.stringify(SPLASH_KEY)})==="1"){document.documentElement.setAttribute("data-splash","skip");return}sessionStorage.setItem(${JSON.stringify(SPLASH_KEY)},"1")}catch(e){}
+// 처리방침·약관 주소는 심사자·외부에서 바로 여는 곳이라 첫 화면 없이 보여준다.
+const SPLASH=`(function(){if(/^\\/(privacy|terms)\\/?$/.test(location.pathname)){document.documentElement.setAttribute("data-splash","skip");return}try{if(sessionStorage.getItem(${JSON.stringify(SPLASH_KEY)})==="1"){document.documentElement.setAttribute("data-splash","skip");return}sessionStorage.setItem(${JSON.stringify(SPLASH_KEY)},"1")}catch(e){}
 var gone=false;
 // 첫 화면은 React 의 Layout 안에도 들어 있다. 그래서 한 번 지워도 React 가 붙는
 // 순간 되살아나 다시 화면을 덮는다(실제로 그랬다. 눌러서 건너뛰어도 2초를 채웠다).

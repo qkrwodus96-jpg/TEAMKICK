@@ -232,6 +232,22 @@ type PickedPlace={venue?:string;name?:string;address:string;lotAddress?:string;c
 // 운영 데이터를 파일로 내려받고 되돌린다. D1 이 사라지면 복구할 다른 수단이 없다.
 export function BackupPanel(){
  const [file,setFile]=useState<File|null>(null),[confirm,setConfirm]=useState(""),[busy,setBusy]=useState(false);
+ // 파일을 만드는 데 몇 초 걸린다. 예전엔 링크라서 그동안 아무 표시가 없어 "안 눌린다"고 느꼈다
+ // (2026-09-24 사장님). 직접 받아서 진행 중·완료·실패를 보여준다.
+ const [saving,setSaving]=useState(false);
+ async function download(){
+  setSaving(true);
+  try{
+   const res=await fetch("/api/backup",{cache:"no-store",credentials:"same-origin"});
+   if(!res.ok){const out=await res.json().catch(()=>({})) as {error?:string};throw new Error(out.error||"백업 파일을 만들지 못했어요.")}
+   const name=/filename="([^"]+)"/.exec(res.headers.get("content-disposition")??"")?.[1]??"teamkick-backup.json";
+   const url=URL.createObjectURL(await res.blob());
+   const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+   setTimeout(()=>URL.revokeObjectURL(url),30000);
+   toast.success("백업 파일을 내려받았어요 · "+name);
+  }catch(err){toast.error(err instanceof Error?err.message:"백업 파일을 만들지 못했어요.")}
+  finally{setSaving(false)}
+ }
  async function restore(e:FormEvent){
   e.preventDefault();
   if(!file)return toast.error("백업 파일을 골라주세요.");
@@ -252,7 +268,7 @@ export function BackupPanel(){
   <h2 className="view-heading">데이터 백업</h2>
   <p className="data-note">팀·경기·투표·출석·기록을 파일 하나로 내려받아요. 정기적으로 받아 안전한 곳에 보관해주세요.</p>
   <p className="data-note">비밀번호와 로그인 정보는 담기지 않아요. 그래서 복원해도 각자 &quot;비밀번호 찾기&quot;로 다시 정해야 해요. 카카오로 가입한 분은 그대로 로그인돼요.</p>
-  <div className="action-strip"><a className="btn" href="/api/backup"><Download size={16}/>백업 파일 내려받기</a></div>
+  <div className="action-strip"><button type="button" className="btn" disabled={saving} onClick={download}>{saving?<LoaderCircle className="loader" size={16}/>:<Download size={16}/>}{saving?"백업 파일 만드는 중…":"백업 파일 내려받기"}</button></div>
   <form className="form-grid" style={{marginTop:24}} onSubmit={restore}>
    <h3>백업 파일로 복원</h3>
    <p className="data-note">지금 저장된 팀·경기·기록을 <strong>모두 파일 내용으로 바꿔요.</strong> 되돌릴 수 없으니 먼저 위에서 지금 상태를 내려받아 두세요.</p>
@@ -681,7 +697,7 @@ export function AppDialogs(p:any){
  {modal?.kind==="player"&&<><div className="team-header"><PlayerPhoto name={modal.player.name} photo={modal.player.photo}/><div><h2>{modal.player.name}</h2><p>{backNoOr(modal.player.number)} · {modal.player.position}</p></div></div><div className="stats-grid" style={{gridTemplateColumns:"repeat(3,1fr)"}}>{["goals","assists","attend"].map((k,i)=><div className="stat-card" key={k}><span className="stat-label">{["골","어시스트","출석"][i]}</span><div className="stat-value">{modal.player[k]}</div></div>)}</div><p className="data-note">위 숫자는 선택한 기간의 기록입니다. 아래는 전체 경기 이력입니다.</p>{v.sides.filter((s:Row)=>s.records[modal.player.id]||s.attendance[modal.player.id]).map((s:Row)=>{const g=v.games.find((g:Row)=>g.id===s.gameId);return g?<div className="notice" key={s.id}><p>{koreanDate(g.start)} · {opponent(v,g)}</p><span>{s.attendance[modal.player.id]?"출석":"불참"} · {s.records[modal.player.id]?.goals??0}골 · {s.records[modal.player.id]?.assists??0}어시스트</span></div>:null})}</>}
  {modal?.kind==="correct"&&<form className="form-grid" onSubmit={e=>{e.preventDefault();save({type:"correctRequest",teamId:v.teamId,gameId:modal.gameId,message:form.message})}}><label>정정할 내용<textarea required value={form.message??""} onChange={e=>field("message",e.target.value)}/></label>{submit("기록 담당자에게 요청")}</form>}
  {modal?.kind==="setup"&&<form className="form-grid" onSubmit={e=>{e.preventDefault();save({type:"setupOwner",code:form.code})}}>{label("운영자 초기 설정 코드","code","password")}<p className="data-note">첫 로그인 순서로 권한을 부여하지 않습니다. 코드는 최초 운영자 등록에 한 번 사용합니다.</p>{submit("서비스 운영자로 등록")}</form>}
- {modal?.kind==="settings"&&<div className="gap-grid"><div className="row"><span className="avatar">{v.user?.name?.slice(-2)||"MY"}</span><strong>{demo?"샘플 팀 공간":v.user?.name||"로그인이 필요해요"}</strong></div>{demo?<button className="btn btn-green" onClick={()=>{p.setDemo(false);setModal(null);p.setView("team")}}>실제 우리 팀 공간으로</button>:<button className="btn" onClick={()=>{p.setDemo(true);setModal(null);p.setView("home")}}>샘플 팀 둘러보기</button>}{v.isOwner&&<button className="btn" onClick={()=>{p.setView("admin");setModal(null)}}><ShieldCheck/>서비스 관리</button>}{p.real?.setupNeeded&&p.real?.user&&<button className="btn" onClick={()=>{p.setDemo(false);setModal({kind:"setup"})}}>운영자 초기 설정</button>}{install?<button className="btn" onClick={async()=>{await install.prompt();setInstall(null)}}><Download/>홈 화면에 설치</button>:<p className="data-note">휴대폰 브라우저의 공유·메뉴에서 ‘홈 화면에 추가’를 선택해 앱처럼 열 수 있어요.</p>}{!demo&&v.role&&v.role!=="captain"&&<button className="btn btn-danger" onClick={()=>setConfirm({title:"현재 팀에서 탈퇴할까요?",command:{type:"leaveTeam",teamId:v.teamId}})}>팀 탈퇴</button>}{!demo&&p.real?.user&&<button className="btn btn-danger" onClick={()=>setConfirm({title:"정말 탈퇴할까요? 계정과 로그인 정보가 삭제되고 되돌릴 수 없어요.",command:{type:"closeAccount"},reload:true})}>회원 탈퇴</button>}{p.real?.user?<button className="btn" disabled={busy} onClick={async()=>{await fetch("/api/auth",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"logout"})});window.location.reload()}}><LogOut/>로그아웃</button>:<button className="btn btn-green" onClick={()=>{p.setDemo(false);setModal(null)}}>로그인 · 회원가입</button>}<p className="data-note">팀킥 · 초기 팀 운영 버전<br/>앱 내 알림을 지원합니다. 휴대폰 푸시는 아직 연결되지 않았습니다.</p></div>}
+ {modal?.kind==="settings"&&<div className="gap-grid"><div className="row"><span className="avatar">{v.user?.name?.slice(-2)||"MY"}</span><strong>{demo?"샘플 팀 공간":v.user?.name||"로그인이 필요해요"}</strong></div>{demo?<button className="btn btn-green" onClick={()=>{p.setDemo(false);setModal(null);p.setView("team")}}>실제 우리 팀 공간으로</button>:<button className="btn" onClick={()=>{p.setDemo(true);setModal(null);p.setView("home")}}>샘플 팀 둘러보기</button>}{v.isOwner&&<button className="btn" onClick={()=>{p.setView("admin");setModal(null)}}><ShieldCheck/>서비스 관리</button>}{p.real?.setupNeeded&&p.real?.user&&<button className="btn" onClick={()=>{p.setDemo(false);setModal({kind:"setup"})}}>운영자 초기 설정</button>}{install?<button className="btn" onClick={async()=>{await install.prompt();setInstall(null)}}><Download/>홈 화면에 설치</button>:<p className="data-note">휴대폰 브라우저의 공유·메뉴에서 ‘홈 화면에 추가’를 선택해 앱처럼 열 수 있어요.</p>}{!demo&&v.role&&v.role!=="captain"&&<button className="btn btn-danger" onClick={()=>setConfirm({title:"현재 팀에서 탈퇴할까요?",command:{type:"leaveTeam",teamId:v.teamId}})}>팀 탈퇴</button>}{!demo&&p.real?.user&&<button className="btn btn-danger" onClick={()=>setConfirm({title:"정말 탈퇴할까요? 계정과 로그인 정보가 삭제되고 되돌릴 수 없어요.",command:{type:"closeAccount"},reload:true})}>회원 탈퇴</button>}{p.real?.user?<button className="btn" disabled={busy} onClick={async()=>{await fetch("/api/auth",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"logout"})});window.location.reload()}}><LogOut/>로그아웃</button>:<button className="btn btn-green" onClick={()=>{p.setDemo(false);setModal(null)}}>로그인 · 회원가입</button>}<p className="data-note">팀킥 · 초기 팀 운영 버전<br/>앱 안 알림과 휴대폰 알림을 지원합니다. 휴대폰 알림은 MY → 기기 알림에서 켜요.</p></div>}
  </DialogContent></Dialog>
  <AlertDialog open={!!confirm} onOpenChange={o=>!o&&setConfirm(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{confirm?.title}</AlertDialogTitle><AlertDialogDescription>팀 상태와 관련 기록에 반영됩니다. 내용을 확인한 후 진행해주세요.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>돌아가기</AlertDialogCancel><AlertDialogAction disabled={busy} onClick={()=>{const c=confirm.command,reload=confirm.reload;setConfirm(null);save(c,reload?()=>window.location.reload():undefined)}}>확인</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></>
 }

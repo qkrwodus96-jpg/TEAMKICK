@@ -148,18 +148,21 @@ export function NotifyToggle(){
  // 푸시가 되는지 확인할 길이 없었다. 이 단추만 그 규칙을 건너뛴다.
  async function sendTest(){
   setBusy(true);
+  setTestNote("보내는 중이에요 · 푸시 서버가 늦으면 20초쯤 걸릴 수 있어요.");
   try{
    const res=await fetch("/api/push",{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({action:"test"})});
-   const out=await res.json().catch(()=>({})) as {ok?:boolean;sent?:number;devices?:number;hosts?:string;reason?:string;error?:string};
+   const out=await res.json().catch(()=>({})) as {ok?:boolean;sent?:number;devices?:number;hosts?:string;via?:string;reason?:string;probe?:string[];error?:string};
    if(!res.ok)throw new Error(out.error||"시험 알림을 보내지 못했어요.");
    if(out.ok){
     toast.success((out.sent??0)+"대에 보냈어요. 잠시 뒤 잠금화면을 확인해주세요.");
     setTestNote("보냈어요 · 기기 "+(out.sent??0)+"대 · 푸시 서버 "+(out.hosts||"알 수 없음")+
+     (out.via?" (닿지 않아 "+out.via+" 로 돌아서 보냄)":"")+
      " · "+new Date().toLocaleTimeString("ko-KR")+". 몇 초 안에 잠금화면에 뜨지 않으면 이 줄을 그대로 알려주세요.");
    }else{
     toast.error(out.reason?"보내지 못했어요 · "+out.reason:"보내지 못했어요.");
-    setTestNote("보내지 못했어요 · "+(out.reason||"이유를 알 수 없어요")+" · 이 줄을 그대로 알려주세요.");
+    setTestNote("보내지 못했어요 · "+(out.reason||"이유를 알 수 없어요")+
+     (out.probe?.length?" · 연결 확인: "+out.probe.join(" / "):"")+" · 이 줄을 그대로 알려주세요.");
    }
   }catch(e){const m=e instanceof Error?e.message:"시험 알림을 보내지 못했어요.";toast.error(m);setTestNote("보내지 못했어요 · "+m)}
   finally{setBusy(false)}

@@ -9,7 +9,7 @@ import {ensureSchema} from "@/lib/schema";
 import {kakaoReady} from "@/lib/kakao";
 import {socialReady} from "@/lib/social";
 import {emailSignupEnabled} from "@/lib/signup-policy";
-import {wakeDevices} from "@/lib/push";
+import {wakeDevices,afterResponse} from "@/lib/push";
 export const dynamic="force-dynamic";
 const json=(x:any,status=200,cookie?:string)=>Response.json(x,{status,headers:cookie?{"Cache-Control":"no-store","Set-Cookie":cookie}:{"Cache-Control":"no-store"}});
 export async function GET(req:Request){try{await ensureSchema();const user=await currentUser(req);if(!user)return json({user:null,mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver")});const {state}=await load();const teamId=new URL(req.url).searchParams.get("team")??undefined;const token=new URL(req.url).searchParams.get("invite");const invite=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());
@@ -45,7 +45,7 @@ export async function POST(req:Request){
     // 이번 저장으로 새로 생긴 알림을 받은 사람만 대상이다.
     const had=new Set(state.notifications.map(x=>x.id));
     const woken=[...new Set(after.notifications.filter(x=>!had.has(x.id)&&x.userId!==user.userId).map(x=>String(x.userId)))];
-    if(woken.length)await wakeDevices(woken).catch(e=>console.error("TeamKick push",e));
+    if(woken.length)await afterResponse(wakeDevices(woken).catch(e=>console.error("TeamKick push",e)));
     return json({ok:true,output,...visibleState(after,user.userId,seen)});
    }catch(e){if(String(e).includes("revision_matches")||String(e).includes("CHECK constraint")){if(attempt<3)continue;throw new AppError("다른 변경이 먼저 저장되었어요. 새로고침 후 다시 시도해주세요.",409)}throw e}
   }

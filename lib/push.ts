@@ -1,4 +1,7 @@
 import {env} from "cloudflare:workers";
+// 이름으로 꺼내지 않고 통째로 받는다. 오래된 실행기에 waitUntil 이 없으면 이름으로
+// 꺼내는 순간 서버 전체가 뜨지 않는다. 통째로 받으면 없을 때 undefined 일 뿐이다.
+import * as workers from "cloudflare:workers";
 import {AppError} from "./model";
 
 // 기기 푸시(웹 푸시). 잠금화면까지 알림이 가게 한다.
@@ -79,25 +82,78 @@ export const MAX_DEVICES=20,TIMEOUT_MS=4000;
 
 // 푸시 서버가 뭐라고 답했는지 남긴다. 예전에는 성공 여부(true/false)만 돌려줘서
 // 안 올 때 원인을 알 수 없었다. 본문은 앞부분만 잘라 둔다.
-export type SendResult={ok:boolean;status:number;detail:string;host:string};
+export type SendResult={ok:boolean;status:number;detail:string;host:string;ms:number;via?:string};
 
-async function sendOne(sub:Sub):Promise<SendResult>{
- const url=new URL(sub.endpoint);
- let res:Response;
+type Attempt={res?:Response;error?:string;ms:number;host:string};
+async function post(endpoint:string,timeout:number):Promise<Attempt>{
+ const url=new URL(endpoint);
+ // 서명은 시간 제한을 걸기 **전에** 만든다. 예전에는 제한 시간이 먼저 흐르기 시작한
+ // 뒤에 서명을 만들어, 서명에 든 시간까지 제한 시간에서 깎였다.
+ const auth="vapid t="+await vapidToken(url.origin)+", k="+publicKey();
+ const began=Date.now();
  try{
-  res=await fetch(sub.endpoint,{method:"POST",signal:AbortSignal.timeout(TIMEOUT_MS),headers:{
-   // Content-Length 는 fetch 가 직접 정하는 값이라 여기서 넣어도 버려진다. 넣지 않는다.
-   Authorization:"vapid t="+await vapidToken(url.origin)+", k="+publicKey(),
-   TTL:"86400",Urgency:"normal"}});
+  const res=await fetch(endpoint,{method:"POST",signal:AbortSignal.timeout(timeout),
+   // 내용 없는 푸시다. 길이 0 인 본문을 분명히 실어 둔다(`Content-Length: 0`).
+   // 참고: 운영과 같은 실행기(workerd)로 확인해 보니 본문을 빼도 길이 0 이 붙었다.
+   // 그러니 2026-09-24 의 "응답 없음" 은 이것 때문이 아니다 — 아래 우회를 보라.
+   body:new Uint8Array(0),
+   headers:{Authorization:auth,TTL:"86400",Urgency:"normal"}});
+  return {res,ms:Date.now()-began,host:url.host};
  }catch(e){
-  // 시간 초과나 연결 실패. 푸시 서버에 닿지도 못한 경우다.
-  return {ok:false,status:0,detail:String(e instanceof Error?e.message:e).slice(0,200),host:url.host};
+  return {error:String(e instanceof Error?e.message:e).slice(0,160),ms:Date.now()-began,host:url.host};
  }
+}
+
+// 크롬(안드로이드)이 주는 푸시 주소가 `https://jmt17.google.com/fcm/send/<토큰>` 모양일
+// 때가 있다. 뒤쪽 `/fcm/send/<토큰>` 이 같으면 `fcm.googleapis.com` 도 같은 곳이다.
+// 사장님 갤럭시에서 jmt17.google.com 이 "응답 없음 · 시간 초과" 로 떨어졌다(2026-09-24).
+// 한쪽에 닿지 못하면 다른 쪽으로 한 번 더 보낸다.
+export const FCM_ORIGIN="https://fcm.googleapis.com";
+export const fcmAlias=(endpoint:string)=>{
+ try{
+  const u=new URL(endpoint);
+  return u.origin!==FCM_ORIGIN&&u.hostname.endsWith(".google.com")&&u.pathname.startsWith("/fcm/send/")?FCM_ORIGIN+u.pathname:"";
+ }catch{return ""}
+};
+
+async function sendOne(sub:Sub,timeout=TIMEOUT_MS):Promise<SendResult>{
+ const first=await post(sub.endpoint,timeout);
+ let got=first,via="";
+ if(!first.res){
+  // 닿지도 못했을 때만 우회한다. 푸시 서버가 거절(4xx)했으면 우회해도 같다.
+  const alias=fcmAlias(sub.endpoint);
+  if(alias){const second=await post(alias,timeout);if(second.res){got=second;via=second.host}}
+ }
+ if(!got.res)return {ok:false,status:0,detail:first.error??"",host:first.host,ms:first.ms};
+ const res=got.res;
  // 410/404 는 기기가 구독을 버렸다는 뜻이다. 그대로 두면 계속 실패한다.
- if(res.status===404||res.status===410)await db().prepare("DELETE FROM push_subs WHERE id=?").bind(sub.id).run();
+ // 다만 우회 주소에서 받은 답이면 확신할 수 없으니 지우지 않는다.
+ if(!via&&(res.status===404||res.status===410))await db().prepare("DELETE FROM push_subs WHERE id=?").bind(sub.id).run();
  let detail="";
  if(!res.ok)detail=await res.text().then(t=>t.slice(0,200)).catch(()=>"");
- return {ok:res.ok,status:res.status,detail,host:url.host};
+ return {ok:res.ok,status:res.status,detail,host:first.host,ms:got.ms,...(via?{via}:{})};
+}
+
+// 저장 응답을 푸시 때문에 붙잡아 두지 않는다. 실행기가 지원하면 응답을 먼저 돌려주고
+// 푸시는 뒤에서 마저 보낸다. 지원하지 않으면 예전처럼 기다린다.
+// 예전에는 푸시가 시간 초과로 떨어지면 알림이 걸린 저장이 그만큼 늦어졌다.
+export function afterResponse(p:Promise<unknown>):Promise<unknown>{
+ const wu=(workers as unknown as {waitUntil?:(p:Promise<unknown>)=>void}).waitUntil;
+ if(typeof wu==="function"){try{wu(p);return Promise.resolve()}catch{/* 아래로 */}}
+ return p;
+}
+
+// 푸시 서버까지 길이 뚫려 있는지 따로 본다. "응답 없음" 이 **우리 요청 모양 때문**인지
+// **이 서버가 밖으로 못 나가서**인지 가려 준다. 주소를 GET 으로 두드려 보고
+// 몇 초 만에 무슨 답이 오는지만 본다(내용은 쓰지 않는다).
+async function reach(host:string){
+ const began=Date.now();
+ try{
+  const r=await fetch("https://"+host+"/",{method:"GET",redirect:"manual",signal:AbortSignal.timeout(5000)});
+  return host+" 연결됨 "+r.status+" ("+(Date.now()-began)+"ms)";
+ }catch(e){
+  return host+" 연결 안 됨 ("+(Date.now()-began)+"ms · "+String(e instanceof Error?e.message:e).slice(0,60)+")";
+ }
 }
 
 // 알림을 받은 사람들의 기기를 깨운다. 실패해도 저장은 이미 끝난 뒤라 되돌리지 않는다.
@@ -111,7 +167,7 @@ export async function wakeDevices(userIds:string[]){
  }
  const out=await Promise.allSettled(subs.map(sendOne));
  const results:SendResult[]=out.map(r=>r.status==="fulfilled"?r.value
-  :{ok:false,status:0,detail:String(r.reason).slice(0,200),host:""});
+  :{ok:false,status:0,detail:String(r.reason).slice(0,200),host:"",ms:0});
  const sent=results.filter(r=>r.ok).length;
  // 실패한 것이 있으면 서버 기록에 이유를 남긴다. 예전에는 조용히 사라졌다.
  for(const r of results)if(!r.ok)console.error("TeamKick push 실패",r.host,r.status,r.detail);
@@ -122,13 +178,20 @@ export async function wakeDevices(userIds:string[]){
 // 평소 알림은 **만든 사람 본인에게는 가지 않는다**(자기가 방금 한 일이라). 그래서 혼자
 // 시험하면 푸시가 영영 안 온다. 이 함수만 그 규칙을 건너뛰고, 푸시 서버가 뭐라고
 // 답했는지 그대로 돌려준다.
+// 시험 발송은 평소보다 오래 기다린다. 느리지만 되는 것과 아예 안 되는 것을 가리려면
+// 제한 시간이 넉넉해야 한다. 평소 발송(4초)은 저장을 늦추지 않도록 그대로 둔다.
+export const TEST_TIMEOUT_MS=8000;
 export async function testWake(accountId:string){
  if(!pushReady())throw new AppError("알림이 아직 설정되지 않았어요. 운영자가 푸시 키를 넣어야 해요.",503);
  const subs=(await subscriptionsOf(accountId)).slice(0,MAX_DEVICES);
  if(!subs.length)throw new AppError("이 계정에 등록된 기기가 없어요. 먼저 이 기기에서 알림을 켜주세요.",409);
- const out=await Promise.allSettled(subs.map(sendOne));
+ const out=await Promise.allSettled(subs.map(x=>sendOne(x,TEST_TIMEOUT_MS)));
  const results:SendResult[]=out.map(r=>r.status==="fulfilled"?r.value
-  :{ok:false,status:0,detail:String(r.reason).slice(0,200),host:""});
+  :{ok:false,status:0,detail:String(r.reason).slice(0,200),host:"",ms:0});
  for(const r of results)if(!r.ok)console.error("TeamKick push 시험 실패",r.host,r.status,r.detail);
- return {devices:subs.length,sent:results.filter(r=>r.ok).length,results};
+ // 푸시 서버에 닿지도 못했으면 길이 뚫려 있는지 함께 본다.
+ let probe:string[]=[];
+ const unreached=[...new Set(results.filter(r=>r.status===0&&r.host).map(r=>r.host))];
+ if(unreached.length)probe=await Promise.all([...unreached,"fcm.googleapis.com","www.google.com"].map(reach));
+ return {devices:subs.length,sent:results.filter(r=>r.ok).length,results,probe};
 }

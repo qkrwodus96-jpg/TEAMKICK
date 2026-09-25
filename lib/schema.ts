@@ -48,13 +48,17 @@ export const STATEMENTS=[
  // 바꾸므로 그 안에 두면 복원과 함께 사라진다.
  `CREATE TABLE IF NOT EXISTS closed_accounts (id text PRIMARY KEY NOT NULL, at text NOT NULL)`,
  `CREATE INDEX IF NOT EXISTS idx_closed_accounts_at ON closed_accounts (at)`,
+ // 소셜로 처음 들어온 사람의 가입 대기(최대 10분). 약관 동의·만 14세 확인을 받기 전에는
+ // 계정을 만들지 않는다. 동의하면 계정을 만들고 이 줄을 지운다. id 는 쿠키 값의 해시다.
+ `CREATE TABLE IF NOT EXISTS social_signups (id text PRIMARY KEY NOT NULL, provider text NOT NULL, subject text NOT NULL, name text NOT NULL, expires text NOT NULL, at text NOT NULL)`,
+ `CREATE INDEX IF NOT EXISTS idx_social_signups_expires ON social_signups (expires)`,
 ];
 
 // 배포된 코드가 어느 시점 것인지 화면으로 확인하기 위한 표시.
 // 스키마나 진단에 영향을 주는 변경을 할 때 함께 올린다.
-export const BUILD="2026-09-24-closed-accounts";
+export const BUILD="2026-09-25-social-consent";
 
-export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications","push_subs","closed_accounts"];
+export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications","push_subs","closed_accounts","social_signups"];
 
 // 카카오만 있던 시절의 계정을 새 열로 옮긴다. 여러 번 돌아도 안전하다.
 export async function backfillAccounts(){

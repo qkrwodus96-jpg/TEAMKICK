@@ -10,3 +10,5 @@ export const rateLimits=sqliteTable("rate_limits",{id:text("id").primaryKey(),co
 export const emailVerifications=sqliteTable("email_verifications",{id:text("id").primaryKey(),accountId:text("account_id").notNull(),expires:text("expires").notNull(),used:integer("used").notNull().default(0),at:text("at").notNull()},t=>[index("idx_email_verifications_account").on(t.accountId)]);
 // 탈퇴한 계정 번호만(이름·이메일 없음). 백업 복원 때 되살리지 않기 위해 1년 보관.
 export const closedAccounts=sqliteTable("closed_accounts",{id:text("id").primaryKey(),at:text("at").notNull()},t=>[index("idx_closed_accounts_at").on(t.at)]);
+// 소셜 가입 대기(최대 10분). 동의·만 14세 확인 전에는 계정을 만들지 않는다.
+export const socialSignups=sqliteTable("social_signups",{id:text("id").primaryKey(),provider:text("provider").notNull(),subject:text("subject").notNull(),name:text("name").notNull(),expires:text("expires").notNull(),at:text("at").notNull()},t=>[index("idx_social_signups_expires").on(t.expires)]);

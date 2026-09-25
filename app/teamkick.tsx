@@ -12,7 +12,7 @@ import {Toaster} from "@/components/ui/sonner";
 import {toast} from "sonner";
 import {demoState} from "@/lib/demo";
 import {applyCommand,visibleState,summaries,currentVote,type Row} from "@/lib/model";
-import {AuthPanel,Management,Matching,AppDialogs,MyHub} from "./screens";
+import {AuthPanel,SocialConsent,Management,Matching,AppDialogs,MyHub} from "./screens";
 export const days=["일","월","화","수","목","금","토"];
 export const koreanDate=(iso:string)=>new Date(iso).toLocaleDateString("ko-KR",{timeZone:"Asia/Seoul",month:"long",day:"numeric",weekday:"short"});
 export const time=(iso:string)=>new Date(iso).toLocaleTimeString("ko-KR",{timeZone:"Asia/Seoul",hour:"2-digit",minute:"2-digit",hour12:false});
@@ -70,8 +70,9 @@ const TEAM_KEY="teamkick_team";
 const storedTeam=()=>{try{return localStorage.getItem(TEAM_KEY)??""}catch{return ""}};
 const rememberTeam=(t:string)=>{try{if(t)localStorage.setItem(TEAM_KEY,t)}catch{}};
 const nav=[{id:"home",label:"홈",icon:Home},{id:"schedule",label:"일정",icon:CalendarDays},{id:"matching",label:"매칭",icon:Handshake},{id:"records",label:"기록",icon:ChartNoAxesCombined},{id:"team",label:"MY",icon:Users}];
-export default function TeamKick({resetToken="",verifyToken="",kakaoNote=""}:{resetToken?:string;verifyToken?:string;kakaoNote?:string}){
- const [samples,setSamples]=useState(demoState),[demo,setDemo]=useState(!resetToken&&!verifyToken&&!kakaoNote),[demoActor,setDemoActor]=useState("demo-a"),[demoTeam,setDemoTeam]=useState("team-a");
+export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",socialSignup=""}:{resetToken?:string;verifyToken?:string;kakaoNote?:string;socialSignup?:string}){
+ const [pendingSignup,setPendingSignup]=useState(socialSignup);
+ const [samples,setSamples]=useState(demoState),[demo,setDemo]=useState(!resetToken&&!verifyToken&&!kakaoNote&&!socialSignup),[demoActor,setDemoActor]=useState("demo-a"),[demoTeam,setDemoTeam]=useState("team-a");
  const [verifyNote,setVerifyNote]=useState(kakaoNote);
  const [activeReset,setActiveReset]=useState(resetToken);
  const [real,setReal]=useState<any>(null),[view,setActualView]=useState("home"),[modal,setModal]=useState<any>(null),[busy,setBusy]=useState(false),[error,setError]=useState(""),[loading,setLoading]=useState(true);
@@ -102,7 +103,7 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote=""}:{re
   return()=>navigator.serviceWorker?.removeEventListener?.("message",onMessage);
  },[]);
  // 카카오 로그인이 실패하면 그 이유가 주소에 실려 돌아온다. 보여주고 주소는 정리한다.
- useEffect(()=>{if(kakaoNote)window.history.replaceState(null,"","/")},[kakaoNote]);
+ useEffect(()=>{if(kakaoNote||socialSignup)window.history.replaceState(null,"","/")},[kakaoNote,socialSignup]);
  // 메일의 확인 링크로 들어온 경우. 링크는 한 번만 쓰이므로 주소에서 바로 지운다.
  useEffect(()=>{if(!verifyToken)return;
   fetch("/api/auth",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"verify",token:verifyToken})})
@@ -186,7 +187,7 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote=""}:{re
  {!demo&&v.user&&<KeepSubscription/>}{!demo&&v.user&&v.teamId&&<NotifyInvite/>}
  {demo&&<div className="demo-strip"><span>샘플 팀 둘러보기 · 변경 사항은 실제 팀에 저장되지 않아요.</span><button onClick={toActual}>우리 팀 시작하기 <span aria-hidden>↗</span></button></div>}
  <div className="md:hidden" style={{marginBottom:20}}>{teamPicker}</div>
- {!demo&&!v.user?<AuthPanel onDemo={()=>setDemo(true)} mailReady={real?.mailReady!==false} kakaoReady={real?.kakaoReady===true} googleReady={real?.googleReady===true} naverReady={real?.naverReady===true} emailSignupEnabled={real?.emailSignupEnabled===true}/>:
+ {!demo&&!v.user&&pendingSignup?<SocialConsent provider={pendingSignup} onCancel={()=>setPendingSignup("")}/>:!demo&&!v.user?<AuthPanel onDemo={()=>setDemo(true)} mailReady={real?.mailReady!==false} kakaoReady={real?.kakaoReady===true} googleReady={real?.googleReady===true} naverReady={real?.naverReady===true} emailSignupEnabled={real?.emailSignupEnabled===true}/>:
  // 팀이 없으면 온보딩을 보여준다. 다만 MY 는 팀과 상관없는 내 것들이라
  // 팀이 없어도 아래에 함께 보여준다. 안 그러면 문의·공지·버전을 볼 길이 없다.
  !team&&view!=="admin"&&view!=="matching"?<><Management {...common} onboarding/>{view==="team"&&<div className="gap-grid" style={{marginTop:24}}><MyHub {...common}/></div>}</>:

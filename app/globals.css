@@ -45,4 +45,4 @@ html[data-splash="skip"] #teamkick-splash{display:none}
 
 .app-booting{position:fixed;inset:0;background:var(--background)}
 
-.legal-page{max-width:720px;margin:0 auto;padding:28px 16px 60px}.legal-page h1{font-size:24px;font-weight:750;margin:14px 0 18px}.legal-text{white-space:pre-wrap;line-height:1.8;font-size:15px}
+.legal-page{max-width:720px;margin:0 auto;padding:28px 16px 60px}.legal-page h1{font-size:24px;font-weight:750;margin:14px 0 18px}.legal-text{line-height:1.75;font-size:15px;word-break:keep-all;overflow-wrap:anywhere}.legal-text section{margin:0 0 18px}.legal-text h2{font-size:16px;font-weight:700;margin:0 0 6px}.legal-text p{margin:0 0 6px}.legal-text ul{margin:4px 0 0;padding-left:18px;list-style:disc}.legal-text li{margin:0 0 4px}.small .legal-text{font-size:13.5px}

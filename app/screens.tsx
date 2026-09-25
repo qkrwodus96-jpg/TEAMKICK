@@ -10,8 +10,50 @@ import {Upload,Plus,Search,MapPin,CalendarDays,Clock,Users,ShieldCheck,Copy,Exte
 import {Picker,Crest,imageUrl,Empty,GameBadge,GuestBadge,PlayerPhoto,Vote,koreanDate,time,localDay,inputTime,fromInput,opponent,started,backNo,backNoOr,NoticeList} from "./teamkick";
 import {currentVote,guestStatusOf,REGIONS,FORMATS,LEVELS,DAYS,levelOf,type Row} from "@/lib/model";
 import {TERMS,PRIVACY} from "@/lib/legal";
+import {LegalText} from "./legal-text";
 import {APP_VERSION} from "@/lib/version";
 import {NotifyToggle} from "./notify";
+// 소셜로 처음 온 사람의 가입 동의 화면. 이 두 가지를 체크하기 전에는 계정을 만들지 않는다
+// (2026-09-25 — 예전에는 소셜로 들어오면 동의 없이 바로 가입됐다).
+export function SocialConsent({provider,onCancel}:{provider:string;onCancel:()=>void}){
+ const label=({kakao:"카카오",google:"구글",naver:"네이버"} as Record<string,string>)[provider]??"소셜";
+ const [agree,setAgree]=useState(false),[adult,setAdult]=useState(false),[busy,setBusy]=useState(false),[failure,setFailure]=useState(""),[legal,setLegal]=useState("");
+ async function send(action:string){
+  const res=await fetch("/api/auth",{method:"POST",headers:{"content-type":"application/json"},credentials:"same-origin",body:JSON.stringify({action,agree,adult})});
+  const out=await res.json().catch(()=>({})) as {error?:string};
+  if(!res.ok)throw new Error(out.error||"처리하지 못했어요. 잠시 후 다시 시도해주세요. (응답 "+res.status+")");
+ }
+ async function submit(e:FormEvent){
+  e.preventDefault();setBusy(true);setFailure("");
+  try{await send("socialSignup");window.location.replace("/")}
+  catch(err){setFailure(err instanceof Error?err.message:"처리하지 못했어요.");setBusy(false)}
+ }
+ async function cancel(){setBusy(true);await send("socialSignupCancel").catch(()=>{});setBusy(false);onCancel()}
+ return <section className="onboarding panel">
+  <h2 className="view-heading">팀킥 가입</h2>
+  <p className="small muted" style={{marginBottom:18,lineHeight:1.7}}>{label} 계정으로 처음 오셨어요. 아래 두 가지를 확인하면 가입이 끝나요.</p>
+  {failure&&<p className="error-bar" role="alert">{failure}</p>}
+  <form className="form-grid" onSubmit={submit}>
+   <label className="row" style={{gap:9,fontWeight:400,fontSize:14,alignItems:"flex-start"}}>
+    <input type="checkbox" required style={{width:"auto",marginTop:3}} checked={agree} onChange={e=>setAgree(e.target.checked)}/>
+    <span>(필수) <button type="button" className="text-link" style={{display:"inline"}} onClick={()=>setLegal("terms")}>이용약관</button>과 <button type="button" className="text-link" style={{display:"inline"}} onClick={()=>setLegal("privacy")}>개인정보 수집·이용</button>에 동의합니다.</span>
+   </label>
+   <label className="row" style={{gap:9,fontWeight:400,fontSize:14,alignItems:"flex-start"}}>
+    <input type="checkbox" required style={{width:"auto",marginTop:3}} checked={adult} onChange={e=>setAdult(e.target.checked)}/>
+    <span>(필수) 만 14세 이상입니다.</span>
+   </label>
+   <p className="data-note">{label}에서 받는 것은 회원 식별자와 이름(닉네임)뿐이에요. 만 14세 미만은 가입할 수 없어요.</p>
+   <button type="submit" className="btn btn-green" disabled={busy}>{busy&&<LoaderCircle className="loader" size={16}/>} 동의하고 시작하기</button>
+  </form>
+  <div className="action-strip"><button className="btn btn-ghost" disabled={busy} onClick={cancel}>가입하지 않기</button></div>
+  <Dialog open={!!legal} onOpenChange={o=>!o&&setLegal("")}><DialogContent className="sm:max-w-[560px] max-h-[85vh] overflow-y-auto rounded-2xl">
+   <DialogHeader><DialogTitle>{legal==="terms"?"이용약관":"개인정보처리방침"}</DialogTitle>
+   <DialogDescription>가입 전에 확인해주세요.</DialogDescription></DialogHeader>
+   <div className="small"><LegalText text={legal==="terms"?TERMS:PRIVACY}/></div>
+  </DialogContent></Dialog>
+ </section>;
+}
+
 export function AuthPanel({onDemo,mailReady=true,kakaoReady=false,googleReady=false,naverReady=false,emailSignupEnabled=false,resetToken="",onResetCancel}:{onDemo:()=>void;onResetCancel?:()=>void;emailSignupEnabled?:boolean;mailReady?:boolean;kakaoReady?:boolean;googleReady?:boolean;naverReady?:boolean;resetToken?:string}){
  const [mode,setMode]=useState(resetToken?"reset":"login"),[form,setForm]=useState<Record<string,string>>({email:"",password:"",password2:"",name:""});
  const [busy,setBusy]=useState(false),[failure,setFailure]=useState("");
@@ -86,7 +128,7 @@ export function AuthPanel({onDemo,mailReady=true,kakaoReady=false,googleReady=fa
   <Dialog open={!!legal} onOpenChange={o=>!o&&setLegal("")}><DialogContent className="sm:max-w-[560px] max-h-[85vh] overflow-y-auto rounded-2xl">
    <DialogHeader><DialogTitle>{legal==="terms"?"이용약관":"개인정보처리방침"}</DialogTitle>
    <DialogDescription>가입 전에 확인해주세요.</DialogDescription></DialogHeader>
-   <p className="small" style={{whiteSpace:"pre-wrap",lineHeight:1.8}}>{legal==="terms"?TERMS:PRIVACY}</p>
+   <div className="small"><LegalText text={legal==="terms"?TERMS:PRIVACY}/></div>
   </DialogContent></Dialog>
  </section>;
 }

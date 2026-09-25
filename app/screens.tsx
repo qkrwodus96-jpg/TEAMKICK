@@ -272,6 +272,8 @@ export function ImageField({title,current,kind,teamId,memberId,onSaved,disabled,
 }
 type PickedPlace={venue?:string;name?:string;address:string;lotAddress?:string;category?:string;lat?:number|string;lng?:number|string};
 const SOCIAL_LABEL:Record<string,string>={kakao:"카카오",google:"구글",naver:"네이버"};
+// 혼자 있는 팀의 주장이면 탈퇴와 함께 팀이 해산된다(lib/model.ts dissolveTeam). 미리 알린다.
+const CAPTAIN_NOTE=" 다른 팀원이 없는 팀의 주장이라면 그 팀은 해산되고, 앞으로 잡힌 경기는 취소돼요.";
 // 탈퇴 조건(주장 인계 등)은 서버가 여기서 먼저 확인하고, 통과하면 사업자 로그인 주소를 준다.
 async function closeWithProvider(provider:string){
  try{
@@ -280,6 +282,26 @@ async function closeWithProvider(provider:string){
   if(!res.ok||!out.location)throw new Error(out.error||"탈퇴를 시작하지 못했어요.");
   window.location.href=out.location;
  }catch(err){toast.error(err instanceof Error?err.message:"탈퇴를 시작하지 못했어요.")}
+}
+// 서비스 관리 — 팀 목록. 팀이 늘어도 볼 수 있게 위 숫자 칸을 눌러 거르고, 이름·지역으로 찾고,
+// 10개씩 더 본다(2026-09-25 사장님 요청). 할 일이 있는 승인 대기가 있으면 그것부터 보여준다.
+const TEAM_LABEL:Record<string,string>={pending:"승인 대기",active:"승인 완료",rejected:"반려",suspended:"이용 정지",closed:"해산"};
+const TEAM_TABS=[{key:"all",label:"등록 팀"},{key:"pending",label:"승인 대기"},{key:"active",label:"활성 팀"},{key:"suspended",label:"이용 정지"}] as const;
+const TEAM_ORDER:Record<string,number>={pending:0,suspended:1,active:2,rejected:3,closed:4};
+function AdminTeams({v,busy,run,setModal}:{v:Row;busy:boolean;run:(c:Record<string,unknown>)=>void;setModal:(m:Record<string,unknown>)=>void}){
+ const teams:Row[]=v.teams??[];
+ const count=(k:string)=>k==="all"?teams.length:teams.filter(t=>t.status===k).length;
+ const [tab,setTab]=useState<string>(()=>count("pending")?"pending":"all"),[query,setQuery]=useState(""),[limit,setLimit]=useState(10);
+ const pick=(k:string)=>{setTab(k);setLimit(10)};
+ const shown=teams.filter(t=>(tab==="all"||t.status===tab)&&teamMatches(t,query))
+  .sort((a,b)=>(TEAM_ORDER[a.status]??9)-(TEAM_ORDER[b.status]??9)||String(a.name).localeCompare(String(b.name),"ko"));
+ return <>
+  <div className="stats-grid" style={{marginBottom:18}}>{TEAM_TABS.map(x=><button type="button" key={x.key} className={"stat-card stat-tab"+(tab===x.key?" is-on":"")} aria-pressed={tab===x.key} onClick={()=>pick(x.key)}><div className="stat-label">{x.label}</div><div className="stat-value">{count(x.key)}</div></button>)}</div>
+  <input placeholder="팀 이름이나 지역으로 찾기" value={query} onChange={e=>{setQuery(e.target.value);setLimit(10)}} style={{marginBottom:16}}/>
+  <div className="admin-grid">{shown.slice(0,limit).map((t:Row)=><section className="panel" key={t.id}><div className="row between"><h3>{t.name}</h3><span className={"badge "+(t.status==="pending"?"badge-orange":t.status==="active"?"badge-green":"badge-red")}>{TEAM_LABEL[t.status]??t.status}</span></div><p className="data-note">{t.region} · 신청자 {t.applicantName}</p><p className="small muted" style={{marginTop:12}}>{t.description}</p>{t.reason&&<p className="data-note">사유: {t.reason}</p>}<div className="action-strip">{t.status==="pending"&&<><button className="btn btn-green" disabled={busy} onClick={()=>run({type:"approveTeam",teamId:t.id})}>팀 승인</button><button className="btn" onClick={()=>setModal({kind:"reason",command:"rejectTeam",teamId:t.id,title:"팀 등록 반려"})}>반려</button></>}{t.status==="active"&&<button className="btn btn-danger" onClick={()=>setModal({kind:"reason",command:"suspendTeam",teamId:t.id,title:"팀 이용 정지"})}>이용 정지</button>}{t.status==="suspended"&&<button className="btn btn-green" disabled={busy} onClick={()=>run({type:"restoreTeam",teamId:t.id})}>이용 복구</button>}</div></section>)}</div>
+  {!shown.length&&<Empty title={query?"찾는 팀이 없어요":"해당하는 팀이 없어요"}/>}
+  {shown.length>limit&&<button type="button" className="btn notice-more" style={{margin:"16px auto 0"}} onClick={()=>setLimit(l=>l+10)}>더 보기 ({shown.length-limit}개 남음)</button>}
+ </>;
 }
 // 운영 데이터를 파일로 내려받고 되돌린다. D1 이 사라지면 복구할 다른 수단이 없다.
 export function BackupPanel(){
@@ -461,7 +483,7 @@ export const teamMatches=(t:Row,q:string)=>{
 };
 export function Management(p:any){
  const {v,team,onboarding,admin,busy,setModal,run,captain}=p,[query,setQuery]=useState("");
- if(admin)return <>{v.isOwner?<><div className="stats-grid" style={{marginBottom:24}}>{[{label:"등록 팀",v:v.teams.length},{label:"승인 대기",v:v.teams.filter((t:Row)=>t.status==="pending").length},{label:"활성 팀",v:v.teams.filter((t:Row)=>t.status==="active").length}].map(x=><div className="stat-card" key={x.label}><div className="stat-label">{x.label}</div><div className="stat-value">{x.v}</div></div>)}</div><div className="admin-grid">{v.teams.map((t:Row)=><section className="panel" key={t.id}><div className="row between"><h3>{t.name}</h3><span className={"badge "+(t.status==="pending"?"badge-orange":t.status==="active"?"badge-green":"badge-red")}>{({pending:"승인 대기",active:"승인 완료",rejected:"반려",suspended:"이용 정지"} as any)[t.status]}</span></div><p className="data-note">{t.region} · 신청자 {t.applicantName}</p><p className="small muted" style={{marginTop:12}}>{t.description}</p>{t.reason&&<p className="data-note">사유: {t.reason}</p>}<div className="action-strip">{t.status==="pending"&&<><button className="btn btn-green" disabled={busy} onClick={()=>run({type:"approveTeam",teamId:t.id})}>팀 승인</button><button className="btn" onClick={()=>setModal({kind:"reason",command:"rejectTeam",teamId:t.id,title:"팀 등록 반려"})}>반려</button></>}{t.status==="active"&&<button className="btn btn-danger" onClick={()=>setModal({kind:"reason",command:"suspendTeam",teamId:t.id,title:"팀 이용 정지"})}>이용 정지</button>}{t.status==="suspended"&&<button className="btn btn-green" disabled={busy} onClick={()=>run({type:"restoreTeam",teamId:t.id})}>이용 복구</button>}</div></section>)}</div>{!!(v.retired??[]).length&&<section className="panel" style={{marginTop:24}}>
+ if(admin)return <>{v.isOwner?<><AdminTeams v={v} busy={busy} run={run} setModal={setModal}/>{!!(v.retired??[]).length&&<section className="panel" style={{marginTop:24}}>
   <h2 className="view-heading">탈퇴한 분의 기록</h2>
   <p className="data-note">탈퇴해도 과거 경기·출석·골 기록은 팀의 공동 기록으로 남고, 그때의 표시 이름도 함께 남아요.</p>
   <p className="data-note">본인이 이름을 지워달라고 요청하면 아래에서 가려주세요. 기록 자체는 그대로 남고 <strong>이름만</strong> 바뀌어요.</p>
@@ -751,8 +773,8 @@ export function AppDialogs(p:any){
  {modal?.kind==="setup"&&<form className="form-grid" onSubmit={e=>{e.preventDefault();save({type:"setupOwner",code:form.code})}}>{label("운영자 초기 설정 코드","code","password")}<p className="data-note">첫 로그인 순서로 권한을 부여하지 않습니다. 코드는 최초 운영자 등록에 한 번 사용합니다.</p>{submit("서비스 운영자로 등록")}</form>}
  {modal?.kind==="settings"&&<div className="gap-grid"><div className="row"><span className="avatar">{v.user?.name?.slice(-2)||"MY"}</span><strong>{demo?"샘플 팀 공간":v.user?.name||"로그인이 필요해요"}</strong></div>{demo?<button className="btn btn-green" onClick={()=>{p.setDemo(false);setModal(null);p.setView("team")}}>실제 우리 팀 공간으로</button>:<button className="btn" onClick={()=>{p.setDemo(true);setModal(null);p.setView("home")}}>샘플 팀 둘러보기</button>}{v.isOwner&&<button className="btn" onClick={()=>{p.setView("admin");setModal(null)}}><ShieldCheck/>서비스 관리</button>}{p.real?.setupNeeded&&p.real?.user&&<button className="btn" onClick={()=>{p.setDemo(false);setModal({kind:"setup"})}}>운영자 초기 설정</button>}{install?<button className="btn" onClick={async()=>{await install.prompt();setInstall(null)}}><Download/>홈 화면에 설치</button>:<p className="data-note">휴대폰 브라우저의 공유·메뉴에서 ‘홈 화면에 추가’를 선택해 앱처럼 열 수 있어요.</p>}{!demo&&v.role&&v.role!=="captain"&&<button className="btn btn-danger" onClick={()=>setConfirm({title:"현재 팀에서 탈퇴할까요?",command:{type:"leaveTeam",teamId:v.teamId}})}>팀 탈퇴</button>}{!demo&&p.real?.user&&<button className="btn btn-danger" onClick={()=>setConfirm(SOCIAL_LABEL[p.real.user.provider]
  // 카카오·구글·네이버로 가입한 계정은 그쪽에 한 번 더 로그인해서 연결까지 끊는다(lib/close.ts).
- ?{title:"정말 탈퇴할까요? 계정과 로그인 정보가 삭제되고 되돌릴 수 없어요.",description:SOCIAL_LABEL[p.real.user.provider]+" 로그인 화면을 한 번 거친 뒤 탈퇴되고, "+SOCIAL_LABEL[p.real.user.provider]+" 연결도 함께 끊어요.",act:()=>closeWithProvider(p.real.user.provider)}
- :{title:"정말 탈퇴할까요? 계정과 로그인 정보가 삭제되고 되돌릴 수 없어요.",command:{type:"closeAccount"},reload:true})}>회원 탈퇴</button>}{p.real?.user?<button className="btn" disabled={busy} onClick={async()=>{await fetch("/api/auth",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"logout"})});window.location.reload()}}><LogOut/>로그아웃</button>:<button className="btn btn-green" onClick={()=>{p.setDemo(false);setModal(null)}}>로그인 · 회원가입</button>}<p className="data-note">팀킥 · 초기 팀 운영 버전<br/>앱 안 알림과 휴대폰 알림을 지원합니다. 휴대폰 알림은 MY → 기기 알림에서 켜요.</p></div>}
+ ?{title:"정말 탈퇴할까요? 계정과 로그인 정보가 삭제되고 되돌릴 수 없어요.",description:SOCIAL_LABEL[p.real.user.provider]+" 로그인 화면을 한 번 거친 뒤 탈퇴되고, "+SOCIAL_LABEL[p.real.user.provider]+" 연결도 함께 끊어요."+CAPTAIN_NOTE,act:()=>closeWithProvider(p.real.user.provider)}
+ :{title:"정말 탈퇴할까요? 계정과 로그인 정보가 삭제되고 되돌릴 수 없어요.",description:"팀 활동 기록은 팀에 남고, 계정 정보는 지워져요."+CAPTAIN_NOTE,command:{type:"closeAccount"},reload:true})}>회원 탈퇴</button>}{p.real?.user?<button className="btn" disabled={busy} onClick={async()=>{await fetch("/api/auth",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"logout"})});window.location.reload()}}><LogOut/>로그아웃</button>:<button className="btn btn-green" onClick={()=>{p.setDemo(false);setModal(null)}}>로그인 · 회원가입</button>}<p className="data-note">팀킥 · 초기 팀 운영 버전<br/>앱 안 알림과 휴대폰 알림을 지원합니다. 휴대폰 알림은 MY → 기기 알림에서 켜요.</p></div>}
  </DialogContent></Dialog>
  <AlertDialog open={!!confirm} onOpenChange={o=>!o&&setConfirm(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{confirm?.title}</AlertDialogTitle><AlertDialogDescription>{confirm?.description??"팀 상태와 관련 기록에 반영됩니다. 내용을 확인한 후 진행해주세요."}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>돌아가기</AlertDialogCancel><AlertDialogAction disabled={busy} onClick={()=>{const c=confirm.command,reload=confirm.reload,act=confirm.act;setConfirm(null);if(act){act();return}save(c,reload?()=>window.location.reload():undefined)}}>확인</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></>
 }

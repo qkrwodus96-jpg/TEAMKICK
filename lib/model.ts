@@ -22,7 +22,10 @@ export const PRUNE_LIMIT=200;
 // 사람이 파일에 남아 있으면) 같은 방법으로 지워야 해서 한곳에 둔다. 조건 확인(주장 등)은
 // 부르는 쪽이 한다 — 복원 때는 이미 탈퇴가 끝난 사람이라 막을 이유가 없다.
 export function forgetAccount(s:State,userId:string,stamp:string){
+ // 혼자 남은 주장이 떠나면 그 팀은 해산한다(2026-09-25 사장님 요청). 다른 팀원이 있으면 탈퇴 전에 주장을 넘겨야 한다.
+ const solo=s.members.filter(y=>y.userId===userId&&y.status==="active"&&y.role==="captain"&&!s.members.some(o=>o.teamId===y.teamId&&o.status==="active"&&o.userId!==userId)).map(y=>y.teamId);
  for(const x of s.members.filter(y=>y.userId===userId&&y.status==="active")){x.status="left";if(x.periods?.at(-1))x.periods.at(-1).end=stamp;}
+ for(const t of solo)dissolveTeam(s,t,stamp);
  for(const x of s.members.filter(y=>y.userId===userId&&y.status==="pending"))x.status="left";
  for(const x of s.guests.filter(y=>y.userId===userId&&["pending","approved"].includes(y.status)))x.status="withdrawn";
  // 남는 기록에서 개인 식별 정보를 지운다. 과거 경기·출석·기록의 선수 표시 이름은 그대로 둔다.
@@ -30,6 +33,26 @@ export function forgetAccount(s:State,userId:string,stamp:string){
  s.notifications=s.notifications.filter(x=>x.userId!==userId);
  s.inquiries=s.inquiries.filter(x=>x.userId!==userId);
  for(const x of s.members.filter(y=>y.userId===userId))x.photo="";
+}
+
+// 팀 해산. 팀과 지난 기록은 남기고(팀의 공동 기록), 앞으로의 일정·신청·초대만 닫는다.
+// 다른 팀과 잡힌 경기는 취소하고 그 팀에 알린다.
+function dissolveTeam(s:State,t:string,stamp:string){
+ const team=s.teams.find(x=>x.id===t);
+ if(!team||team.status==="closed")return;
+ team.status="closed";team.reason="주장이 탈퇴해 해산했어요.";
+ for(const m of s.members.filter(x=>x.teamId===t&&x.status==="pending"))m.status="left";
+ for(const v of s.invites.filter(x=>x.teamId===t))v.active=false;
+ for(const r of s.requests.filter(x=>x.teamId===t&&x.status==="pending"))r.status="closed";
+ const now=Date.parse(stamp);
+ for(const g of s.games.filter(x=>(x.home===t||x.away===t)&&x.status==="scheduled"&&Date.parse(x.start)>now)){
+  g.status="cancelled";g.reason="팀 해산으로 취소됐어요.";g.listing="cancelled";g.change=null;
+  for(const r of s.requests.filter(x=>x.gameId===g.id&&x.status==="pending"))r.status="closed";
+  for(const z of s.sides.filter(x=>x.gameId===g.id))if(guestStatusOf(z)==="open")z.guestStatus="closed";
+  for(const r of s.guests.filter(x=>x.gameId===g.id&&x.status==="pending"))r.status="closed";
+  const other=g.home===t?g.away:g.home;
+  if(other)notice(s,other,"경기 취소","상대 팀이 해산해 경기가 취소됐어요.",g.id);
+ }
 }
 
 export function prune(s:State,now=Date.now()){
@@ -123,7 +146,7 @@ export function seoulStamp(value:string){
  return (d.getUTCMonth()+1)+"월 "+d.getUTCDate()+"일 ("+WEEKDAYS[d.getUTCDay()]+") "+two(d.getUTCHours())+":"+two(d.getUTCMinutes());
 }
 // 팀 등록 상태를 사람이 읽는 말로 바꾼다. 알림에 active·rejected 가 그대로 나가고 있었다.
-const TEAM_STATUS:Record<string,string>={pending:"승인 대기 중이에요",active:"승인됐어요",rejected:"반려됐어요",suspended:"이용이 정지됐어요"};
+const TEAM_STATUS:Record<string,string>={pending:"승인 대기 중이에요",active:"승인됐어요",rejected:"반려됐어요",suspended:"이용이 정지됐어요",closed:"해산했어요"};
 
 // 알림을 누르면 그 소식이 있는 화면으로 바로 가야 한다. 어느 화면인지는 알림을
 // 만들 때가 가장 확실하므로(제목 글자를 나중에 해석하지 않는다) 여기서 같이 적는다.
@@ -386,7 +409,8 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  else if(type==="revokeInvite"){requireTeam(s,t,a.id,"captain");const v=s.invites.find(x=>x.id===c.inviteId&&x.teamId===t);ensure(v,"초대를 찾을 수 없어요.");v!.active=false;}
  else if(type==="closeAccount"){
   const mine=s.members.filter(x=>x.userId===a.id&&x.status==="active");
-  ensure(!mine.some(x=>x.role==="captain"),"주장을 맡은 팀이 있어요. 먼저 주장을 인계한 뒤 탈퇴할 수 있어요.",409);
+  // 다른 팀원이 있는 팀의 주장은 먼저 넘겨야 한다. 혼자 있는 팀이면 탈퇴와 함께 해산한다(forgetAccount).
+  ensure(!mine.some(x=>x.role==="captain"&&s.members.some(o=>o.teamId===x.teamId&&o.status==="active"&&o.userId!==a.id)),"주장을 맡은 팀에 다른 팀원이 있어요. 먼저 주장을 인계한 뒤 탈퇴할 수 있어요.",409);
   ensure(!s.teams.some(x=>x.applicant===a.id&&x.status==="pending"),"승인 대기 중인 팀 신청이 있어요. 처리된 뒤에 탈퇴할 수 있어요.",409);
   ensure(!isOwner(s,a.id),"서비스 운영자 계정은 이 화면에서 탈퇴할 수 없어요.",409);
   forgetAccount(s,a.id,stamp);

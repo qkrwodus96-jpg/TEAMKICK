@@ -2792,6 +2792,9 @@ test('주장은 소셜 탈퇴도 시작 단계에서 막고, 연결을 건드리
   const acc=(await auth.signInWithKakao('k-captain','주장')).user.userId;
   const {teamId}=command(f.s,{id:acc,name:'주장'},{type:'createTeam',name:'카카오 팀',region:'서울',description:'테스트'});
   command(f.s,owner,{type:'approveTeam',teamId});
+  // 다른 팀원이 있어야 막힌다(혼자인 주장은 탈퇴하면서 팀이 해산된다).
+  command(f.s,member,{type:'joinTeam',teamId,name:member.name,position:'MF',number:9});
+  command(f.s,{id:acc,name:'주장'},{type:'approveMember',teamId,memberId:f.s.members.find(x=>x.teamId===teamId&&x.userId===member.id).id});
   const {state,version}=await repository.load();
   await repository.commit(state,f.s,version);
   await assert.rejects(()=>closeLib.checkClosable(acc),/주장/,'카카오에 다녀오기 전에 알려준다');
@@ -2847,5 +2850,33 @@ test('예전 카카오 계정(kakao_id 만 있는 줄)도 이미 가입한 사�
   db.prepare('UPDATE accounts SET provider_id=NULL WHERE id=?').run(user.userId);
   assert.equal(await auth.socialAccountId('kakao','legacy-k'),user.userId,'다시 동의 화면으로 보내면 안 된다');
   db.close();
+});
+
+// --- 혼자인 주장의 탈퇴 (2026-09-25) ---
+test('혼자인 주장은 탈퇴할 수 있고, 팀은 해산되며 잡힌 경기는 취소하고 상대 팀에 알린다',()=>{
+  const f=fixture();
+  // 팀 a 는 A 혼자, 팀 b 와 매칭된 경기가 있다.
+  const gameId=game(f.s,f.a,{listing:true});
+  const g=f.s.games.find(x=>x.id===gameId);
+  g.away=f.b;g.listing='matched';
+  const past=command(f.s,A,{type:'createGame',teamId:f.a,start:iso(NOW-3*DAY),end:iso(NOW-3*DAY+7200e3),venue:'지난 경기',address:'서울',external:'외부 FC'},NOW-4*DAY).gameId;
+  const {invite}=command(f.s,A,{type:'invite',teamId:f.a});
+  command(f.s,member,{type:'joinTeam',teamId:f.a,name:member.name,position:'MF',number:9});
+  command(f.s,A,{type:'closeAccount'});
+  const team=f.s.teams.find(t=>t.id===f.a);
+  assert.equal(team.status,'closed','팀은 해산 상태');
+  assert.equal(f.s.games.find(x=>x.id===gameId).status,'cancelled','앞으로의 경기는 취소');
+  assert.notEqual(f.s.games.find(x=>x.id===past).status,'cancelled','지난 기록은 그대로');
+  assert.ok(f.s.notifications.some(n=>n.teamId===f.b&&n.title==='경기 취소'),'상대 팀에 알린다');
+  assert.equal(f.s.invites.find(x=>x.id===invite).active,false,'초대는 닫는다');
+  assert.equal(f.s.members.find(x=>x.teamId===f.a&&x.userId===member.id).status,'left','가입 대기도 닫는다');
+  assert.ok(!f.s.users.some(u=>u.id===A.id),'탈퇴한 사람 정보는 지운다');
+});
+
+test('다른 팀원이 있는 주장은 여전히 먼저 주장을 넘겨야 한다',()=>{
+  const f=fixture();
+  addPlayer(f.s,f.a);
+  assert.throws(()=>command(f.s,A,{type:'closeAccount'}),/다른 팀원이 있어요/);
+  assert.equal(f.s.teams.find(t=>t.id===f.a).status,'active');
 });
 

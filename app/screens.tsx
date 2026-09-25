@@ -42,7 +42,7 @@ export function SocialConsent({provider,onCancel}:{provider:string;onCancel:()=>
     <input type="checkbox" required style={{width:"auto",marginTop:3}} checked={adult} onChange={e=>setAdult(e.target.checked)}/>
     <span>(필수) 만 14세 이상입니다.</span>
    </label>
-   <p className="data-note">{label}에서 받는 것은 회원 식별자와 이름(닉네임)뿐이에요. 만 14세 미만은 가입할 수 없어요.</p>
+   <p className="data-note">팀킥이 저장하는 것은 {label} 회원 식별자와 이름(닉네임)뿐이에요. 만 14세 미만은 가입할 수 없어요.</p>
    <button type="submit" className="btn btn-green" disabled={busy}>{busy&&<LoaderCircle className="loader" size={16}/>} 동의하고 시작하기</button>
   </form>
   <div className="action-strip"><button className="btn btn-ghost" disabled={busy} onClick={cancel}>가입하지 않기</button></div>

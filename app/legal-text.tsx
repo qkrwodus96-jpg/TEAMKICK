@@ -15,7 +15,8 @@ function blocks(text:string):Block[]{
    const join=(prev:string)=>prev+(/[·\/]$/.test(prev)?"":" ")+row.trim();
    if(/^-\s/.test(row))b.items.push(row.replace(/^-\s/,""));
    else if(b.items.length)b.items[b.items.length-1]=join(b.items[b.items.length-1]);
-   else if(b.lines.length&&/^\s/.test(row))b.lines[b.lines.length-1]=join(b.lines[b.lines.length-1]);
+   // 앞줄이 문장 끝(마침표 등)이 아니면 코드에서 꺾어 둔 줄이므로 이어 붙인다.
+   else if(b.lines.length&&(/^\s/.test(row)||!/[.!?:)]$/.test(b.lines[b.lines.length-1])))b.lines[b.lines.length-1]=join(b.lines[b.lines.length-1]);
    else b.lines.push(row.trim());
   }
   out.push(b);

@@ -1,5 +1,5 @@
 import {authorizeUrl,exchange,profile,socialReady,stateCookieName,config,type Provider} from "@/lib/social";
-import {signInWithSocial,sessionCookie} from "@/lib/auth";
+import {signInWithSocial,sessionCookie,socialAccountId,startSocialSignup,signupCookie} from "@/lib/auth";
 import {ensureSchema} from "@/lib/schema";
 import {AppError} from "@/lib/model";
 import {startClose,finishClose,CLOSE_PREFIX} from "@/lib/close-route";
@@ -34,6 +34,11 @@ export async function handle(req:Request,p:Provider){
   const person=await profile(p,accessToken);
   // 탈퇴하려고 다녀온 경우. 로그인 대신 탈퇴하고 연결을 끊는다.
   if(expected.startsWith(CLOSE_PREFIX))return await finishClose(req,p,person,accessToken);
+  // 처음 온 사람은 바로 가입시키지 않는다. 약관 동의·만 14세 확인 화면으로 보낸다.
+  if(!await socialAccountId(p,person.id)){
+   const pending=await startSocialSignup(p,person.id,person.nickname);
+   return new Response(null,{status:302,headers:{Location:origin+"/?signup="+p,"Cache-Control":"no-store","Set-Cookie":signupCookie(pending)}});
+  }
   const {token}=await signInWithSocial(p,person.id,person.nickname);
   return new Response(null,{status:302,headers:{
    Location:origin+"/","Cache-Control":"no-store","Set-Cookie":sessionCookie(token)}});

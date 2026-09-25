@@ -1,4 +1,4 @@
-import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword,limit,clientKey,verifyEmail,resendVerification,currentUser} from "@/lib/auth";
+import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword,limit,clientKey,verifyEmail,resendVerification,currentUser,completeSocialSignup,cancelSocialSignup,clearedSignupCookie} from "@/lib/auth";
 import {AppError,setupIncomplete,SETUP_MESSAGE} from "@/lib/model";
 import {ensureSchema} from "@/lib/schema";
 import {emailSignupEnabled} from "@/lib/signup-policy";
@@ -27,6 +27,14 @@ export async function POST(req:Request){
   if(c.action==="verify"){await verifyEmail(c);return json({ok:true})}
   if(c.action==="resendVerify"){const user=await currentUser(req);if(!user)throw new AppError("먼저 로그인해주세요.",401);await limit("verify",clientKey(req));const sent=await resendVerification(user.userId,new URL(req.url).origin);return json({ok:true,sent})}
   if(c.action==="logout"){await signOut(req);return json({ok:true},200,clearedCookie())}
+  // 소셜로 처음 온 사람의 동의. 대기 줄은 한 번 쓰면 지운다(lib/auth.ts).
+  if(c.action==="socialSignup"){
+   await limit("signup",clientKey(req));
+   const {user,token}=await completeSocialSignup(req,c);
+   const headers=new Headers({"Cache-Control":"no-store"});headers.append("Set-Cookie",sessionCookie(token));headers.append("Set-Cookie",clearedSignupCookie());
+   return Response.json({ok:true,user:{id:user.userId,name:user.fullName}},{headers});
+  }
+  if(c.action==="socialSignupCancel"){await cancelSocialSignup(req);return json({ok:true},200,clearedSignupCookie())}
   throw new AppError("지원하지 않는 작업이에요.");
  }catch(e){
   console.error("TeamKick auth",e instanceof AppError?e.message:e);

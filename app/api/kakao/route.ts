@@ -1,5 +1,5 @@
 import {authorizeUrl,exchange,profile,kakaoReady,STATE_COOKIE} from "@/lib/kakao";
-import {signInWithKakao,sessionCookie} from "@/lib/auth";
+import {signInWithKakao,sessionCookie,socialAccountId,startSocialSignup,signupCookie} from "@/lib/auth";
 import {ensureSchema} from "@/lib/schema";
 import {AppError} from "@/lib/model";
 import {startClose,finishClose,CLOSE_PREFIX} from "@/lib/close-route";
@@ -31,6 +31,11 @@ export async function GET(req:Request){
   const person=await profile(accessToken);
   // 탈퇴하려고 카카오에 다녀온 경우. 로그인 대신 탈퇴하고 연결을 끊는다.
   if(expected.startsWith(CLOSE_PREFIX))return await finishClose(req,"kakao",person,accessToken);
+  // 처음 온 사람은 바로 가입시키지 않는다. 약관 동의·만 14세 확인 화면으로 보낸다.
+  if(!await socialAccountId("kakao",person.id)){
+   const pending=await startSocialSignup("kakao",person.id,person.nickname);
+   return new Response(null,{status:302,headers:{Location:origin+"/?signup=kakao","Cache-Control":"no-store","Set-Cookie":signupCookie(pending)}});
+  }
   const {token}=await signInWithKakao(person.id,person.nickname);
   return new Response(null,{status:302,headers:{Location:origin+"/","Cache-Control":"no-store","Set-Cookie":sessionCookie(token)}});
  }catch(e){

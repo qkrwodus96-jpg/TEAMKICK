@@ -289,6 +289,56 @@ export async function signInWithSocial(provider:string,socialId:string,nickname:
  return {user:{userId:account.id,fullName:account.name},token:await startSession(account.id,now)};
 }
 
+// --- 소셜 가입 동의 (2026-09-25) ---
+// 예전에는 소셜로 처음 들어오면 곧바로 계정을 만들고 동의 시각을 적었다. 약관 동의도,
+// 만 14세 확인도 받지 않은 채였다(처리방침은 "14세 미만은 가입할 수 없다"고 적어 두고).
+// 이제 처음 온 사람은 10분짜리 대기 줄만 만들고, 동의 화면에서 두 가지를 체크해야 계정을 만든다.
+export const SIGNUP_COOKIE="teamkick_signup";
+const SIGNUP_MINUTES=10;
+export const signupCookie=(token:string)=>SIGNUP_COOKIE+"="+token+"; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age="+SIGNUP_MINUTES*60;
+export const clearedSignupCookie=()=>SIGNUP_COOKIE+"=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0";
+export const SOCIAL_PROVIDERS=["kakao","google","naver"] as const;
+
+// 이미 가입한 사람인지. 카카오는 예전 열(kakao_id)에도 있을 수 있다.
+export async function socialAccountId(provider:string,subject:string){
+ const row=provider==="kakao"
+  ?await db().prepare("SELECT id FROM accounts WHERE provider='kakao' AND (kakao_id=? OR provider_id=?)").bind(subject,subject).first<{id:string}>()
+  :await db().prepare("SELECT id FROM accounts WHERE provider=? AND provider_id=?").bind(provider,subject).first<{id:string}>();
+ return row?.id??null;
+}
+
+export async function startSocialSignup(provider:string,subject:string,nickname:string,now=Date.now()){
+ ensure((SOCIAL_PROVIDERS as readonly string[]).includes(provider)&&String(subject??"").trim(),"로그인 정보를 가져오지 못했어요. 다시 시도해주세요.",503);
+ const token=toBase64(crypto.getRandomValues(new Uint8Array(32))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+ await db().prepare("DELETE FROM social_signups WHERE expires<?").bind(iso(now)).run();
+ await db().prepare("INSERT INTO social_signups(id,provider,subject,name,expires,at) VALUES(?,?,?,?,?,?)")
+  .bind(await hashToken(token),provider,String(subject).trim(),String(nickname??"").trim().slice(0,30)||"팀원",iso(now+SIGNUP_MINUTES*60000),iso(now)).run();
+ return token;
+}
+
+type PendingRow={id:string;provider:string;subject:string;name:string;expires:string};
+async function pendingRow(req:Request,now:number){
+ const token=cookieValue(req.headers.get("cookie"),SIGNUP_COOKIE);
+ if(!token)return null;
+ const row=await db().prepare("SELECT id,provider,subject,name,expires FROM social_signups WHERE id=?").bind(await hashToken(token)).first<PendingRow>();
+ if(!row||Date.parse(row.expires)<=now)return null;
+ return row;
+}
+
+export async function cancelSocialSignup(req:Request){
+ const token=cookieValue(req.headers.get("cookie"),SIGNUP_COOKIE);
+ if(token)await db().prepare("DELETE FROM social_signups WHERE id=?").bind(await hashToken(token)).run();
+}
+
+export async function completeSocialSignup(req:Request,input:{agree?:unknown;adult?:unknown},now=Date.now()){
+ ensure(input.agree===true,"이용약관과 개인정보 수집·이용에 동의해주세요.");
+ ensure(input.adult===true,"만 14세 이상만 가입할 수 있어요.");
+ const row=await pendingRow(req,now);
+ ensure(row,"가입 시간(10분)이 지났어요. 처음 화면에서 다시 시작해주세요.",410);
+ await db().prepare("DELETE FROM social_signups WHERE id=?").bind(row!.id).run();
+ return row!.provider==="kakao"?signInWithKakao(row!.subject,row!.name,now):signInWithSocial(row!.provider,row!.subject,row!.name,now);
+}
+
 export async function signInWithKakao(kakaoId:string,nickname:string,now=Date.now()){
  ensure(kakaoId,"카카오 정보를 가져오지 못했어요. 다시 시도해주세요.",503);
  const existing=await db().prepare("SELECT id,name FROM accounts WHERE kakao_id=?").bind(kakaoId).first<{id:string;name:string}>();

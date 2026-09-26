@@ -145,6 +145,8 @@ export function seoulStamp(value:string){
  const two=(n:number)=>String(n).padStart(2,"0");
  return (d.getUTCMonth()+1)+"월 "+d.getUTCDate()+"일 ("+WEEKDAYS[d.getUTCDay()]+") "+two(d.getUTCHours())+":"+two(d.getUTCMinutes());
 }
+// 알림 문구에 쓸 상대 이름. 외부 팀은 입력한 이름, 앱 안 팀은 팀 이름.
+function opponent0(s:State,g:Row,t:string){const other=g.home===t?g.away:g.home;return (other?teamOf(s,other)?.name:g.external)||"경기"}
 // 팀 등록 상태를 사람이 읽는 말로 바꾼다. 알림에 active·rejected 가 그대로 나가고 있었다.
 const TEAM_STATUS:Record<string,string>={pending:"승인 대기 중이에요",active:"승인됐어요",rejected:"반려됐어요",suspended:"이용이 정지됐어요",closed:"해산했어요"};
 
@@ -169,6 +171,38 @@ function clearStaleRecords(s:State,g:Row){
   if(typeof total!=="number"||sum!==total)z.recordsFinal=false;
  }
 }
+// --- 자체전(팀 안 연습 경기, 2026-09-26 사장님 요청) ---
+// 우리 팀을 1팀·2팀…으로 나눠 뛴다. 상대팀이 없으니 팀 전적(승·무·패, 승률)에는 넣지 않고,
+// 출석·골·도움·MVP 는 개인 기록에 그대로 쌓는다.
+export const isIntra=(g:Row|undefined)=>g?.kind==="intra";
+export const SQUAD_NAMES=["1팀","2팀","3팀","4팀"];
+// 조 나누기에 넣을 수 있는 사람: 그 경기의 팀원 명단 + 승인된 용병.
+function squadPool(s:State,side:Row,g:Row){
+ const ids=new Set<string>(rosterFor(s,side,g).map((x:Row)=>x.id));
+ for(const x of s.guests.filter(y=>y.gameId===g.id&&y.teamId===side.teamId&&y.status==="approved"))ids.add(x.id);
+ return ids;
+}
+// 조별 점수 = 그 조 팀원들의 골 + 그 조의 "용병·미상" 골. 조를 바꾸면 다시 계산한다.
+function intraScores(g:Row,side:Row){
+ const n=Number(g.squads)||2,out=Array.from({length:n},(_,i)=>Number(side.squadExtra?.[i]??0));
+ for(const [k,r] of Object.entries(side.records??{}) as [string,{goals?:number}][]){const i=side.squads?.[k];if(typeof i==="number"&&i<n)out[i]+=Number(r?.goals??0)}
+ return out;
+}
+
+// --- MVP 투표 (2026-09-26) ---
+// 출석이 확정되면 열리고 48시간 뒤 닫힌다. 출석한 팀원만 투표하고, 출석한 팀원 중 자기 말고 한 명을 고른다.
+// 누가 누구를 뽑았는지는 팀원에게도 보이지 않는다(visibleState 에서 표 대신 개수만 보낸다).
+export const MVP_HOURS=48;
+const attendedMembers=(side:Row)=>(side.roster??[]).filter((m:Row)=>side.attendance?.[m.id]===true).map((m:Row)=>m.id as string);
+export function mvpWinners(side:Row,now=Date.now()){
+ const p=side?.mvp;if(!p||now<Date.parse(p.closesAt))return [] as string[];
+ const tally:Record<string,number>={};for(const c of Object.values(p.votes??{}) as string[])tally[c]=(tally[c]??0)+1;
+ const top=Math.max(0,...Object.values(tally));
+ return top>0?Object.keys(tally).filter(k=>tally[k]===top):[];
+}
+// 팀 회칙 예시는 앱에서 고르는 칩으로만 쓴다. 저장 길이만 서버에서 막는다.
+export const RULES_MAX=2000;
+
 export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  const type=textValue(c.type,50),t=String(c.teamId??""),stamp=iso(now);let output:any={};
  if(!s.users.find(u=>u.id===a.id))s.users.push({id:a.id,name:a.name,at:stamp});
@@ -225,9 +259,16 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   if(c.days!==undefined)team.days=pick(c.days,DAYS,"주로 뛰는 때");
   if(c.level!==undefined)team.level=pick(c.level,LEVELS,"팀 실력");
  }
+ // 팀 회칙. 주장·운영진이 쓴다. 가입을 신청하려는 사람도 미리 읽을 수 있게 공개 정보로 보낸다(화면에 안내).
+ else if(type==="editRules"){
+  requireTeam(s,t,a.id,"manager");const team=teamOf(s,t)!;
+  team.rules=textValue(c.rules,RULES_MAX,false);team.rulesAt=stamp;
+  if(c.notify===true&&team.rules)notice(s,t,"팀 회칙이 바뀌었어요","MY 탭의 회칙에서 확인해주세요.",undefined,"team");
+ }
  else if(type==="createGame"){
   requireTeam(s,t,a.id,"manager");const d=dates(c.start,c.end);checkConflict(s,t,d.start,d.end,"");
   const g={id:id(),home:t,away:null,external:textValue(c.external,60,false),...d,venue:textValue(c.venue,100),address:textValue(c.address,200),lat:coord(c.lat,90),lng:coord(c.lng,180),region:regionValue(c.region||teamOf(s,t)!.region),format:textValue(c.format||"11인제",20),secured:c.secured!==false,cost:integer(c.cost??0,0,10000000),status:"scheduled",listing:c.listing?"open":"none",revision:1,result:null,at:stamp};
+  if(c.kind==="intra"){ensure(!c.listing&&!g.external,"자체전은 상대팀 없이 우리 팀끼리 하는 경기예요.");Object.assign(g,{kind:"intra",squads:integer(c.squads??2,2,4)});}
   const voteCloses=c.deadline?Date.parse(String(c.deadline)):0;if(c.deadline)ensure(Number.isFinite(voteCloses)&&voteCloses>now&&voteCloses<=Date.parse(g.start),"투표 마감은 지금 이후, 경기 시작 시각까지로 정해주세요.");ensure(!g.external||!c.listing,"수기 상대팀과 모집을 동시에 설정할 수 없어요.");ensure(!c.listing||Date.parse(g.start)>now,"지난 경기로 모집할 수 없어요.");
   if(c.listing)requireTeam(s,t,a.id,"captain");s.games.push(g);const side=newSide(g,t);side.needed=integer(c.needed??11,1,50);side.note=textValue(c.note,500,false);if(voteCloses)side.deadline=iso(voteCloses);
   s.sides.push(side);notice(s,t,"새 경기 일정",seoulStamp(g.start)+" · "+g.venue,g.id);output={gameId:g.id};
@@ -251,10 +292,13 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    }
   }
  }
- else if(["vote","attendance","records","matchRecord","completeGame","cancelGame","result","confirmResult","changeGame","confirmChange","sideSettings","remindVote","openListing","closeListing","setOpponent"].includes(type)){
+ else if(["vote","attendance","records","matchRecord","completeGame","cancelGame","result","confirmResult","changeGame","confirmChange","sideSettings","remindVote","openListing","closeListing","setOpponent","squads","mvpVote","closeMvp","remindMvp"].includes(type)){
   const g=s.games.find(x=>x.id===c.gameId);ensure(g&&containsTeam(g,t),"팀 경기를 찾을 수 없어요.",404);
   const captainActions=["cancelGame","result","matchRecord","confirmResult","changeGame","confirmChange","openListing","closeListing","completeGame","setOpponent"];
-  const m=requireTeam(s,t,a.id,type==="vote"?"member":captainActions.includes(type)?"captain":"manager");
+  // 자체전 기록은 상대 확인이 없으니 운영진도 넣을 수 있다.
+  const level=type==="vote"||type==="mvpVote"?"member":type==="matchRecord"&&isIntra(g)?"manager":captainActions.includes(type)?"captain":"manager";
+  const m=requireTeam(s,t,a.id,level);
+  if(isIntra(g))ensure(!["result","confirmResult","records","setOpponent","openListing"].includes(type),"자체전에서는 쓸 수 없는 기능이에요.");
   const side=sideOf(s,g!.id,t);ensure(side,"경기 팀 정보를 찾을 수 없어요.",404);
   ensure(g!.status!=="cancelled","취소된 경기예요.",409);
   if(type==="vote"){ensure(g!.status==="scheduled"&&now<Math.min(Date.parse(side!.deadline),Date.parse(g!.start)),"참여 투표가 마감되었어요.",409);ensure(["yes","no","maybe"].includes(c.value),"응답을 선택해주세요.");(side!.votes[m.id]??=[]).push({value:c.value,at:stamp});}
@@ -284,6 +328,48 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    ensure(Object.keys(values).every(k=>roster.some((x:any)=>x.id===k)),"이 경기의 출석 대상이 아닌 선수가 포함되어 있어요.");ensure(roster.every((x:any)=>typeof values[x.id]==="boolean"),"모든 선수의 출석을 확인해주세요.");
    side!.roster=roster;side!.attendance=values;side!.attendanceFinal=true;side!.attendanceAt=stamp;
    if(Object.entries(side!.records).some(([k,v]:any)=>!values[k]&&(v.goals||v.assists)))side!.recordsFinal=false;
+   // 출석이 확정되면 MVP 투표를 연다. 다시 확정하면(정정) 빠진 사람의 표와 그 사람에게 간 표를 뺀다.
+   const came=attendedMembers(side!);
+   if(!side!.mvp){
+    side!.mvp={openAt:stamp,closesAt:iso(now+MVP_HOURS*3600e3),votes:{}};
+    const voters=s.members.filter(x=>x.teamId===t&&came.includes(x.id)&&x.status==="active");
+    if(came.length>=2)for(const x of voters)s.notifications.push({id:id(),userId:x.userId,teamId:t,title:"MVP 투표가 열렸어요",body:(isIntra(g)?"자체전":opponent0(s,g!,t))+" · 오늘의 MVP를 뽑아주세요. "+MVP_HOURS+"시간 뒤 마감돼요.",gameId:g!.id,to:"schedule",read:false,at:stamp});
+   }else{
+    const votes=side!.mvp.votes??{};
+    for(const [k,v] of Object.entries(votes))if(!came.includes(k)||!came.includes(v as string))delete votes[k];
+   }
+  }
+  if(type==="mvpVote"){
+   const p=side!.mvp;ensure(p,"아직 MVP 투표가 열리지 않았어요. 출석이 확정되면 열려요.",409);
+   ensure(now<Date.parse(p.closesAt),"MVP 투표가 마감됐어요.",409);
+   const came=attendedMembers(side!);
+   ensure(came.includes(m.id),"이 경기에 출석한 팀원만 투표할 수 있어요.",403);
+   const pick=String(c.candidate??"");
+   ensure(came.includes(pick),"이 경기에 출석한 팀원 중에서 골라주세요.");
+   ensure(pick!==m.id,"자기 자신은 뽑을 수 없어요.");
+   (p.votes??={})[m.id]=pick;
+  }
+  if(type==="closeMvp"||type==="remindMvp"){
+   const p=side!.mvp;ensure(p&&now<Date.parse(p.closesAt),"진행 중인 MVP 투표가 없어요.",409);
+   const came=attendedMembers(side!),people=s.members.filter(x=>x.teamId===t&&came.includes(x.id)&&x.status==="active");
+   if(type==="remindMvp"){
+    ensure(!p.remindAt||now-Date.parse(p.remindAt)>=6*3600e3,"방금 알림을 보냈어요. 6시간 뒤에 다시 보낼 수 있어요.",429);
+    const waiting=people.filter(x=>!p.votes?.[x.id]);ensure(waiting.length,"모두 투표했어요.");
+    for(const x of waiting)s.notifications.push({id:id(),userId:x.userId,teamId:t,title:"MVP 투표 알림",body:"아직 MVP를 뽑지 않았어요. "+seoulStamp(p.closesAt)+"에 마감돼요.",gameId:g!.id,to:"schedule",read:false,at:stamp});
+    p.remindAt=stamp;output={notified:waiting.length};
+   }else{
+    p.closesAt=stamp;p.closedBy=a.id;
+    const win=mvpWinners(side!,now).map(k=>(side!.roster??[]).find((r:Row)=>r.id===k)?.name).filter(Boolean);
+    for(const x of people)s.notifications.push({id:id(),userId:x.userId,teamId:t,title:"MVP 투표 결과",body:win.length?"오늘의 MVP: "+win.join(", "):"투표한 사람이 없어 MVP가 없어요.",gameId:g!.id,to:"schedule",read:false,at:stamp});
+   }
+  }
+  if(type==="squads"){
+   ensure(isIntra(g),"자체전에서만 팀을 나눌 수 있어요.");
+   ensure(c.assign&&typeof c.assign==="object"&&!Array.isArray(c.assign),"팀 나누기 정보를 확인해주세요.");
+   const pool=squadPool(s,side!,g!),n=Number(g!.squads)||2,next:Record<string,number>={};
+   for(const [k,v] of Object.entries(c.assign)){ensure(pool.has(k),"이 경기에 뛸 수 있는 선수만 나눌 수 있어요.");next[k]=integer(v,0,n-1);}
+   side!.squads=next;side!.squadsAt=stamp;
+   if(side!.recordsFinal&&g!.result?.status==="confirmed")g!.result={...g!.result,squads:intraScores(g!,side!)};
   }
   if(type==="records"){
    ensure(g!.status==="completed"&&side!.attendanceFinal,"경기 완료와 출석 확정을 먼저 해주세요.");ensure(g!.result?.status==="confirmed","경기 결과 확정 후 개인 기록을 저장해주세요.");
@@ -297,7 +383,28 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   // 넣을 수 있었고, 둘의 합이 맞지 않으면 저장이 막혔다. 이제 우리 팀 점수는
   // 선수 득점 + 상대 자책골 + 득점자 미상을 **더해서 구하고**, 손으로 넣는 숫자는
   // 상대팀 득점 하나뿐이다. 합이 안 맞아 막히는 일이 없어진다.
-  if(type==="matchRecord"){
+  if(type==="matchRecord"&&isIntra(g)){
+   ensure(g!.status==="completed","경기 완료 처리 후 기록을 입력해주세요.");
+   ensure(side!.attendanceFinal,"출석 확정을 먼저 해주세요.");
+   ensure(c.values&&typeof c.values==="object"&&!Array.isArray(c.values),"선수 기록을 확인해주세요.");
+   const n=Number(g!.squads)||2,values:Record<string,{goals:number;assists:number}>={};
+   for(const [k,row] of Object.entries(c.values as Record<string,{goals?:unknown;assists?:unknown}>)){
+    ensure(side!.attendance[k]===true,"출석 확정된 선수만 기록할 수 있어요.");
+    ensure(row&&typeof row==="object","선수 기록을 확인해주세요.");
+    values[k]={goals:integer(row.goals),assists:integer(row.assists)};
+    // 골을 넣은 사람은 어느 팀이었는지 알아야 조별 점수를 셀 수 있다.
+    if(values[k].goals)ensure(typeof side!.squads?.[k]==="number","골을 넣은 선수가 몇 팀인지 먼저 나눠주세요.");
+   }
+   const extra=Array.from({length:n},(_,i)=>integer(Array.isArray(c.extra)?c.extra[i]??0:0));
+   const list=Object.values(values);
+   const goals=list.reduce((x,r)=>x+r.goals,0)+extra.reduce((x,y)=>x+y,0),assists=list.reduce((x,r)=>x+r.assists,0);
+   ensure(assists<=goals,"도움 합계가 전체 골보다 많을 수 없어요.");
+   side!.records=values;side!.squadExtra=extra;side!.ownGoals=0;side!.unknownGoals=0;side!.recordsFinal=true;side!.recordsAt=stamp;
+   const revision=(g!.resultSequence??0)+1;g!.resultSequence=revision;
+   g!.result={status:"confirmed",squads:intraScores(g!,side!),by:t,revision,at:stamp};
+   output={squads:g!.result.squads};
+  }
+  else if(type==="matchRecord"){
    ensure(g!.status==="completed","경기 완료 처리 후 기록을 입력해주세요.");
    ensure(side!.attendanceFinal,"출석 확정을 먼저 해주세요.");
    ensure(g!.away||g!.external,"상대팀을 먼저 설정해주세요.");
@@ -334,7 +441,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   if(type==="changeGame"){
    ensure(g!.status==="scheduled"&&now<Date.parse(g!.start),"이미 시작한 경기는 일정 변경을 할 수 없어요.");const d=dates(c.start,c.end);ensure(Date.parse(d.start)>now,"미래 일정을 선택해주세요.");const change={proposalId:id(),...d,venue:textValue(c.venue,100),address:textValue(c.address,200),lat:coord(c.lat,90),lng:coord(c.lng,180),cost:integer(c.cost??g!.cost,0,10000000),by:t,version:g!.revision};
    if(g!.away){g!.change=change;notice(s,g!.home===t?g!.away:g!.home,"일정 변경 제안",change.venue+" · "+change.start,g!.id);}
-   else{checkConflict(s,t,d.start,d.end,g!.id);if(g!.listing!=="open")g!.external=textValue(c.external??g!.external,60,false);Object.assign(g!,change);g!.revision++;for(const z of s.sides.filter(x=>x.gameId===g!.id)){z.voteArchive=[...(z.voteArchive??[]),z.votes];z.votes={};z.deadline=g!.start;}for(const r of s.requests.filter(x=>x.gameId===g!.id&&x.status==="pending"))r.status="changed";}
+   else{checkConflict(s,t,d.start,d.end,g!.id);if(g!.listing!=="open"&&!isIntra(g))g!.external=textValue(c.external??g!.external,60,false);Object.assign(g!,change);g!.revision++;for(const z of s.sides.filter(x=>x.gameId===g!.id)){z.voteArchive=[...(z.voteArchive??[]),z.votes];z.votes={};z.deadline=g!.start;}for(const r of s.requests.filter(x=>x.gameId===g!.id&&x.status==="pending"))r.status="changed";}
   }
   if(type==="confirmChange"){const change=g!.change;ensure(g!.status==="scheduled"&&now<Date.parse(g!.start)&&change&&now<Date.parse(change.start),"이미 시작한 경기의 변경 제안은 수락할 수 없어요.",409);ensure(change&&change.by!==t&&change.version===g!.revision&&c.proposalId===change.proposalId,"확인 가능한 최신 변경 제안이 없어요.",409);if(c.agree!==false){for(const tid of [g!.home,g!.away].filter(Boolean))checkConflict(s,tid,change.start,change.end,g!.id);Object.assign(g!,change);g!.revision++;for(const z of s.sides.filter(x=>x.gameId===g!.id)){z.voteArchive=[...(z.voteArchive??[]),z.votes];z.votes={};z.deadline=g!.start;z.roster=null;z.attendanceFinal=false;}for(const tid of [g!.home,g!.away].filter(Boolean))notice(s,tid,"경기 일정 변경","변경된 일정에 다시 참여 투표해주세요.",g!.id);}g!.change=null;}
  }
@@ -464,7 +571,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
 export function visibleState(s:State,userId:string,selected?:string){
  const owner=isOwner(s,userId),my=s.members.filter(m=>m.userId===userId),active=my.filter(m=>m.status==="active"&&["active","suspended"].includes(teamOf(s,m.teamId)?.status)),team=active.find(x=>x.teamId===selected)??active[0];
  const tid=team?.teamId;const activeAccess=active.some(m=>teamOf(s,m.teamId)?.status==="active");
- const ownTeams=s.teams.filter(t=>t.applicant===userId);const publicTeams=s.teams.filter(t=>t.status==="active"||owner||active.some(m=>m.teamId===t.id)||t.applicant===userId).map(t=>{const full=owner||active.some(m=>m.teamId===t.id)||t.applicant===userId;return full?t:{id:t.id,name:t.name,region:t.region,description:t.description,format:t.format,days:t.days,level:t.level,status:t.status,color:t.color,logo:t.logo}});
+ const ownTeams=s.teams.filter(t=>t.applicant===userId);const publicTeams=s.teams.filter(t=>t.status==="active"||owner||active.some(m=>m.teamId===t.id)||t.applicant===userId).map(t=>{const full=owner||active.some(m=>m.teamId===t.id)||t.applicant===userId;return full?t:{id:t.id,name:t.name,region:t.region,description:t.description,format:t.format,days:t.days,level:t.level,status:t.status,color:t.color,logo:t.logo,rules:t.rules??""}});
  const games=s.games.filter(g=>tid&&containsTeam(g,tid));const listings=activeAccess?s.games.filter(g=>g.listing==="open"&&g.status==="scheduled"&&Date.parse(g.start)>Date.now()&&teamOf(s,g.home)?.status==="active"):[];
  const members=tid?s.members.filter(m=>m.teamId===tid&&(m.status==="active"||m.status==="left"||m.status==="removed"||team.role==="captain")):[];
  const myGuestRows=s.guests.filter(x=>x.userId===userId);const guestGame=(gid:string)=>s.games.find(y=>y.id===gid);
@@ -476,7 +583,7 @@ export function visibleState(s:State,userId:string,selected?:string){
   setupNeeded:!s.settings.some(x=>x.id==="owner"),games,// 승인된 용병도 그 경기에 뛰는 사람이다. 예전에는 참여 인원에서 빠져 있어
  // "9명 참여 예정" 이 실제와 달랐다. 팀원 명단(roster)과는 따로 둔다 —
  // 용병은 팀원이 아니고 출석·선수 통계에도 넣지 않는다(ASM-04).
- sides:s.sides.filter(x=>x.teamId===tid).map(z=>({...z,roster:rosterFor(s,z,s.games.find(g=>g.id===z.gameId)!),draft:attendanceDraft(s,z,s.games.find(g=>g.id===z.gameId)!),
+ sides:s.sides.filter(x=>x.teamId===tid).map(z=>({...z,mvp:mvpView(z,team?.id),roster:rosterFor(s,z,s.games.find(g=>g.id===z.gameId)!),draft:attendanceDraft(s,z,s.games.find(g=>g.id===z.gameId)!),
   guestRoster:s.guests.filter(x=>x.gameId===z.gameId&&x.teamId===tid&&x.status==="approved").map(x=>({id:x.id,name:x.name,number:x.number,position:x.position}))})),listings,
  requests:s.requests.filter(r=>r.teamId===tid||(tid&&isCaptain(s,tid,userId)&&s.games.some(g=>g.id===r.gameId&&g.home===tid))),
  // 공지는 고정한 것을 먼저, 그다음 최근에 쓴 것부터 보여준다. 예전에는 저장된
@@ -486,6 +593,15 @@ export function visibleState(s:State,userId:string,selected?:string){
  myGuests:myGuestRows.map(x=>{const gm=guestGame(x.gameId);return {...x,teamName:teamOf(s,x.teamId)?.name??"",start:gm?.start??"",venue:gm?.venue??"",gameStatus:gm?.status??""}}),
  guestListings:s.sides.filter(z=>{const gm=guestGame(z.gameId);return guestStatusOf(z)==="open"&&!!gm&&gm.status==="scheduled"&&Date.parse(gm.start)>Date.now()&&teamOf(s,z.teamId)?.status==="active"}).map(z=>{const gm=guestGame(z.gameId)!;return {id:z.id,gameId:gm.id,teamId:z.teamId,teamName:teamOf(s,z.teamId)?.name??"",start:gm.start,end:gm.end,venue:gm.venue,address:gm.address,region:gm.region,format:gm.format,cost:gm.cost,secured:gm.secured,needed:z.guestNeeded??0,approved:approvedGuests(s,gm.id,z.teamId),applied:myGuestRows.find(x=>x.gameId===gm.id&&x.teamId===z.teamId&&["pending","approved"].includes(x.status))?.status??""}}),
  invites:s.invites.filter(x=>x.teamId===tid&&team?.role==="captain"),audit:owner?s.audit.slice(-100).reverse():[]};
+}
+// MVP 투표를 화면에 보낼 모양. 표(누가 누구를 뽑았는지)는 보내지 않는다 — 비밀 투표.
+// 마감 전: 내가 고른 사람과 몇 명이 투표했는지만. 마감 후: 사람별 득표 수와 MVP.
+export function mvpView(side:Row,me?:string,now=Date.now()){
+ const p=side.mvp;if(!p)return null;
+ const votes=(p.votes??{}) as Record<string,string>,closed=now>=Date.parse(p.closesAt);
+ const tally:Record<string,number>={};if(closed)for(const c of Object.values(votes))tally[c]=(tally[c]??0)+1;
+ return {openAt:p.openAt,closesAt:p.closesAt,closed,mine:me?votes[me]??"":"",voted:Object.keys(votes).length,
+  eligible:attendedMembers(side).length,winners:mvpWinners(side,now),tally:closed?tally:{}};
 }
 // 내가 뛴 모든 팀의 기록을 합산한다. 팀별 화면(summaries)과 달리 팀 경계를 넘는다.
 // 팀을 옮기거나 여러 팀에서 뛰어도 "내가 쌓은 것"은 하나로 보여야 한다.
@@ -507,8 +623,10 @@ export function myTotals(s:State,userId:string){
 }
 
 export function summaries(v:any,from:string,to:string){
- const games=v.games.filter((g:Row)=>g.status==="completed"&&g.start>=from&&g.start<to);const scored=games.filter((g:Row)=>g.result?.status==="confirmed");let wins=0,draws=0,losses=0,goals=0,against=0;
+ // 자체전은 우리 팀끼리라 팀 전적(경기 수·승무패·득실)에서 빼고, 선수 기록(출석·골·도움·MVP)에는 넣는다.
+ const allGames=v.games.filter((g:Row)=>g.status==="completed"&&g.start>=from&&g.start<to);const games=allGames.filter((g:Row)=>!isIntra(g));const intra=allGames.length-games.length;
+ const recorded=allGames.filter((g:Row)=>g.result?.status==="confirmed");const scored=games.filter((g:Row)=>g.result?.status==="confirmed");let wins=0,draws=0,losses=0,goals=0,against=0;
  for(const g of scored){const own=g.home===v.teamId?g.result.a:g.result.b,other=g.home===v.teamId?g.result.b:g.result.a;goals+=own;against+=other;if(own>other)wins++;else if(own===other)draws++;else losses++;}
- const attendanceGames=games.filter((g:Row)=>v.sides.some((s:Row)=>s.gameId===g.id&&s.attendanceFinal));const players:Row[]=v.members.filter((m:Row)=>m.status!=="pending"&&m.status!=="rejected").map((m:Row)=>{let attend=0,eligible=0,g=0,a=0;for(const side of v.sides){if(!games.some((x:Row)=>x.id===side.gameId))continue;if(side.attendanceFinal&&(side.roster??[]).some((r:any)=>r.id===m.id)){eligible++;if(side.attendance[m.id])attend++;}if(side.recordsFinal&&scored.some((x:Row)=>x.id===side.gameId)){g+=side.records[m.id]?.goals??0;a+=side.records[m.id]?.assists??0;}}return {...m,attend,eligible,rate:eligible?Math.round(attend/eligible*100):null,goals:g,assists:a,points:g+a}});
- return {played:games.length,scored:scored.length,wins,draws,losses,goals,against,winRate:scored.length?+(wins/scored.length*100).toFixed(1):null,players,attendanceConfirmed:attendanceGames.length,average:attendanceGames.length?+(players.reduce((sum,p)=>sum+p.attend,0)/attendanceGames.length).toFixed(1):null,pending:games.length-scored.length};
+ const attendanceGames=allGames.filter((g:Row)=>v.sides.some((s:Row)=>s.gameId===g.id&&s.attendanceFinal));const players:Row[]=v.members.filter((m:Row)=>m.status!=="pending"&&m.status!=="rejected").map((m:Row)=>{let attend=0,eligible=0,g=0,a=0,mvp=0;for(const side of v.sides){if(!allGames.some((x:Row)=>x.id===side.gameId))continue;if(side.attendanceFinal&&(side.roster??[]).some((r:any)=>r.id===m.id)){eligible++;if(side.attendance[m.id])attend++;}if(side.recordsFinal&&recorded.some((x:Row)=>x.id===side.gameId)){g+=side.records[m.id]?.goals??0;a+=side.records[m.id]?.assists??0;}if((side.mvp?.winners??[]).includes(m.id))mvp++;}return {...m,attend,eligible,rate:eligible?Math.round(attend/eligible*100):null,goals:g,assists:a,points:g+a,mvp}});
+ return {played:games.length,intra,scored:scored.length,wins,draws,losses,goals,against,winRate:scored.length?+(wins/scored.length*100).toFixed(1):null,players,attendanceConfirmed:attendanceGames.length,average:attendanceGames.length?+(players.reduce((sum,p)=>sum+p.attend,0)/attendanceGames.length).toFixed(1):null,pending:games.length-scored.length};
 }

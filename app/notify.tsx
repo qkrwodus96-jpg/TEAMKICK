@@ -116,6 +116,30 @@ export function KeepSubscription(){
 // 앱이 대신 켜 줄 수 없다. 대신 켜야 한다는 것을 놓치지 않게 한 번 크게 권한다.
 // 껐거나 이미 켠 사람에게는 다시 뜨지 않는다.
 const ASKED="teamkick_notify_asked";
+// 첫 사용 안내(welcome.tsx)도 같은 방법으로 켠다. 실패하면 이유를 담아 던진다.
+export type PushStatus="on"|"off"|"denied"|"ios-install"|"unsupported"|"server-off";
+export async function pushStatus():Promise<PushStatus>{
+ if(!("serviceWorker"in navigator)||!("PushManager"in window)||typeof Notification==="undefined")return isIos()&&!installed()?"ios-install":"unsupported";
+ if(isIos()&&!installed())return "ios-install";
+ if(Notification.permission==="denied")return "denied";
+ const res=await fetch("/api/push",{cache:"no-store"}).then(r=>r.json() as Promise<State>).catch(()=>null);
+ if(!res?.ready)return "server-off";
+ const reg=await navigator.serviceWorker?.getRegistration?.().catch(()=>null);
+ return await reg?.pushManager?.getSubscription?.().catch(()=>null)?"on":"off";
+}
+export async function turnOnPush(){
+ const res=await fetch("/api/push",{cache:"no-store"}).then(r=>r.json()) as State;
+ const ok=await Notification.requestPermission();
+ if(ok!=="granted")throw new Error("알림을 허용해야 받을 수 있어요. 나중에 MY 에서 켤 수 있어요.");
+ const reg=await navigator.serviceWorker.register("/sw.js");
+ await navigator.serviceWorker.ready;
+ const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:keyBytes(res.key)});
+ const out=await fetch("/api/push",{method:"POST",headers:{"Content-Type":"application/json"},
+  body:JSON.stringify({action:"subscribe",subscription:sub.toJSON()})});
+ if(!out.ok)throw new Error(((await out.json().catch(()=>({}))) as {error?:string}).error||"알림을 켜지 못했어요.");
+ try{localStorage.setItem(ASKED,"1")}catch{}
+ window.dispatchEvent(new Event("teamkick-push-on"));
+}
 export function NotifyInvite(){
  const [show,setShow]=useState(false);
  const [busy,setBusy]=useState(false);
@@ -131,23 +155,15 @@ export function NotifyInvite(){
    if(await reg?.pushManager?.getSubscription?.().catch(()=>null))return; // 이미 켜져 있다
    setShow(true);
   })();
+  // 첫 사용 안내에서 켰으면 이 띠는 더 필요 없다
+  const hide=()=>setShow(false);window.addEventListener("teamkick-push-on",hide);
+  return()=>window.removeEventListener("teamkick-push-on",hide);
  },[]);
  function done(){try{localStorage.setItem(ASKED,"1")}catch{};setShow(false)}
  async function turnOn(){
   setBusy(true);
-  try{
-   const res=await fetch("/api/push",{cache:"no-store"}).then(r=>r.json()) as State;
-   const ok=await Notification.requestPermission();
-   if(ok!=="granted")throw new Error("알림을 허용해야 받을 수 있어요. 나중에 MY 에서 켤 수 있어요.");
-   const reg=await navigator.serviceWorker.register("/sw.js");
-   await navigator.serviceWorker.ready;
-   const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:keyBytes(res.key)});
-   const out=await fetch("/api/push",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({action:"subscribe",subscription:sub.toJSON()})});
-   if(!out.ok)throw new Error(((await out.json().catch(()=>({}))) as {error?:string}).error||"알림을 켜지 못했어요.");
-   toast.success("이 기기로 알림을 받아요.");
-   done();
-  }catch(e){toast.error(e instanceof Error?e.message:"알림을 켜지 못했어요.");done()}
+  try{await turnOnPush();toast.success("이 기기로 알림을 받아요.");done()}
+  catch(e){toast.error(e instanceof Error?e.message:"알림을 켜지 못했어요.");done()}
   finally{setBusy(false)}
  }
  if(!show)return null;

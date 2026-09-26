@@ -1,4 +1,4 @@
-import {blank,newSide,id,type State,iso} from "./model";
+import {blank,newSide,id,type State,type Row,iso} from "./model";
 export function demoState():State{
  const s=blank(),now=new Date(),d=new Date(now.getTime()+9*3600e3);d.setUTCHours(10,0,0,0);d.setUTCDate(d.getUTCDate()+((7-d.getUTCDay())%7||7));const next=d.getTime()-9*3600e3;
  s.settings=[{id:"owner",userId:"demo-a"}];
@@ -15,5 +15,21 @@ export function demoState():State{
  s.sides.push(z);if(g.away)s.sides.push(newSide(g,g.away));
  }
  const open={id:"game-other",home:"team-b",away:null,external:"",start:iso(next+864e5),end:iso(next+864e5+2*3600e3),venue:"강서 개화축구장",address:"서울 강서구 방화동 47",region:"서울",format:"11인제",secured:true,cost:80000,status:"scheduled",listing:"open",revision:1,result:null};s.games.push(open);s.sides.push(newSide(open,"team-b"));
- s.notices=[{id:"notice-1",teamId:"team-a",title:"이번 주 유니폼은 초록색입니다",body:"홈 유니폼(초록색)과 흰색 양말을 준비해주세요. 경기 시작 20분 전까지 모여주세요.",pinned:true,at:iso(next-4*864e5)},{id:"notice-2",teamId:"team-a",title:"9월 회비 납부 안내",body:"회비 납부 여부는 주장에게 확인해주세요.",pinned:false,at:iso(next-7*864e5)}];return s;
+ s.notices=[{id:"notice-1",teamId:"team-a",title:"이번 주 유니폼은 초록색입니다",body:"홈 유니폼(초록색)과 흰색 양말을 준비해주세요. 경기 시작 20분 전까지 모여주세요.",pinned:true,at:iso(next-4*864e5)},{id:"notice-2",teamId:"team-a",title:"9월 회비 납부 안내",body:"회비 납부 여부는 주장에게 확인해주세요.",pinned:false,at:iso(next-7*864e5)}];
+ // 1.11.0 샘플: 팀 회칙, 지난 자체전(팀 나누기·기록·MVP 마감), 가장 최근 경기의 진행 중인 MVP 투표.
+ s.teams[0].rules="[출석]\n- 참여 투표는 경기 전날 밤 10시까지 해주세요.\n- 늦으면 단톡방에 미리 알려주세요.\n\n[회비]\n- 월 회비 2만 원, 매월 5일까지\n\n[매너]\n- 거친 태클은 하지 않아요. 부상 방지가 먼저예요.";
+ const active=s.members.filter(x=>x.teamId==="team-a"&&x.status==="active");
+ const roster=active.map(x=>({id:x.id,name:x.name,number:x.number,position:x.position}));
+ // 늘 이틀 전(요일에 따라 미래가 되지 않게 지금 기준으로 잡는다)
+ const when=Math.floor((Date.now()-2*864e5)/3600e3)*3600e3;
+ const ig:Row={id:"game-intra",home:"team-a",away:null,external:"",kind:"intra",squads:2,start:iso(when),end:iso(when+2*3600e3),venue:"난지천공원 인조잔디축구장",address:"서울 마포구 하늘공원로 108-2",region:"서울",format:"11인제",secured:true,cost:0,status:"completed",listing:"none",revision:1,at:iso(when-5*864e5)};
+ const iz:Row=newSide(ig,"team-a");iz.roster=roster;iz.attendance=Object.fromEntries(roster.map((m,j)=>[m.id,j<12]));iz.attendanceFinal=true;
+ iz.squads=Object.fromEntries(roster.slice(0,12).map((m,j)=>[m.id,j%2]));iz.records={"a-p1":{goals:2,assists:0},"a-p2":{goals:1,assists:1},"a-p3":{goals:0,assists:1},"a-p0":{goals:1,assists:0}};iz.squadExtra=[0,0];iz.recordsFinal=true;
+ ig.result={status:"confirmed",squads:[1,3],by:"team-a",revision:1,at:iso(when+3*3600e3)};
+ iz.mvp={openAt:iso(when+3*3600e3),closesAt:iso(when+51*3600e3),votes:{"a-p0":"a-p1","a-p2":"a-p1","a-p3":"a-p1","a-p4":"a-p2","a-p5":"a-p1"}};
+ s.games.push(ig);s.sides.push(iz);
+ const recent=s.sides.find(z=>z.gameId==="game-3");
+ const hour=Math.floor(Date.now()/3600e3)*3600e3;
+ if(recent)recent.mvp={openAt:iso(hour-3600e3),closesAt:iso(hour+47*3600e3),votes:{"a-p2":"a-p1","a-p3":"a-p4"}};
+ return s;
 }

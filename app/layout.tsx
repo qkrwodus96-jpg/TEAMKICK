@@ -39,6 +39,9 @@ export default function Layout({children}:{children:React.ReactNode}){
   <head>
    {/* 첫 화면이 로고 파일을 기다리지 않도록 가장 먼저 받아 둔다. */}
    <link rel="preload" as="image" href={LOGO}/>
+   {/* 글꼴: Pretendard(OFL-1.1, public/fonts/pretendard/OFL.txt). 글자 범위별로 나뉜 파일이라 화면에 쓰인 글자 묶음만 받는다. */}
+   {/* eslint-disable-next-line @next/next/no-css-tags -- public 폴더의 정적 글꼴 CSS(글자 범위별 @font-face 92개)라 번들에 넣지 않는다 */}
+   <link rel="stylesheet" href="/fonts/pretendard/pretendard.css"/>
    <script dangerouslySetInnerHTML={{__html:CATCH}}/>
    <script dangerouslySetInnerHTML={{__html:SPLASH}}/>
    {/* 자바스크립트가 막혀 있으면 첫 화면을 치울 방법이 없다. 아예 보여주지 않는다. */}

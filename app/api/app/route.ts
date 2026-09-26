@@ -12,7 +12,10 @@ import {emailSignupEnabled} from "@/lib/signup-policy";
 import {wakeDevices,devicesAmong,pushReady} from "@/lib/push";
 export const dynamic="force-dynamic";
 const json=(x:any,status=200,cookie?:string)=>Response.json(x,{status,headers:cookie?{"Cache-Control":"no-store","Set-Cookie":cookie}:{"Cache-Control":"no-store"}});
-export async function GET(req:Request){try{await ensureSchema();const user=await currentUser(req);if(!user)return json({user:null,mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver")});const {state}=await load();const teamId=new URL(req.url).searchParams.get("team")??undefined;const token=new URL(req.url).searchParams.get("invite");const invite=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());
+export async function GET(req:Request){try{await ensureSchema();const user=await currentUser(req);
+ // 로그인 전이라도 초대 링크로 왔으면 어느 팀 초대인지(팀 이름만) 알려 준다. 가입 화면에 "OO 팀 초대"를 띄운다.
+ if(!user){const token=new URL(req.url).searchParams.get("invite");let invitedTeamName:string|null=null;if(token){const {state}=await load();const inv=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());const team=inv?state.teams.find(t=>t.id===inv.teamId&&t.status==="active"):null;invitedTeamName=team?.name??null}
+  return json({user:null,invitedTeamName,mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver")});}const {state}=await load();const teamId=new URL(req.url).searchParams.get("team")??undefined;const token=new URL(req.url).searchParams.get("invite");const invite=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());
  // 기록된 운영자의 계정이 사라졌으면 다시 등록할 수 있어야 한다. 그렇지 않으면 아무도 운영자가 될 수 없다.
  const ownerId=state.settings.find(x=>x.id==="owner")?.userId;
  const ownerMissing=!!ownerId&&ownerId!==user.userId&&!(await accountExists(ownerId));

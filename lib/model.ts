@@ -200,6 +200,53 @@ export function mvpWinners(side:Row,now=Date.now()){
  const top=Math.max(0,...Object.values(tally));
  return top>0?Object.keys(tally).filter(k=>tally[k]===top):[];
 }
+// --- 랭킹 (2026-09-26, 1.12.0) ---
+// 기간: 이번 주(월요일 0시 시작)·이번 달·올해, 모두 한국 시간 기준. 항목: 골·도움·공격P·MVP·출석.
+export const RANK_PERIODS=["week","month","year"] as const;
+export const RANK_KEYS=["goals","assists","points","mvp","attend"] as const;
+export function periodRange(period:string,now=Date.now()){
+ const k=new Date(now+9*3600e3),y=k.getUTCFullYear(),m=k.getUTCMonth(),d=k.getUTCDate();
+ const at=(yy:number,mm:number,dd:number)=>Date.UTC(yy,mm,dd)-9*3600e3;
+ if(period==="week"){const back=(k.getUTCDay()+6)%7;const s=at(y,m,d-back);return {from:iso(s),to:iso(s+7*864e5)}}
+ if(period==="month")return {from:iso(at(y,m,1)),to:iso(at(y,m+1,1))};
+ return {from:iso(at(y,0,1)),to:iso(at(y+1,0,1))};
+}
+// 같은 값이면 같은 등수(1,1,3). 값이 0인 사람은 빼고 센다.
+export function rankRows<T extends Record<string,unknown>>(rows:T[],key:string){
+ const list=rows.filter(r=>Number(r[key]??0)>0).sort((a,b)=>Number(b[key])-Number(a[key])||String(a.name??"").localeCompare(String(b.name??""),"ko"));
+ return list.map(r=>({...r,value:Number(r[key]),rank:1+list.filter(x=>Number(x[key])>Number(r[key])).length}));
+}
+// 전국 랭킹: **참여를 켠 사람만**(users[].rankPublic). 다른 사람의 계정 번호는 보내지 않고
+// 선수 이름·팀 이름·숫자만 보낸다. 한 사람이 여러 팀에서 뛰면 합산한다. 활동 중인 팀의 기록만 센다.
+export const NATIONAL_LIMIT=50;
+export function nationalRanking(s:State,userId:string,now=Date.now()){
+ const open=new Set(s.users.filter(u=>u.rankPublic===true).map(u=>u.id as string));
+ const out:Record<string,Record<string,Row[]>>={};
+ for(const period of RANK_PERIODS){
+  const {from,to}=periodRange(period,now);
+  const people=new Map<string,{name:string;teams:Map<string,number>;goals:number;assists:number;mvp:number;attend:number}>();
+  for(const side of s.sides){
+   const g=s.games.find(x=>x.id===side.gameId);
+   if(!g||g.status!=="completed"||g.start<from||g.start>=to)continue;
+   const team=teamOf(s,side.teamId);if(team?.status!=="active")continue;
+   const winners=mvpWinners(side,now);
+   for(const r of (side.roster??[]) as Row[]){
+    const m=s.members.find(x=>x.id===r.id);if(!m?.userId||!open.has(m.userId))continue;
+    const p=people.get(m.userId)??{name:String(m.name??""),teams:new Map(),goals:0,assists:0,mvp:0,attend:0};
+    const came=side.attendanceFinal&&side.attendance?.[r.id]===true;
+    if(came){p.attend++;p.teams.set(team.name,(p.teams.get(team.name)??0)+1)}
+    if(side.recordsFinal&&g.result?.status==="confirmed"){p.goals+=Number(side.records?.[r.id]?.goals??0);p.assists+=Number(side.records?.[r.id]?.assists??0)}
+    if(winners.includes(r.id))p.mvp++;
+    if(m.status==="active")p.name=String(m.name??p.name);
+    people.set(m.userId,p);
+   }
+  }
+  const rows=[...people.entries()].map(([uid,p])=>({name:p.name,team:[...p.teams.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]??"",goals:p.goals,assists:p.assists,points:p.goals+p.assists,mvp:p.mvp,attend:p.attend,me:uid===userId}));
+  out[period]={};
+  for(const key of RANK_KEYS)out[period][key]=rankRows(rows,key).map(({name,team,value,rank,me},i)=>({id:"n"+i,name,team,value,rank,me})).filter((r,i)=>i<NATIONAL_LIMIT||r.me);
+ }
+ return out;
+}
 // 팀 회칙 예시는 앱에서 고르는 칩으로만 쓴다. 저장 길이만 서버에서 막는다.
 export const RULES_MAX=2000;
 
@@ -563,6 +610,8 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   for(const x of rows){x.name=ANON_NAME;x.photo="";}
   output={changed:rows.length};
  }
+ // 전국 랭킹 참여 켜기·끄기. 본인만 바꾼다. 꺼도 기록은 그대로, 전국 목록에서만 빠진다.
+ else if(type==="setRankPublic"){const u=s.users.find(x=>x.id===a.id)!;u.rankPublic=c.on===true;u.rankPublicAt=stamp;}
  else if(type==="readNotifications"){for(const n of s.notifications.filter(x=>x.userId===a.id))n.read=true;}
  else if(type==="correctRequest"){requireTeam(s,t,a.id);for(const m of s.members.filter(x=>x.teamId===t&&["captain","manager"].includes(x.role)&&x.status==="active"))userNotice(s,m.userId,"기록 정정 요청",a.name+": "+textValue(c.message,500),t,"records");}
  else throw new AppError("지원하지 않는 작업이에요.");
@@ -577,6 +626,7 @@ export function visibleState(s:State,userId:string,selected?:string){
  const myGuestRows=s.guests.filter(x=>x.userId===userId);const guestGame=(gid:string)=>s.games.find(y=>y.id===gid);
  return {teams:publicTeams,members,mine:my,ownTeams,teamId:tid??"",role:team?.role??"",isOwner:owner,retired:owner?retiredPeople(s):[],
   myTotals:myTotals(s,userId),
+  rankPublic:s.users.find(x=>x.id===userId)?.rankPublic===true,national:nationalRanking(s,userId),
   // 문의는 본인 것만 본다. 운영자는 답변해야 하므로 전부 본다.
   inquiries:s.inquiries.filter(x=>owner||x.userId===userId).sort((x,y)=>String(y.at).localeCompare(String(x.at))).map(x=>({...x,mine:x.userId===userId})),
   announcements:[...s.announcements].sort((x,y)=>String(y.at).localeCompare(String(x.at))),

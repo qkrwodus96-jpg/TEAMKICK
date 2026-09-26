@@ -1,15 +1,33 @@
 # TEAMKICK 작업 인계
 
-최종 갱신: 2026-09-24
+최종 갱신: 2026-09-26
 작업 폴더: `/home/user/TEAMKICK`
 브랜치: `claude/fervent-galileo-8sulep`
 이 브랜치에 배포본 1.7.1(`codex/account-recovery-20260919`)을 합쳐 두었다.
 PR #21 은 2026-09-18 병합 완료(T39-T62), PR #20 은 2026-09-17 병합 완료.
 **`main` 은 1.8.0 까지 들어가 있다. 1.8.1·1.9.0 은 이 브랜치에만 있다.**
 미커밋 변경: 없음
-버전: `APP_VERSION=1.10.7`, `BUILD=2026-09-25-social-consent`
+버전: `APP_VERSION=1.11.0`, `BUILD=2026-09-26-team-play`
 **다음 세션이 가장 먼저 할 일: 1.9.0 배포를 GPT 에게 맡기고 사용자 확인을 받는다.**
 현재 작업 ID: **사용자 요청 5가지 처리 완료(로컬 검증). 배포가 남았다.**
+
+### 2026-09-26 (16) 자체전 · MVP 투표 · 초대 QR · 팀 회칙 · 첫 사용 안내 · 디자인 5번 (1.11.0)
+
+**코드 작성 완료 · 로컬 검증 완료 · 배포 전**
+
+사장님 요청(2026-09-26): 디자인 5번(지금 색 + 구역 띠), 자체전(1팀·2팀) + 자동 나누기 + 골·도움,
+경기 후 MVP 투표(알림, 득점왕·도움왕·MVP·출석왕), 초대 QR·링크 공유, 팀 회칙(자리 포함), 가입 직후 사용법 팝업.
+
+- 서버(`lib/model.ts`): `createGame` 에 `kind:"intra"`·`squads`(2~4), 새 명령 `squads`·`mvpVote`·`closeMvp`·`remindMvp`·`editRules`.
+  자체전에서 `result`·`confirmResult`·`records`·`setOpponent`·`openListing` 은 막음. `summaries` 는 자체전을 팀 전적에서 빼고
+  개인 기록에 넣음(`intra` 개수, 선수별 `mvp`). `visibleState` 는 MVP 표를 보내지 않고 `mvpView`(내 표·투표 수·마감 후 득표·MVP)만.
+- 화면: `app/team-play.tsx`(팀 나누기·MVP·왕 카드·회칙·QR), `app/welcome.tsx`(첫 사용 안내). `app/notify.tsx`·`app/install.tsx` 는 안내에서 쓰도록 함수만 꺼냄.
+- 디자인: `app/globals.css` 끝 "디자인 5번" — 되돌리려면 그 부분만 지우면 된다. 다음 경기 상자는 #116e42(사장님이 "경기 만들기 색 느낌" 요청, 같은 계열에서 글자가 읽히는 명도로).
+- 새 의존성 1개: `qrcode-generator@2.0.4`(MIT, 의존성 없음). 줄바꿈이 CRLF 인 package.json·pnpm-lock.yaml 은 CRLF 로 되돌려 실제 변경만 남김(1줄·8줄).
+- 처리방침 1항에 자체전 팀 나누기·MVP 투표(비밀)·팀 회칙(가입 전 공개) 추가, 적용일 2026-09-26. `LEGAL.md` 2-8.
+- 검증: 테스트 154/154(새 9개), 타입 검사 통과, lint 76건(시작 때와 같음), 샘플 팀으로 390px·1280px 화면 확인(가로 넘침 없음).
+  **푸시 실제 도착은 이 환경에서 못 봄**(VAPID 없음) — MVP 알림은 알림함에 쌓이는 것까지 확인, 폰 도착은 배포 후.
+- 샘플 팀(`lib/demo.ts`)에 회칙·지난 자체전(마감 전 MVP)·최근 경기 진행 중 MVP 를 넣어 둠.
 
 ### 2026-09-25 (15) 혼자인 주장 탈퇴 · 서비스 관리 목록 (1.10.7)
 

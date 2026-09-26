@@ -41,7 +41,7 @@ compile('app/api/app/route.ts','api.mjs',s=>s.replace('"@/lib/signup-policy"','"
 compile('lib/unlink.ts','unlink.mjs',s=>s.replace('"./social"','"./social.mjs"'));
 compile('lib/close.ts','close.mjs',s=>s.replace('"./store"','"./store.mjs"').replace('"./model"','"./model.mjs"').replace('"./auth"','"./auth.mjs"').replace('"./unlink"','"./unlink.mjs"'));
 globalThis.__teamkickTestEnv={};
-const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp}=await import(path.join(runtime,'model.mjs'));
+const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp,mvpView,mvpWinners}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
 const auth=await import(path.join(runtime,'auth.mjs'));
 const mail=await import(path.join(runtime,'mail.mjs'));
@@ -2128,7 +2128,8 @@ test('가입 전 사람도 팀 찾기에서 로고를 본다(다른 내부 정�
   const seen=stranger.teams.find(t=>t.id===a);
   assert.equal(seen.logo,key,'로고 주소가 있어야 한다');
   assert.equal(seen.applicant,undefined,'신청자는 숨긴다');
-  assert.deepEqual(Object.keys(seen).sort(),['color','days','description','format','id','level','logo','name','region','status'].filter(k=>k in seen).sort());
+  // 회칙(rules)은 가입 전에 읽을 수 있게 일부러 공개한다(2026-09-26, 화면에 안내).
+  assert.deepEqual(Object.keys(seen).sort(),['color','days','description','format','id','level','logo','name','region','rules','status'].filter(k=>k in seen).sort());
   // 우리 팀 주장에게는 전부
   assert.equal(visibleState(s,A.id,a).teams.find(t=>t.id===a).logo,key);
 });
@@ -2880,3 +2881,150 @@ test('다른 팀원이 있는 주장은 여전히 먼저 주장을 넘겨야 한
   assert.equal(f.s.teams.find(t=>t.id===f.a).status,'active');
 });
 
+
+// --- 1.11.0: 자체전 · MVP 투표 · 팀 회칙 ---
+function intraFixture(){
+  const f=fixture();
+  const p1=addPlayer(f.s,f.a,{id:'p1',name:'선수1'}),p2=addPlayer(f.s,f.a,{id:'p2',name:'선수2'}),p3=addPlayer(f.s,f.a,{id:'p3',name:'선수3'});
+  const start=NOW-2*DAY;
+  const {gameId}=command(f.s,A,{type:'createGame',teamId:f.a,kind:'intra',squads:2,start:iso(start),end:iso(start+7200e3),venue:'축구장',address:'서울 마포구'},start-DAY);
+  const cap=f.s.members.find(x=>x.teamId===f.a&&x.role==='captain');
+  return {...f,gameId,p1,p2,p3,cap};
+}
+function attendAll(f){
+  const z=sideOf(f.s,f.gameId,f.a),g=f.s.games.find(x=>x.id===f.gameId);
+  command(f.s,A,{type:'completeGame',teamId:f.a,gameId:f.gameId});
+  const values=Object.fromEntries(rosterFor(f.s,z,g).map(x=>[x.id,true]));
+  command(f.s,A,{type:'attendance',teamId:f.a,gameId:f.gameId,values});
+  return values;
+}
+
+test('자체전은 상대팀 없이 만들고, 상대팀 기능은 막힌다',()=>{
+  const f=intraFixture(),g=f.s.games.find(x=>x.id===f.gameId);
+  assert.equal(g.kind,'intra');assert.equal(g.squads,2);assert.equal(g.away,null);
+  assert.throws(()=>command(f.s,A,{type:'createGame',teamId:f.a,kind:'intra',external:'외부 FC',start:iso(NOW+3*DAY),end:iso(NOW+3*DAY+7200e3),venue:'a',address:'b'}),/자체전/);
+  assert.throws(()=>command(f.s,A,{type:'createGame',teamId:f.a,kind:'intra',squads:5,start:iso(NOW+4*DAY),end:iso(NOW+4*DAY+7200e3),venue:'a',address:'b'}),/숫자 범위/);
+  assert.throws(()=>command(f.s,A,{type:'setOpponent',teamId:f.a,gameId:f.gameId,external:'x'}),/자체전/);
+  assert.throws(()=>command(f.s,A,{type:'openListing',teamId:f.a,gameId:f.gameId}),/자체전/);
+  assert.throws(()=>command(f.s,A,{type:'result',teamId:f.a,gameId:f.gameId,own:1,opponent:0}),/자체전/);
+});
+
+test('자체전 팀 나누기는 그 경기에 뛸 수 있는 사람만, 팀 번호 범위 안에서 받는다',()=>{
+  const f=intraFixture();
+  // 일반 팀원은 나눌 수 없다(운영진 이상)
+  assert.throws(()=>command(f.s,{id:'p1',name:'선수1'},{type:'squads',teamId:f.a,gameId:f.gameId,assign:{[f.p1.id]:0}}),/권한/);
+  assert.throws(()=>command(f.s,A,{type:'squads',teamId:f.a,gameId:f.gameId,assign:{'남의 선수':0}}),/뛸 수 있는/);
+  assert.throws(()=>command(f.s,A,{type:'squads',teamId:f.a,gameId:f.gameId,assign:{[f.p1.id]:2}}),/숫자 범위/);
+  command(f.s,A,{type:'squads',teamId:f.a,gameId:f.gameId,assign:{[f.cap.id]:0,[f.p1.id]:0,[f.p2.id]:1,[f.p3.id]:1}});
+  assert.deepEqual(sideOf(f.s,f.gameId,f.a).squads,{[f.cap.id]:0,[f.p1.id]:0,[f.p2.id]:1,[f.p3.id]:1});
+  // 운영진도 나눌 수 있다
+  command(f.s,A,{type:'setRole',teamId:f.a,memberId:f.p1.id,role:'manager'});
+  command(f.s,{id:'p1',name:'선수1'},{type:'squads',teamId:f.a,gameId:f.gameId,assign:{[f.p1.id]:1}});
+});
+
+test('자체전 기록은 조별 점수를 선수 골로 더하고, 팀 전적에는 넣지 않고 개인 기록에는 넣는다',()=>{
+  const f=intraFixture();attendAll(f);
+  // 골 넣은 사람이 몇 팀인지 모르면 받지 않는다
+  assert.throws(()=>command(f.s,A,{type:'matchRecord',teamId:f.a,gameId:f.gameId,values:{[f.p1.id]:{goals:1,assists:0}}}),/몇 팀인지/);
+  command(f.s,A,{type:'squads',teamId:f.a,gameId:f.gameId,assign:{[f.cap.id]:0,[f.p1.id]:0,[f.p2.id]:1,[f.p3.id]:1}});
+  const out=command(f.s,A,{type:'matchRecord',teamId:f.a,gameId:f.gameId,values:{[f.p1.id]:{goals:2,assists:0},[f.p2.id]:{goals:1,assists:0},[f.cap.id]:{goals:0,assists:2}},extra:[0,1]});
+  assert.deepEqual(out.squads,[2,2]);
+  const g=f.s.games.find(x=>x.id===f.gameId);assert.equal(g.result.status,'confirmed');assert.deepEqual(g.result.squads,[2,2]);
+  assert.throws(()=>command(f.s,A,{type:'matchRecord',teamId:f.a,gameId:f.gameId,values:{[f.cap.id]:{goals:0,assists:1}},extra:[0,0]}),/도움 합계/);
+  const stats=summaries(visibleState(f.s,A.id,f.a),'1970','2100');
+  assert.equal(stats.played,0,'자체전은 팀 경기 수에 넣지 않는다');assert.equal(stats.intra,1);
+  assert.equal(stats.wins+stats.draws+stats.losses,0);
+  assert.equal(stats.players.find(x=>x.id===f.p1.id).goals,2,'개인 골에는 넣는다');
+  assert.equal(stats.players.find(x=>x.id===f.cap.id).assists,2);
+  assert.equal(stats.players.find(x=>x.id===f.p3.id).attend,1,'출석에도 넣는다');
+  // 조를 바꾸면 점수를 다시 센다
+  command(f.s,A,{type:'squads',teamId:f.a,gameId:f.gameId,assign:{[f.cap.id]:0,[f.p1.id]:1,[f.p2.id]:1,[f.p3.id]:1}});
+  assert.deepEqual(f.s.games.find(x=>x.id===f.gameId).result.squads,[0,4]);
+  // 운영진도 자체전 기록을 넣을 수 있다(상대 확인이 없으니)
+  command(f.s,A,{type:'setRole',teamId:f.a,memberId:f.p2.id,role:'manager'});
+  command(f.s,{id:'p2',name:'선수2'},{type:'matchRecord',teamId:f.a,gameId:f.gameId,values:{[f.p2.id]:{goals:1,assists:0}},extra:[0,0]});
+});
+
+test('다른 팀과의 경기도 선수 골·도움을 넣고 개인 기록에 쌓인다(기존 기능 유지)',()=>{
+  const {s,a}=fixture(),m=addPlayer(s,a),g=game(s,a,{start:NOW-2*DAY}),z=sideOf(s,g,a);
+  command(s,A,{type:'completeGame',teamId:a,gameId:g});
+  command(s,A,{type:'attendance',teamId:a,gameId:g,values:Object.fromEntries(rosterFor(s,z,s.games[0]).map(x=>[x.id,true]))});
+  command(s,A,{type:'matchRecord',teamId:a,gameId:g,values:{[m.id]:{goals:1,assists:1}},opponent:2});
+  const stats=summaries(visibleState(s,A.id,a),'1970','2100');
+  assert.equal(stats.played,1);assert.equal(stats.losses,1);assert.equal(stats.players.find(x=>x.id===m.id).goals,1);
+});
+
+test('MVP 투표는 출석 확정 때 열리고, 출석한 팀원만 자기 말고 출석한 사람을 뽑는다',()=>{
+  const f=intraFixture();
+  const before=f.s.notifications.length;
+  const values=attendAll(f);
+  const z=sideOf(f.s,f.gameId,f.a);
+  assert.ok(z.mvp,'출석 확정과 함께 열린다');
+  const opened=f.s.notifications.slice(before).filter(n=>n.title==='MVP 투표가 열렸어요');
+  assert.equal(opened.length,Object.keys(values).length,'출석한 사람 모두에게 알림');
+  assert.ok(opened.every(n=>n.to==='schedule'&&n.gameId===f.gameId&&n.teamId===f.a));
+  assert.throws(()=>command(f.s,{id:'p1',name:'선수1'},{type:'mvpVote',teamId:f.a,gameId:f.gameId,candidate:f.p1.id}),/자기 자신/);
+  assert.throws(()=>command(f.s,{id:'p1',name:'선수1'},{type:'mvpVote',teamId:f.a,gameId:f.gameId,candidate:'없는 사람'}),/출석한 팀원 중/);
+  command(f.s,{id:'p1',name:'선수1'},{type:'mvpVote',teamId:f.a,gameId:f.gameId,candidate:f.p2.id});
+  command(f.s,{id:'p1',name:'선수1'},{type:'mvpVote',teamId:f.a,gameId:f.gameId,candidate:f.p3.id}); // 마감 전엔 바꿀 수 있다
+  assert.equal(z.mvp.votes[f.p1.id],f.p3.id);
+  // 불참으로 정정하면 그 사람의 표와 그 사람에게 간 표가 빠지고, 투표도 못 한다
+  command(f.s,A,{type:'attendance',teamId:f.a,gameId:f.gameId,values:{...values,[f.p3.id]:false}});
+  assert.equal(z.mvp.votes[f.p1.id],undefined);
+  assert.throws(()=>command(f.s,{id:'p3',name:'선수3'},{type:'mvpVote',teamId:f.a,gameId:f.gameId,candidate:f.p1.id}),/출석한 팀원만/);
+});
+
+test('MVP 투표는 비밀이다 — 마감 전엔 내 표와 투표 수만, 마감 후엔 득표 수만 보인다',()=>{
+  const f=intraFixture();attendAll(f);
+  command(f.s,{id:'p1',name:'선수1'},{type:'mvpVote',teamId:f.a,gameId:f.gameId,candidate:f.p2.id});
+  command(f.s,{id:'p3',name:'선수3'},{type:'mvpVote',teamId:f.a,gameId:f.gameId,candidate:f.p2.id});
+  const seen=visibleState(f.s,'p2',f.a).sides.find(x=>x.gameId===f.gameId).mvp;
+  assert.equal(seen.votes,undefined,'표 자체는 보내지 않는다');
+  assert.equal(seen.mine,'');assert.equal(seen.voted,2);assert.equal(seen.closed,false);assert.deepEqual(seen.tally,{});
+  assert.equal(visibleState(f.s,'p1',f.a).sides.find(x=>x.gameId===f.gameId).mvp.mine,f.p2.id);
+  assert.ok(!JSON.stringify(visibleState(f.s,'p2',f.a)).includes('"votes":{"'+f.p1.id),'다른 사람의 표가 응답에 섞이지 않는다');
+  // 일반 팀원은 마감할 수 없고 주장·운영진은 할 수 있다
+  assert.throws(()=>command(f.s,{id:'p1',name:'선수1'},{type:'closeMvp',teamId:f.a,gameId:f.gameId}),/권한/);
+  const before=f.s.notifications.length;
+  command(f.s,A,{type:'closeMvp',teamId:f.a,gameId:f.gameId});
+  assert.ok(f.s.notifications.slice(before).some(n=>n.title==='MVP 투표 결과'&&n.body.includes('선수2')));
+  const after=visibleState(f.s,'p2',f.a).sides.find(x=>x.gameId===f.gameId).mvp;
+  assert.equal(after.closed,true);assert.deepEqual(after.winners,[f.p2.id]);assert.deepEqual(after.tally,{[f.p2.id]:2});
+  assert.throws(()=>command(f.s,{id:'p1',name:'선수1'},{type:'mvpVote',teamId:f.a,gameId:f.gameId,candidate:f.p3.id}),/마감/);
+  const stats=summaries(visibleState(f.s,A.id,f.a),'1970','2100');
+  assert.equal(stats.players.find(x=>x.id===f.p2.id).mvp,1);assert.equal(stats.players.find(x=>x.id===f.p1.id).mvp,0);
+});
+
+test('MVP 동률이면 공동 MVP, 48시간이 지나면 저절로 마감된다',()=>{
+  const f=intraFixture();attendAll(f);
+  command(f.s,{id:'p1',name:'선수1'},{type:'mvpVote',teamId:f.a,gameId:f.gameId,candidate:f.p2.id});
+  command(f.s,{id:'p2',name:'선수2'},{type:'mvpVote',teamId:f.a,gameId:f.gameId,candidate:f.p1.id});
+  const later=NOW+49*3600e3;
+  assert.throws(()=>command(f.s,{id:'p3',name:'선수3'},{type:'mvpVote',teamId:f.a,gameId:f.gameId,candidate:f.p1.id},later),/마감/);
+  const z=sideOf(f.s,f.gameId,f.a);
+  assert.equal(mvpView(z,f.cap.id,NOW).closed,false,'지금은 아직 열려 있다');
+  assert.deepEqual(mvpWinners(z,NOW),[],'마감 전에는 MVP 가 없다');
+  const view=mvpView(z,f.cap.id,later);
+  assert.equal(view.closed,true);assert.deepEqual([...view.winners].sort(),[f.p1.id,f.p2.id].sort(),'동률은 공동 MVP');
+});
+
+test('MVP 미투표자 알림은 운영진이 보내고 6시간에 한 번이다',()=>{
+  const f=intraFixture();attendAll(f);
+  command(f.s,{id:'p1',name:'선수1'},{type:'mvpVote',teamId:f.a,gameId:f.gameId,candidate:f.p2.id});
+  const out=command(f.s,A,{type:'remindMvp',teamId:f.a,gameId:f.gameId});
+  assert.equal(out.notified,3,'투표 안 한 3명(주장·선수2·선수3)');
+  assert.throws(()=>command(f.s,A,{type:'remindMvp',teamId:f.a,gameId:f.gameId}),/6시간/);
+});
+
+test('팀 회칙은 주장·운영진이 쓰고, 가입 전 사람도 읽을 수 있다',()=>{
+  const {s,a}=fixture(),m=addPlayer(s,a);
+  assert.throws(()=>command(s,member,{type:'editRules',teamId:a,rules:'x'}),/권한/);
+  command(s,A,{type:'editRules',teamId:a,rules:'[회비]\n- 월 2만원',notify:true});
+  assert.equal(s.teams.find(t=>t.id===a).rules,'[회비]\n- 월 2만원');
+  assert.ok(s.notifications.some(n=>n.userId===member.id&&n.title==='팀 회칙이 바뀌었어요'&&n.to==='team'));
+  assert.equal(visibleState(s,'stranger').teams.find(t=>t.id===a).rules,'[회비]\n- 월 2만원');
+  assert.throws(()=>command(s,A,{type:'editRules',teamId:a,rules:'x'.repeat(2001)}),/길이/);
+  command(s,A,{type:'setRole',teamId:a,memberId:m.id,role:'manager'});
+  command(s,member,{type:'editRules',teamId:a,rules:''});
+  assert.equal(s.teams.find(t=>t.id===a).rules,'');
+});

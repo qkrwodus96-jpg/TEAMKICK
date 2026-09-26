@@ -27,6 +27,13 @@ function installed(){
 const isIos=()=>/iphone|ipad|ipod/i.test(navigator.userAgent)&&!/crios|fxios/i.test(navigator.userAgent);
 const isSamsung=()=>/samsungbrowser/i.test(navigator.userAgent);
 
+// 첫 사용 안내(welcome.tsx)에서 쓴다. 설치 창을 받았으면 바로 부르고, 못 받았으면 손으로 하는 방법을 고른다.
+export function installState(){return {installed:installed(),how:(isIos()?"ios":isSamsung()?"samsung":"other") as "ios"|"samsung"|"other",prompt:held()}}
+export async function promptInstall(){
+ const p=held();if(!p)return false;
+ try{await p.prompt();const c=await p.userChoice.catch(()=>null);(window as unknown as {__teamkickInstall:Prompt|null}).__teamkickInstall=null;if(c?.outcome==="accepted"){remember(DONE);return true}return false}
+ catch{(window as unknown as {__teamkickInstall:Prompt|null}).__teamkickInstall=null;return false}
+}
 export function InstallGuide(){
  const [view,setView]=useState<{show:boolean;how:""|"ios"|"samsung"|"other";prompt:Prompt|null}>({show:false,how:"",prompt:null});
 

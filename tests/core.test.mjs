@@ -41,7 +41,7 @@ compile('app/api/app/route.ts','api.mjs',s=>s.replace('"@/lib/signup-policy"','"
 compile('lib/unlink.ts','unlink.mjs',s=>s.replace('"./social"','"./social.mjs"'));
 compile('lib/close.ts','close.mjs',s=>s.replace('"./store"','"./store.mjs"').replace('"./model"','"./model.mjs"').replace('"./auth"','"./auth.mjs"').replace('"./unlink"','"./unlink.mjs"'));
 globalThis.__teamkickTestEnv={};
-const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp,mvpView,mvpWinners}=await import(path.join(runtime,'model.mjs'));
+const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp,mvpView,mvpWinners,periodRange,rankRows,nationalRanking}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
 const auth=await import(path.join(runtime,'auth.mjs'));
 const mail=await import(path.join(runtime,'mail.mjs'));
@@ -3027,4 +3027,54 @@ test('팀 회칙은 주장·운영진이 쓰고, 가입 전 사람도 읽을 수
   command(s,A,{type:'setRole',teamId:a,memberId:m.id,role:'manager'});
   command(s,member,{type:'editRules',teamId:a,rules:''});
   assert.equal(s.teams.find(t=>t.id===a).rules,'');
+});
+
+// --- 1.12.0: 랭킹 ---
+test('랭킹 기간은 한국 시간 기준 — 이번 주는 월요일 0시, 이번 달은 1일, 올해는 1월 1일부터',()=>{
+  // 2026-09-27(일) 23:30 KST = 14:30 UTC. 이번 주는 9/21(월) 00:00 KST 부터
+  const sunNight=Date.parse('2026-09-27T14:30:00Z');
+  assert.deepEqual(periodRange('week',sunNight),{from:'2026-09-20T15:00:00.000Z',to:'2026-09-27T15:00:00.000Z'});
+  // 9/28(월) 00:30 KST 는 새 주
+  assert.equal(periodRange('week',Date.parse('2026-09-27T15:30:00Z')).from,'2026-09-27T15:00:00.000Z');
+  assert.deepEqual(periodRange('month',sunNight),{from:'2026-08-31T15:00:00.000Z',to:'2026-09-30T15:00:00.000Z'});
+  assert.deepEqual(periodRange('year',sunNight),{from:'2025-12-31T15:00:00.000Z',to:'2026-12-31T15:00:00.000Z'});
+});
+
+test('같은 값은 같은 등수(1,1,3)이고 0인 사람은 빠진다',()=>{
+  const rows=rankRows([{name:'가',goals:3},{name:'나',goals:3},{name:'다',goals:1},{name:'라',goals:0}],'goals');
+  assert.deepEqual(rows.map(r=>[r.name,r.rank]),[['가',1],['나',1],['다',3]]);
+});
+
+test('전국 랭킹은 참여를 켠 사람만, 계정 번호 없이 이름·팀·숫자만 보인다',()=>{
+  const f=intraFixture();attendAll(f);
+  command(f.s,A,{type:'squads',teamId:f.a,gameId:f.gameId,assign:{[f.cap.id]:0,[f.p1.id]:0,[f.p2.id]:1,[f.p3.id]:1}});
+  command(f.s,A,{type:'matchRecord',teamId:f.a,gameId:f.gameId,values:{[f.p1.id]:{goals:3,assists:0},[f.p2.id]:{goals:1,assists:2}},extra:[0,0]});
+  // 픽스처 경기는 이틀 전이라 '올해' 기간으로 본다
+  let view=visibleState(f.s,'stranger').national;
+  assert.equal(view.year.goals.length,0,'아무도 참여를 켜지 않으면 비어 있다');
+  command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:true});
+  view=visibleState(f.s,'stranger').national;
+  assert.deepEqual(view.year.goals.map(r=>[r.name,r.value,r.rank]),[['선수1',3,1]],'켠 사람만');
+  assert.equal(view.year.goals[0].team,'팀 0');
+  const text=JSON.stringify(visibleState(f.s,'stranger').national);
+  for(const uid of ['p1','p2','p3',A.id])assert.ok(!text.includes('"'+uid+'"'),'계정 번호가 섞이지 않는다');
+  assert.equal(visibleState(f.s,'p1').national.year.goals[0].me,true,'내 줄은 표시');
+  assert.equal(visibleState(f.s,'p1').rankPublic,true);
+  // 끄면 빠진다(기록은 그대로)
+  command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:false});
+  assert.equal(visibleState(f.s,'stranger').national.year.goals.length,0);
+  assert.equal(summaries(visibleState(f.s,A.id,f.a),'1970','2100').players.find(x=>x.id===f.p1.id).goals,3);
+});
+
+test('전국 랭킹은 정지·해산된 팀의 기록과 탈퇴한 사람을 뺀다',()=>{
+  const f=intraFixture();attendAll(f);
+  command(f.s,A,{type:'squads',teamId:f.a,gameId:f.gameId,assign:{[f.p1.id]:0}});
+  command(f.s,A,{type:'matchRecord',teamId:f.a,gameId:f.gameId,values:{[f.p1.id]:{goals:2,assists:0}},extra:[0,0]});
+  command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:true});
+  assert.equal(nationalRanking(f.s,'x').year.goals.length,1);
+  command(f.s,owner,{type:'suspendTeam',teamId:f.a,reason:'테스트'});
+  assert.equal(nationalRanking(f.s,'x').year.goals.length,0,'정지된 팀');
+  command(f.s,owner,{type:'restoreTeam',teamId:f.a});
+  command(f.s,{id:'p1',name:'선수1'},{type:'closeAccount'});
+  assert.equal(nationalRanking(f.s,'x').year.goals.length,0,'탈퇴한 사람');
 });

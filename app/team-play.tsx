@@ -5,7 +5,7 @@ import {useMemo,useState} from "react";
 import qrcode from "qrcode-generator";
 import {Trophy,Shuffle,Minus,Plus,Check,Share2,Copy,Bell,Crown,Goal,Footprints,CalendarCheck,BookOpen} from "lucide-react";
 import {toast} from "sonner";
-import {SQUAD_NAMES,type Row} from "@/lib/model";
+import {SQUAD_NAMES,summaries,periodRange,rankRows,type Row} from "@/lib/model";
 import {PlayerPhoto,koreanDate,time,backNo,opponent} from "./teamkick";
 
 // --- 공통: 숫자 올리고 내리기 ---
@@ -108,17 +108,42 @@ export function MvpPanel({g,side,v,manager,busy,save}:{g:Row;side:Row;v:Row;mana
  </div>;
 }
 
-// --- 기록 왕 카드 (득점왕·도움왕·MVP·출석왕) ---
-const KINGS=[{key:"goals",label:"득점왕",unit:"골",icon:Goal},{key:"assists",label:"도움왕",unit:"도움",icon:Footprints},{key:"mvp",label:"MVP",unit:"회",icon:Trophy},{key:"attend",label:"출석왕",unit:"회",icon:CalendarCheck}] as const;
-export function KingCards({players,onOpen}:{players:Row[];onOpen:(p:Row)=>void}){
- return <div className="king-grid">{KINGS.map(k=>{
-  const top=Math.max(0,...players.map(p=>Number(p[k.key]??0)));
-  const leaders=top>0?players.filter(p=>Number(p[k.key]??0)===top).sort((a,b)=>a.name.localeCompare(b.name,"ko")):[];
-  const lead=leaders[0];
-  return <button type="button" className="king-card" key={k.key} disabled={!lead} onClick={()=>lead&&onOpen(lead)}>
-   <span className="king-label"><k.icon size={15}/>{k.label}</span>
-   {lead?<><span className="row" style={{gap:8,minWidth:0}}><PlayerPhoto name={lead.name} photo={lead.photo}/><strong className="king-name">{lead.name}{leaders.length>1&&<small className="muted"> 외 {leaders.length-1}명</small>}</strong></span><span className="king-value">{top}<small>{k.unit}</small></span></>:<span className="small muted">아직 기록이 없어요</span>}
-  </button>})}</div>;
+// --- 랭킹 (팀 내 · 전국 / 이번 주 · 이번 달 · 올해) ---
+// 1·2·3등은 시상대, 그 아래 4~9등, 나머지는 "더 보기". 전국은 참여를 켠 선수만(lib/model.ts nationalRanking).
+const RANK_TABS=[{key:"goals",label:"득점",unit:"골",icon:Goal},{key:"assists",label:"도움",unit:"도움",icon:Footprints},{key:"points",label:"공격P",unit:"P",icon:Crown},{key:"mvp",label:"MVP",unit:"회",icon:Trophy},{key:"attend",label:"출석",unit:"회",icon:CalendarCheck}] as const;
+// 메달 색은 자리(왼쪽·가운데·오른쪽)가 아니라 등수로 정한다. 공동 1등이면 셋 다 금색.
+const MEDAL:Record<number,string>={1:"#d4a017",2:"#9aa6ae",3:"#c07a45"};
+const PERIODS=[{key:"week",label:"이번 주"},{key:"month",label:"이번 달"},{key:"year",label:"올해"}] as const;
+export function Rankings({v,busy,run,onOpen}:{v:Row;busy:boolean;run:(c:Record<string,unknown>)=>void;onOpen:(p:Row)=>void}){
+ const [scope,setScope]=useState<"team"|"national">("team");
+ const [period,setPeriod]=useState<string>("month");
+ const [key,setKey]=useState<string>("goals");
+ const [more,setMore]=useState(false);
+ const tab=RANK_TABS.find(x=>x.key===key)!;
+ const rows:Row[]=useMemo(()=>{
+  if(scope==="national")return (v.national?.[period]?.[key]??[]) as Row[];
+  const {from,to}=periodRange(period);
+  const players=summaries({...v,games:v.games??[],members:v.members??[],sides:v.sides??[]},from,to).players.map((p:Row)=>({...p,me:p.userId===v.user?.id}));
+  return rankRows(players,key) as Row[];
+ },[v,scope,period,key]);
+ const podium=rows.slice(0,3),rest=rows.slice(3),shown=more?rest:rest.filter(r=>rows.indexOf(r)<9);
+ const label=(r:Row)=>r.value+tab.unit;
+ const who=(r:Row)=>scope==="national"?r.team:[backNo(r.number),r.position].filter(Boolean).join(" · ");
+ const open=(r:Row)=>{if(scope==="team")onOpen(r)};
+ return <div className="rankings">
+  <div className="panel-title"><h2>랭킹</h2><div className="seg" role="tablist" aria-label="랭킹 범위">{[{k:"team",t:"팀 내"},{k:"national",t:"전국"}].map(x=><button key={x.k} role="tab" aria-selected={scope===x.k} className={scope===x.k?"on":""} onClick={()=>{setScope(x.k as "team"|"national");setMore(false)}}>{x.t}</button>)}</div></div>
+  <div className="chip-row rank-periods">{PERIODS.map(x=><button key={x.key} className={"chip-mini"+(period===x.key?" on":"")} onClick={()=>{setPeriod(x.key);setMore(false)}}>{x.label}</button>)}</div>
+  <div className="rank-keys" role="tablist" aria-label="랭킹 항목">{RANK_TABS.map(x=><button key={x.key} role="tab" aria-selected={key===x.key} className={key===x.key?"on":""} onClick={()=>{setKey(x.key);setMore(false)}}><x.icon size={15}/>{x.label}왕</button>)}</div>
+  {scope==="national"&&<div className="rank-optin">{v.rankPublic?<p className="small muted">전국 랭킹에 참여 중이에요. <button className="text-link" disabled={busy} onClick={()=>run({type:"setRankPublic",on:false})}>빠지기</button></p>:<div className="task-box"><strong>전국 랭킹은 참여를 켠 선수만 보여요</strong><p className="small muted">켜면 내 선수 이름·팀 이름·기록 숫자가 다른 팀 이용자에게도 보여요. 언제든 끌 수 있어요.</p><button className="btn btn-green" disabled={busy} onClick={()=>run({type:"setRankPublic",on:true})}>전국 랭킹 참여하기</button></div>}</div>}
+  {rows.length?<>
+   <div className="podium">{[1,0,2].map(i=>{const r=podium[i];return <div key={i} className={"podium-col place-"+(i+1)+(r?.me?" me":"")}>{r?<button className="podium-card" onClick={()=>open(r)} disabled={scope!=="team"}>
+    <span className="podium-medal" style={{background:MEDAL[r.rank as number]??"#9aa6a0"}}>{r.rank}</span><span className="podium-face" style={{["--medal" as string]:MEDAL[r.rank as number]??"#c9d3cd"}}><PlayerPhoto name={r.name} photo={r.photo}/></span><strong>{r.name}</strong><small>{who(r)||" "}</small><b className="podium-value">{r.value}<small>{tab.unit}</small></b></button>:<div className="podium-card empty"><span className="podium-medal">{i+1}</span><small>—</small></div>}<div className="podium-step"/></div>})}</div>
+   {!!shown.length&&<ol className="rank-list">{shown.map(r=><li key={(r.id??"")+r.name} className={r.me?"me":""}><button onClick={()=>open(r)} disabled={scope!=="team"}><span className="rank-no">{r.rank}</span><PlayerPhoto name={r.name} photo={r.photo}/><span className="rank-who"><strong>{r.name}{r.me&&<em> 나</em>}</strong><small>{who(r)}</small></span><b>{label(r)}</b></button></li>)}</ol>}
+   {rest.length>shown.length&&<button className="btn rank-more" onClick={()=>setMore(true)}>더 보기 ({rest.length-shown.length}명)</button>}
+   {more&&rest.length>6&&<button className="text-link rank-more" onClick={()=>setMore(false)}>접기</button>}
+  </>:<p className="small muted rank-empty">{scope==="national"&&!v.rankPublic?"아직 참여한 선수가 없거나 이 기간 기록이 없어요.":"이 기간에 "+tab.label+" 기록이 없어요."}</p>}
+  <p className="data-note">{scope==="team"?"우리 팀 기록 기준(자체전 포함). 골·도움은 결과가 확정된 경기, 출석은 출석 확정, MVP는 마감된 투표만 세요.":"참여를 켠 선수의 모든 팀 기록을 합쳐요. 활동 중인 팀의 기록만 세고, 상위 50명까지 보여요."}</p>
+ </div>;
 }
 
 // --- 팀 회칙 ---

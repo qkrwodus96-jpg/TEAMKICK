@@ -31,5 +31,7 @@ export function demoState():State{
  const recent=s.sides.find(z=>z.gameId==="game-3");
  const hour=Math.floor(Date.now()/3600e3)*3600e3;
  if(recent)recent.mvp={openAt:iso(hour-3600e3),closesAt:iso(hour+47*3600e3),votes:{"a-p2":"a-p1","a-p3":"a-p4"}};
+ // 전국 랭킹 샘플: 몇 명만 참여를 켜 둔다(샘플 주장 본인은 꺼 둬서 참여 안내가 보이게).
+ for(const u of s.users)if(/^demo-a-[1-6]$/.test(String(u.id)))u.rankPublic=true;
  return s;
 }

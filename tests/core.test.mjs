@@ -3158,10 +3158,10 @@ test('좋아하는 팀은 목록에 있는 것만, 중복 없이, 최대 5개까
 });
 
 test('축구 소식 서버: 키 없으면 준비 중, 30분 캐시, 네이버 실패 시 직전 결과 또는 오류',async()=>{
-  const env=globalThis.__teamkickTestEnv;const saved={id:env.NAVER_CLIENT_ID,secret:env.NAVER_CLIENT_SECRET};const realFetch=globalThis.fetch;
+  const env=globalThis.__teamkickTestEnv;const saved={id:env.NAVER_CLIENT_ID,secret:env.NAVER_CLIENT_SECRET,hid:env.NAVER_API_HUB_KEY_ID,hkey:env.NAVER_API_HUB_KEY};const realFetch=globalThis.fetch;
   newsServer.clearNewsCache();
   try{
-    delete env.NAVER_CLIENT_ID;delete env.NAVER_CLIENT_SECRET;
+    delete env.NAVER_CLIENT_ID;delete env.NAVER_CLIENT_SECRET;delete env.NAVER_API_HUB_KEY_ID;delete env.NAVER_API_HUB_KEY;
     await assert.rejects(newsServer.fetchNews('world'),e=>e.status===503&&/준비 중/.test(e.message));
     await assert.rejects(newsServer.fetchNews('없는것'),e=>e.status===400);
     env.NAVER_CLIENT_ID='id';env.NAVER_CLIENT_SECRET='secret';
@@ -3177,9 +3177,18 @@ test('축구 소식 서버: 키 없으면 준비 중, 30분 캐시, 네이버 �
     fail=true;
     const stale=await newsServer.fetchNews('mu',t0+31*60e3);assert.equal(stale.stale,true,'실패하면 직전 결과를 오래된 것으로 표시');assert.equal(calls,2);
     await assert.rejects(newsServer.fetchNews('jb',t0),e=>e.status===503,'직전 결과가 없으면 오류(가짜 기사로 채우지 않음)');
+    // NAVER API HUB 키가 있으면 새 주소·헤더로 부른다(2026-07-31 이후 새 신청은 HUB 만 됨)
+    fail=false;env.NAVER_API_HUB_KEY_ID='hid';env.NAVER_API_HUB_KEY='hkey';newsServer.clearNewsCache();
+    assert.equal(newsServer.newsSource(),'hub');
+    await newsServer.fetchNews('kor',t0);
+    assert.ok(sent.url.startsWith('https://naverapihub.apigw.ntruss.com/search/v1/news?'),sent.url);
+    assert.equal(sent.headers['X-NCP-APIGW-API-KEY-ID'],'hid');assert.equal(sent.headers['X-NCP-APIGW-API-KEY'],'hkey');
+    assert.equal(sent.headers['X-Naver-Client-Id'],undefined);
   }finally{
     globalThis.fetch=realFetch;newsServer.clearNewsCache();
     if(saved.id===undefined)delete env.NAVER_CLIENT_ID;else env.NAVER_CLIENT_ID=saved.id;
     if(saved.secret===undefined)delete env.NAVER_CLIENT_SECRET;else env.NAVER_CLIENT_SECRET=saved.secret;
+    if(saved.hid===undefined)delete env.NAVER_API_HUB_KEY_ID;else env.NAVER_API_HUB_KEY_ID=saved.hid;
+    if(saved.hkey===undefined)delete env.NAVER_API_HUB_KEY;else env.NAVER_API_HUB_KEY=saved.hkey;
   }
 });

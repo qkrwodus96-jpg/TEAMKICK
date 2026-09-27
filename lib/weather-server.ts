@@ -50,9 +50,13 @@ async function forecastItems(nx:number,ny:number,now:number){
   return [...first.items,...rest.flatMap(x=>x.items)];
  });
 }
-type AirItem={informCode?:string;informData?:string;informGrade?:string};
+type AirItem={informCode?:string;informData?:string;informGrade?:string;dataTime?:string};
+// 대기질 예보는 하루 4번(05·11·17·23시) 발표된다. 새벽에는 오늘 발표가 아직 없으니 어제 발표도 함께 본다.
 async function airItems(code:"PM10"|"PM25",now:number){
- const date=ymdDash(now);
+ const [today,yesterday]=await Promise.all([airDay(code,ymdDash(now),now).catch(()=>[] as AirItem[]),airDay(code,ymdDash(now-24*3600e3),now)]);
+ return [...today,...yesterday];
+}
+async function airDay(code:"PM10"|"PM25",date:string,now:number){
  return cached("a:"+code+":"+date,now,async()=>{
   const q=new URLSearchParams({serviceKey:key(),returnType:"json",numOfRows:"100",pageNo:"1",searchDate:date,InformCode:code});
   const body=await getJson(AIR+"?"+q.toString(),6000);

@@ -246,4 +246,7 @@ html[data-splash="skip"] #teamkick-splash{display:none}
 .nb-pick{display:inline-flex;align-items:center;gap:5px;border:1px solid #cfe8d8;background:#f1faf4;color:#1f5f3d;border-radius:999px;padding:5px 10px;font-size:13px;font-weight:700}
 .nb-custom{width:100%;margin-top:4px;border-style:dashed;color:#12814d}
 .nb-more{justify-self:start;margin-top:2px}
-.rank-areas{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.nl-tags{display:flex;flex-wrap:wrap;gap:4px 10px}
+.nl-tags .nl-team{color:#5d6d63}
+.rank-area{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13.5px;font-weight:600;color:#3d5144}
+.rank-area select{border:1px solid var(--border);border-radius:9px;padding:7px 10px;background:#fff;font:inherit;font-weight:600;color:var(--foreground)}

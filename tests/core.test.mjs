@@ -3136,11 +3136,11 @@ test('네이버 뉴스 응답은 태그·기호를 정리하고, 원문 주소·
   const now=Date.parse('2026-09-27T12:30:00Z');
   const items=news.parseNaverNews({items:[
     {title:'<b>K리그1</b> &quot;한 경기&quot; &amp; 순위',originallink:'https://sports.khan.co.kr/a/1',link:'https://n.news.naver.com/1',description:'본문 요약',pubDate:'Sun, 27 Sep 2026 21:18:00 +0900'},
-    {title:'원문 없음',originallink:'',link:'https://n.news.naver.com/2',description:'',pubDate:'Sat, 26 Sep 2026 21:00:00 +0900'},
-    {title:'모르는 곳',originallink:'https://www.unknown-news.kr/3',link:'',description:'',pubDate:'Sun, 27 Sep 2026 20:00:00 +0900'},
-    {title:'<b>K리그1</b> &quot;한 경기&quot; &amp; 순위',originallink:'https://other.kr/dup',link:'',description:'',pubDate:'Sun, 27 Sep 2026 21:00:00 +0900'},
-    {title:'나쁜 주소',originallink:'javascript:alert(1)',link:'',description:'',pubDate:'Sun, 27 Sep 2026 21:00:00 +0900'},
-    {title:'&lt;script&gt;',originallink:'https://x.kr/5',link:'',description:'',pubDate:'시간 아님'},
+    {title:'원문 없음',originallink:'',link:'https://n.news.naver.com/2',description:'축구 소식',pubDate:'Sat, 26 Sep 2026 21:00:00 +0900'},
+    {title:'모르는 곳',originallink:'https://www.unknown-news.kr/3',link:'',description:'K리그 경기',pubDate:'Sun, 27 Sep 2026 20:00:00 +0900'},
+    {title:'<b>K리그1</b> &quot;한 경기&quot; &amp; 순위',originallink:'https://other.kr/dup',link:'',description:'축구',pubDate:'Sun, 27 Sep 2026 21:00:00 +0900'},
+    {title:'나쁜 주소',originallink:'javascript:alert(1)',link:'',description:'축구',pubDate:'Sun, 27 Sep 2026 21:00:00 +0900'},
+    {title:'&lt;script&gt;',originallink:'https://x.kr/5',link:'',description:'축구',pubDate:'시간 아님'},
   ]});
   assert.deepEqual(items.map(x=>x.title),['K리그1 "한 경기" & 순위','모르는 곳','원문 없음'],'같은 제목·잘못된 주소·시간 없는 글은 뺀다');
   assert.equal(items[0].url,'https://sports.khan.co.kr/a/1');assert.equal(items[0].press,'스포츠경향');
@@ -3177,7 +3177,7 @@ test('축구 소식 서버: 키 없으면 준비 중, 30분 캐시, 네이버 �
     env.NAVER_CLIENT_ID='id';env.NAVER_CLIENT_SECRET='secret';
     let calls=0,sent=null,fail=false;
     globalThis.fetch=async(url,init)=>{calls++;sent={url:String(url),headers:init.headers};if(fail)return new Response('{}',{status:500});
-      return Response.json({items:[{title:'<b>맨유</b> 소식',originallink:'https://www.yna.co.kr/1',link:'',pubDate:'Sun, 27 Sep 2026 21:00:00 +0900'}]})};
+      return Response.json({items:[{title:'<b>맨유</b> 소식',originallink:'https://www.yna.co.kr/1',link:'',description:'맨유 감독 인터뷰',pubDate:'Sun, 27 Sep 2026 21:00:00 +0900'}]})};
     const t0=Date.parse('2026-09-27T12:00:00Z');
     const a=await newsServer.fetchNews('mu',t0);
     assert.equal(a.items[0].title,'맨유 소식');assert.equal(a.items[0].press,'연합뉴스');
@@ -3256,11 +3256,12 @@ test('날씨 서버: 키 없음·키 오류·지난 경기·먼 경기·정상, 
       const item=(category,fcstValue)=>({category,fcstValue,fcstDate:'20260928',fcstTime:'1000'});
       return Response.json({response:{header:{resultCode:'00'},body:{totalCount:4,items:{item:[item('TMP','17'),item('POP','20'),item('PTY','0'),item('SKY','3')]}}}})};
     await assert.rejects(weatherServer.gameWeather(g,now),e=>/인증키/.test(e.message),'키 오류는 키 확인 안내');
-    assert.ok(new URL(urls[0]).searchParams.get('serviceKey')==='abc+def','인코딩된 키는 풀어서 보낸다');
-    assert.ok(urls[0].includes('nx=60')&&urls[0].includes('ny=127')&&urls[0].includes('base_time=1400'),urls[0]);
+    const fu=urls.find(u=>u.includes('VilageFcst'));
+    assert.ok(new URL(fu).searchParams.get('serviceKey')==='abc+def','인코딩된 키는 풀어서 보낸다');
+    assert.ok(fu.includes('nx=60')&&fu.includes('ny=127')&&fu.includes('base_time=1400'),fu);
     mode='ok';weatherServer.clearWeatherCache();urls=[];
     const w=await weatherServer.gameWeather(g,now);
-    assert.equal(w.status,'ok');assert.equal(w.forecast.label,'구름많음');assert.equal(w.forecast.temp,17);assert.equal(w.air,null,'미세먼지 실패는 날씨를 막지 않는다');
+    assert.equal(w.status,'ok');assert.equal(w.forecast.label,'구름많음');assert.equal(w.forecast.temp,17);assert.equal(w.air,null,'미세먼지 실패는 날씨를 막지 않는다');assert.equal(w.airNote,'error');
     const calls=urls.filter(u=>u.includes('VilageFcst')).length;
     await weatherServer.gameWeather(g,now+10*60e3);assert.equal(urls.filter(u=>u.includes('VilageFcst')).length,calls,'같은 발표는 다시 부르지 않는다');
     assert.deepEqual(await weatherServer.gameWeather({...g,start:'2026-10-10T01:00:00.000Z'},now),{status:'far'});
@@ -3298,4 +3299,35 @@ test('다른 지역 랭킹: 참여한 선수가 있는 지역만, 그 지역 팀
   const v=visibleState(f.s,B.id,f.b);
   assert.deepEqual(Object.keys(v.regions),['서울']);
   assert.equal(v.regions['서울'].year.goals[0].name,'선수1','다른 팀 사람도 그 지역 랭킹을 볼 수 있다');
+});
+
+test('축구 소식은 축구 기사만 남기고, 제목에서 팀·선수·대회 태그를 뽑는다',()=>{
+  assert.equal(news.isFootball('야구 대표팀, 결승 진출','국가대표 야구'),false,'다른 종목');
+  assert.equal(news.isFootball('배구 대표팀 소집','대표팀'),false);
+  assert.equal(news.isFootball('축구 대표팀 소집 명단 발표',''),true);
+  assert.equal(news.isFootball('리버풀 시내 교통 통제','리버풀 시의회'),false,'도시 이름');
+  assert.equal(news.isFootball('리버풀, 원정서 3-1 승리','프리미어리그 선두'),true);
+  const items=news.parseNaverNews({items:[
+    {title:'야구 대표팀 결승',originallink:'https://a.kr/1',description:'대표팀',pubDate:'Sun, 27 Sep 2026 21:00:00 +0900'},
+    {title:'축구 대표팀 소집',originallink:'https://a.kr/2',description:'',pubDate:'Sun, 27 Sep 2026 21:00:00 +0900'}]});
+  assert.deepEqual(items.map(x=>x.title),['축구 대표팀 소집']);
+  assert.deepEqual(news.tagsFor('이강인·벨링엄 맞대결…대표팀 아시안게임 명단에도'),['이강인','벨링엄','대표팀']);
+  assert.deepEqual(news.tagsFor('레알 마드리드, 챔피언스리그 결승'),['레알 마드리드','챔스']);
+});
+
+test('미세먼지: 활용신청 안 된 키·예보 없는 날은 이유를 알려주고, 날씨는 그대로 보인다',async()=>{
+  const env=globalThis.__teamkickTestEnv;const saved=env.DATA_GO_KR_KEY;const realFetch=globalThis.fetch;weatherServer.clearWeatherCache();
+  const now=Date.parse('2026-09-27T15:00:00+09:00'),g={lat:37.5665,lng:126.978,region:'서울',start:'2026-09-28T01:00:00.000Z'};
+  const item=(category,fcstValue)=>({category,fcstValue,fcstDate:'20260928',fcstTime:'1000'});
+  const kma=()=>Response.json({response:{header:{resultCode:'00'},body:{totalCount:4,items:{item:[item('TMP','17'),item('POP','20'),item('PTY','0'),item('SKY','1')]}}}});
+  try{
+    env.DATA_GO_KR_KEY='k';
+    globalThis.fetch=async(url)=>String(url).includes('ArpltnInforInqireSvc')?new Response('<x>SERVICE_KEY_IS_NOT_REGISTERED_ERROR</x>'):kma();
+    let w=await weatherServer.gameWeather(g,now);assert.equal(w.forecast.label,'맑음');assert.equal(w.airNote,'key');
+    weatherServer.clearWeatherCache();
+    globalThis.fetch=async(url)=>String(url).includes('ArpltnInforInqireSvc')?Response.json({response:{header:{resultCode:'00'},body:{items:[{informCode:String(url).includes('PM25')?'PM25':'PM10',informData:'2026-09-28',informGrade:'서울 : 보통,부산 : 좋음'}]}}}):kma();
+    w=await weatherServer.gameWeather(g,now);assert.deepEqual(w.air,{pm10:'보통',pm25:'보통'});assert.equal(w.airNote,'');
+    weatherServer.clearWeatherCache();
+    w=await weatherServer.gameWeather({...g,region:'제주'},now);assert.equal(w.air,null);assert.equal(w.airNote,'none','그 권역 예보가 없으면 none');
+  }finally{globalThis.fetch=realFetch;weatherServer.clearWeatherCache();if(saved===undefined)delete env.DATA_GO_KR_KEY;else env.DATA_GO_KR_KEY=saved}
 });

@@ -20,8 +20,10 @@ async function cached<T>(k:string,now:number,load:()=>Promise<T>):Promise<T>{
 }
 export const clearWeatherCache=()=>cache.clear();
 
-async function getJson(url:string){
- let res:Response;try{res=await fetch(url)}catch{throw new AppError("지금은 날씨를 불러올 수 없어요.",503)}
+// 공공데이터 서버가 느릴 때 화면이 오래 멈추지 않게 제한 시간을 둔다.
+async function getJson(url:string,ms=10000){
+ let res:Response;const ctl=new AbortController();const timer=setTimeout(()=>ctl.abort(),ms);
+ try{res=await fetch(url,{signal:ctl.signal})}catch{throw new AppError(ctl.signal.aborted?"TIMEOUT":"지금은 날씨를 불러올 수 없어요.",503)}finally{clearTimeout(timer)}
  const text=await res.text();
  // 키가 틀리거나 아직 승인 전이면 JSON 을 달라고 해도 XML 오류가 온다.
  if(!res.ok||!text.trim().startsWith("{")){
@@ -35,16 +37,17 @@ type KmaItem={category?:string;fcstDate?:string;fcstTime?:string;fcstValue?:stri
 async function forecastItems(nx:number,ny:number,now:number){
  const base=baseFor(now);
  return cached("f:"+nx+","+ny+":"+base.date+base.time,now,async()=>{
-  const out:KmaItem[]=[];
-  for(let page=1;page<=3;page++){
-   const q=new URLSearchParams({serviceKey:key(),pageNo:String(page),numOfRows:"1000",dataType:"JSON",base_date:base.date,base_time:base.time,nx:String(nx),ny:String(ny)});
-   const body=await getJson(FORECAST+"?"+q.toString());
+  const page=async(n:number)=>{
+   const q=new URLSearchParams({serviceKey:key(),pageNo:String(n),numOfRows:"1000",dataType:"JSON",base_date:base.date,base_time:base.time,nx:String(nx),ny:String(ny)});
+   const body=await getJson(FORECAST+"?"+q.toString()).catch((e:unknown)=>{throw e instanceof AppError&&e.message==="TIMEOUT"?new AppError("날씨 서버가 늦게 응답해요. 잠시 뒤 다시 열어주세요.",503):e});
    const code=String(body?.response?.header?.resultCode??"");
    if(code!=="00"){console.error("TeamKick weather code",code);throw new AppError("지금은 날씨를 불러올 수 없어요.",503)}
-   const items=(body?.response?.body?.items?.item??[]) as KmaItem[];out.push(...items);
-   if(out.length>=Number(body?.response?.body?.totalCount??0)||!items.length)break;
-  }
-  return out;
+   return {items:(body?.response?.body?.items?.item??[]) as KmaItem[],total:Number(body?.response?.body?.totalCount??0)};
+  };
+  // 첫 쪽에서 전체 개수를 보고, 남은 쪽(보통 1~2쪽)은 한꺼번에 받는다.
+  const first=await page(1);const pages=Math.min(3,Math.ceil(first.total/1000));
+  const rest=pages>1?await Promise.all(Array.from({length:pages-1},(_,i)=>page(i+2))):[];
+  return [...first.items,...rest.flatMap(x=>x.items)];
  });
 }
 type AirItem={informCode?:string;informData?:string;informGrade?:string};
@@ -52,7 +55,9 @@ async function airItems(code:"PM10"|"PM25",now:number){
  const date=ymdDash(now);
  return cached("a:"+code+":"+date,now,async()=>{
   const q=new URLSearchParams({serviceKey:key(),returnType:"json",numOfRows:"100",pageNo:"1",searchDate:date,InformCode:code});
-  const body=await getJson(AIR+"?"+q.toString());
+  const body=await getJson(AIR+"?"+q.toString(),6000);
+  const result=String(body?.response?.header?.resultCode??"00");
+  if(result!=="00"){console.error("TeamKick air code",result);throw new AppError("AIR_"+result,503)}
   return (body?.response?.body?.items??[]) as AirItem[];
  });
 }
@@ -63,14 +68,15 @@ export async function gameWeather(input:{lat:number;lng:number;start:string;regi
  if(start<now-3*3600e3)return {status:"past"};
  ensure(weatherReady(),"날씨가 아직 준비 중이에요.",503);
  const {nx,ny}=toGrid(input.lat,input.lng);
- const forecast=pickForecast(await forecastItems(nx,ny,now),start);
- if(!forecast)return {status:"far"};
- // 미세먼지는 곁들이는 정보라 실패해도 날씨는 보여준다. 예보는 오늘~모레까지만 있다.
- let air:GameWeather["air"]=null;
- try{const region=airRegion(input.region,input.lng),day=ymdDash(start);
-  const [pm10,pm25]=await Promise.all([airItems("PM10",now),airItems("PM25",now)]);
+ // 미세먼지는 날씨와 동시에 부르고, 늦거나 실패해도 날씨는 먼저 보여준다(그 이유는 airNote 로 알려준다).
+ const region=airRegion(input.region,input.lng),day=ymdDash(start);
+ const airJob=Promise.all([airItems("PM10",now),airItems("PM25",now)]).then(([pm10,pm25])=>{
   const a={pm10:pickAir(pm10,"PM10",day,region),pm25:pickAir(pm25,"PM25",day,region)};
-  if(a.pm10||a.pm25)air=a;
- }catch(e){if(!(e instanceof AppError))console.error("TeamKick air",e)}
- return {status:"ok",forecast,air};
+  return a.pm10||a.pm25?{air:a,note:"" as const}:{air:null,note:"none" as const};
+ }).catch((e:unknown)=>{const m=e instanceof AppError?e.message:"";if(!(e instanceof AppError))console.error("TeamKick air",e);
+  return {air:null,note:(m==="TIMEOUT"?"timeout":/인증키/.test(m)?"key":"error") as "timeout"|"key"|"error"}});
+ const forecast=pickForecast(await forecastItems(nx,ny,now),start);
+ if(!forecast){airJob.catch(()=>{});return {status:"far"}}
+ const {air,note}=await airJob;
+ return {status:"ok",forecast,air,airNote:note};
 }

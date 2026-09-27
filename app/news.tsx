@@ -4,7 +4,7 @@
 import {useEffect,useState} from "react";
 import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from "@/components/ui/dialog";
 import {ExternalLink,Heart,Plus,RotateCw,Check,ChevronDown,Flame,Search,X} from "lucide-react";
-import {NEWS_BASE,NEWS_TEAMS,NEWS_TEAMS_MAX,NEWS_SECTIONS,CUSTOM_PREFIX,cleanCustom,newsTopic,agoText,todayKeywords,teamInTitle,type NewsItem,type NewsTopic} from "@/lib/news";
+import {NEWS_BASE,NEWS_TEAMS,NEWS_TEAMS_MAX,NEWS_SECTIONS,CUSTOM_PREFIX,cleanCustom,newsTopic,agoText,todayKeywords,tagsFor,type NewsItem,type NewsTopic} from "@/lib/news";
 
 type Feed={items:NewsItem[];at:string;stale?:boolean};
 // 같은 화면 안에서 칩을 오가도 다시 부르지 않게 5분 동안 들고 있는다(서버는 30분 캐시).
@@ -31,9 +31,12 @@ export function HomeSwitch({value,onChange,v,enabled}:{value:string;onChange:(x:
  </div>;
 }
 
-// 사진·그림 없이 글만. 제목에 팀 이름이 나오면 그 팀 이름표(팀 색 글자)를 앞에 붙인다.
-function Row({x,t}:{x:NewsItem;t:NewsTopic}){const team=t.group!=="해외"&&t.group!=="국내"?t:teamInTitle(x.title);
- return <a className="nl-row" href={x.url} target="_blank" rel="noopener noreferrer"><span className="nl-text">{team&&<span className="nl-team" style={{color:team.bg==="#FEBE10"||team.bg==="#F7B500"?"#9a6a00":team.bg}}>{team.name}</span>}<strong className="nl-title">{x.title}</strong><span className="nl-meta">{x.press} · {agoText(x.at)}</span></span><ExternalLink className="nl-go" size={16}/></a>}
+// 사진·그림 없이 글만. 제목에 나온 팀·선수·대회 이름을 작은 태그로 앞에 붙인다(팀은 팀 색 글자).
+function Row({x,t}:{x:NewsItem;t:NewsTopic}){
+ const tags=tagsFor(x.title);const mine=t.group!=="해외"&&t.group!=="국내"?t.name:"";
+ if(mine&&!tags.includes(mine))tags.unshift(mine);
+ const color=(n:string)=>{const team=NEWS_TEAMS.find(y=>y.name===n)??(n===t.name?t:undefined);if(!team||team.group==="대표팀 · 선수")return undefined;return team.bg==="#FEBE10"||team.bg==="#F7B500"||team.bg==="#FDE100"||team.bg==="#FDD100"||team.bg==="#FDB913"?"#9a6a00":team.bg};
+ return <a className="nl-row" href={x.url} target="_blank" rel="noopener noreferrer"><span className="nl-text">{!!tags.length&&<span className="nl-tags">{tags.slice(0,3).map(n=><span key={n} className="nl-team" style={{color:color(n)}}>{n}</span>)}</span>}<strong className="nl-title">{x.title}</strong><span className="nl-meta">{x.press} · {agoText(x.at)}</span></span><ExternalLink className="nl-go" size={16}/></a>}
 function Skeleton(){return <div className="nl-list" aria-busy="true">{[0,1,2,3,4].map(i=><div key={i} className="nl-row"><span className="nl-text"><span className="sk sk-line"/><span className="sk sk-line short"/><span className="sk sk-meta"/></span></div>)}</div>}
 
 export function NewsScreen({v,demo,loggedIn,save}:{v:Record<string,unknown>;demo:boolean;loggedIn:boolean;save:(c:Record<string,unknown>)=>Promise<unknown>}){

@@ -53,4 +53,4 @@ export function pickAir(items:{informCode?:string;informData?:string;informGrade
  for(const part of row.informGrade.split(",")){const [name,grade]=part.split(":").map(x=>x.trim());if(name===region&&grade)return grade}
  return null;
 }
-export type GameWeather={status:"ok"|"far"|"past";forecast?:Forecast|null;air?:{pm10:string|null;pm25:string|null}|null};
+export type GameWeather={status:"ok"|"far"|"past";forecast?:Forecast|null;air?:{pm10:string|null;pm25:string|null}|null;airNote?:""|"none"|"timeout"|"key"|"error"};

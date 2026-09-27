@@ -3078,3 +3078,45 @@ test('전국 랭킹은 정지·해산된 팀의 기록과 탈퇴한 사람을 �
   command(f.s,{id:'p1',name:'선수1'},{type:'closeAccount'});
   assert.equal(nationalRanking(f.s,'x').year.goals.length,0,'탈퇴한 사람');
 });
+
+// --- 1.12.1: 내 지역 랭킹 · 일요일 경기 ---
+test('내 지역 랭킹은 참여를 켠 사람이 그 지역 팀에서 남긴 기록만 센다',()=>{
+  const f=intraFixture();attendAll(f);
+  command(f.s,A,{type:'squads',teamId:f.a,gameId:f.gameId,assign:{[f.p1.id]:0}});
+  command(f.s,A,{type:'matchRecord',teamId:f.a,gameId:f.gameId,values:{[f.p1.id]:{goals:2,assists:0}},extra:[0,0]});
+  command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:true});
+  assert.equal(nationalRanking(f.s,'x',Date.now(),'서울').year.goals.length,1);
+  assert.equal(nationalRanking(f.s,'x',Date.now(),'부산').year.goals.length,0,'다른 지역 팀 기록은 안 센다');
+  const v=visibleState(f.s,'p1',f.a);
+  assert.equal(v.myRegion,'서울');assert.equal(v.regional.year.goals[0].me,true);
+  // 켜지 않은 사람은 지역 랭킹에도 없다
+  command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:false});
+  assert.equal(visibleState(f.s,'p1',f.a).regional.year.goals.length,0);
+});
+
+test('일요일 오전 경기는 그날 밤 "이번 주" 랭킹에 들어간다(주는 월~일)',()=>{
+  const KST=h=>Date.parse('2026-09-27T00:00:00+09:00')+h*3600e3;// 일요일
+  const f=fixture();const p=addPlayer(f.s,f.a,{id:'s1',name:'일요선수'},KST(-24*20));
+  const {gameId}=command(f.s,A,{type:'createGame',teamId:f.a,kind:'intra',squads:2,start:iso(KST(8)),end:iso(KST(10)),venue:'v',address:'서울'},KST(-24));
+  const z=sideOf(f.s,gameId,f.a),g=f.s.games.find(x=>x.id===gameId);
+  command(f.s,A,{type:'completeGame',teamId:f.a,gameId},KST(11));
+  command(f.s,A,{type:'attendance',teamId:f.a,gameId,values:Object.fromEntries(rosterFor(f.s,z,g).map(x=>[x.id,true]))},KST(11));
+  command(f.s,A,{type:'squads',teamId:f.a,gameId,assign:{[p.id]:0}},KST(11));
+  command(f.s,A,{type:'matchRecord',teamId:f.a,gameId,values:{[p.id]:{goals:1,assists:0}},extra:[0,0]},KST(11));
+  const {from,to}=periodRange('week',KST(21.5));
+  const row=summaries(visibleState(f.s,A.id,f.a),from,to).players.find(x=>x.id===p.id);
+  assert.equal(row.goals,1);assert.equal(row.attend,1);
+  // 다음 날(월)이 되면 새 주라 빠진다
+  const next=periodRange('week',KST(24.5));
+  assert.equal(summaries(visibleState(f.s,A.id,f.a),next.from,next.to).players.find(x=>x.id===p.id).goals,0);
+});
+
+test('출석 확정은 MVP 투표 알림을 몇 명에게 보냈는지 돌려준다(본인 제외)',()=>{
+  const f=intraFixture();const z=sideOf(f.s,f.gameId,f.a),g=f.s.games.find(x=>x.id===f.gameId);
+  command(f.s,A,{type:'completeGame',teamId:f.a,gameId:f.gameId});
+  const out=command(f.s,A,{type:'attendance',teamId:f.a,gameId:f.gameId,values:Object.fromEntries(rosterFor(f.s,z,g).map(x=>[x.id,true]))});
+  assert.equal(out.mvpNotified,3,'주장 빼고 출석한 3명');
+  // 정정(다시 확정)할 때는 투표가 이미 열려 있어 새 알림이 없다
+  const again=command(f.s,A,{type:'attendance',teamId:f.a,gameId:f.gameId,values:Object.fromEntries(rosterFor(f.s,z,g).map(x=>[x.id,true]))});
+  assert.equal(again.mvpNotified,undefined);
+});

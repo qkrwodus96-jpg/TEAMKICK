@@ -129,7 +129,6 @@ html[data-splash="skip"] #teamkick-splash{display:none}
 .podium-card strong{font-size:14px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.podium-card small{font-size:11.5px;color:var(--muted-foreground);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:15px}
 .podium-card .player-avatar{width:46px;height:46px;font-size:14px;border:3px solid #fff;box-shadow:0 0 0 2px var(--medal,#c9d3cd)}
 .place-1 .podium-card .player-avatar{width:58px;height:58px;font-size:16px}
-.podium-medal{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:12.5px;font-weight:800;color:#fff;background:var(--medal,#9aa6a0)}
 .podium-value{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.03em;line-height:1.1}.podium-value small{font-size:12px;font-weight:500;margin-left:2px;color:var(--muted-foreground)}
 .place-1{--medal:#d4a017}.place-2{--medal:#9aa6ae}.place-3{--medal:#c07a45}
 .podium-step{border-radius:10px 10px 0 0;background:linear-gradient(#eef6f1,#e3efe8)}.place-1 .podium-step{height:54px;background:#dcefe4}.place-2 .podium-step{height:36px}.place-3 .podium-step{height:24px}
@@ -147,3 +146,37 @@ html[data-splash="skip"] #teamkick-splash{display:none}
 @media(min-width:768px){.rankings{background:#fff;border:1px solid var(--border);border-radius:15px;padding:23px}}
 .score-word{letter-spacing:0!important;font-size:22px!important;font-weight:700}
 .invite-note{margin-bottom:18px}
+/* 1.12.1 자체전 머리: "우리 팀 자체전"을 가운데, 그 아래 "1팀 vs 2팀" */
+.intra-vs{display:grid;justify-items:center;gap:16px;padding:22px 8px 20px;text-align:center}
+.intra-head{display:flex;align-items:center;justify-content:center;gap:9px;min-width:0;max-width:100%}
+.intra-head .club-crest{width:34px;height:34px;min-width:34px;font-size:12px;letter-spacing:-.5px}
+.intra-head strong{font-size:18px;font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.intra-tag{font-size:13px;font-weight:700;padding:3px 9px;border-radius:999px;background:#c4ef75;color:#1f4a2c;white-space:nowrap}
+.intra-squads{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap}
+.intra-squads.n3,.intra-squads.n4{gap:8px}
+.intra-squad{display:grid;justify-items:center;gap:5px;min-width:56px}
+.intra-squad i{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:15px;font-weight:800;color:#fff;background:#168b53;border:2px solid rgba(255,255,255,.75)}
+.intra-squad.squad-1 i{background:#2f6fd6}.intra-squad.squad-2 i{background:#d4731c}.intra-squad.squad-3 i{background:#6d5bd0}
+.intra-squad b{font-size:15px;font-weight:700}
+.intra-squad em{font-style:normal;font-size:28px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.intra-sep{font-size:14px;font-weight:700;letter-spacing:2px;color:#88a28e;align-self:center}
+.intra-squads.n3 .intra-sep,.intra-squads.n4 .intra-sep{font-size:12px;letter-spacing:0}
+.next-match .intra-head strong,.next-match .intra-squad b,.next-match .intra-squad em{color:#fff}
+.detail-score.intra{padding:18px 5px 8px}
+.detail-score.intra .intra-head strong,.detail-score.intra .intra-squad b,.detail-score.intra .intra-squad em{color:#1f3b2b}
+.detail-score.intra .intra-sep{color:#9aaa9f}
+.detail-score.intra .intra-tag{background:#e6f5eb;color:#13874f}
+/* 1.12.1 시상대: 초록 막대 대신 회색 단상 + 메달색 윗선 + 등수 숫자 */
+.podium{gap:4px}
+.podium-step{display:grid;place-items:start center;padding-top:6px;border-radius:6px 6px 0 0;background:linear-gradient(#f3f5f4,#e9edeb);border-top:4px solid var(--medal,#c9d3cd)}
+.podium-step span{font-size:22px;font-weight:800;line-height:1;color:#7d8983;font-variant-numeric:tabular-nums}
+.place-1 .podium-step{height:66px;background:linear-gradient(#f3f5f4,#e9edeb)}.place-2 .podium-step{height:46px}.place-3 .podium-step{height:34px}
+.place-1 .podium-step span{font-size:26px;color:#5f6b65}
+.podium-card{padding-bottom:8px}
+.podium-card.empty{padding-bottom:22px}
+.rank-periods{align-items:center}.rank-range{font-size:12.5px;color:var(--muted-foreground);margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums}
+.intra-two{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px;width:100%;max-width:320px}
+.intra-score{font-size:30px;font-weight:800;letter-spacing:2px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.next-match .intra-score{color:#fff}.detail-score.intra .intra-score{color:#1f3b2b}
+.rank-periods{flex-wrap:wrap}
+.intra-score.vs{font-size:15px;letter-spacing:3px;color:#88a28e!important}

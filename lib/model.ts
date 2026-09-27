@@ -218,8 +218,9 @@ export function rankRows<T extends Record<string,unknown>>(rows:T[],key:string){
 }
 // 전국 랭킹: **참여를 켠 사람만**(users[].rankPublic). 다른 사람의 계정 번호는 보내지 않고
 // 선수 이름·팀 이름·숫자만 보낸다. 한 사람이 여러 팀에서 뛰면 합산한다. 활동 중인 팀의 기록만 센다.
+// region 을 주면 "내 지역" 랭킹: 그 지역 팀에서 뛴 기록만 센다(참여 조건은 전국과 같다).
 export const NATIONAL_LIMIT=50;
-export function nationalRanking(s:State,userId:string,now=Date.now()){
+export function nationalRanking(s:State,userId:string,now=Date.now(),region=""){
  const open=new Set(s.users.filter(u=>u.rankPublic===true).map(u=>u.id as string));
  const out:Record<string,Record<string,Row[]>>={};
  for(const period of RANK_PERIODS){
@@ -228,7 +229,7 @@ export function nationalRanking(s:State,userId:string,now=Date.now()){
   for(const side of s.sides){
    const g=s.games.find(x=>x.id===side.gameId);
    if(!g||g.status!=="completed"||g.start<from||g.start>=to)continue;
-   const team=teamOf(s,side.teamId);if(team?.status!=="active")continue;
+   const team=teamOf(s,side.teamId);if(team?.status!=="active"||(region&&team.region!==region))continue;
    const winners=mvpWinners(side,now);
    for(const r of (side.roster??[]) as Row[]){
     const m=s.members.find(x=>x.id===r.id);if(!m?.userId||!open.has(m.userId))continue;
@@ -381,6 +382,8 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
     side!.mvp={openAt:stamp,closesAt:iso(now+MVP_HOURS*3600e3),votes:{}};
     const voters=s.members.filter(x=>x.teamId===t&&came.includes(x.id)&&x.status==="active");
     if(came.length>=2)for(const x of voters)s.notifications.push({id:id(),userId:x.userId,teamId:t,title:"MVP 투표가 열렸어요",body:(isIntra(g)?"자체전":opponent0(s,g!,t))+" · 오늘의 MVP를 뽑아주세요. "+MVP_HOURS+"시간 뒤 마감돼요.",gameId:g!.id,to:"schedule",read:false,at:stamp});
+    // 주장 화면에 "몇 명에게 알림을 보냈는지" 보여주려고 돌려준다(본인 제외).
+    output={mvpNotified:came.length>=2?voters.filter(x=>x.userId!==a.id).length:0};
    }else{
     const votes=side!.mvp.votes??{};
     for(const [k,v] of Object.entries(votes))if(!came.includes(k)||!came.includes(v as string))delete votes[k];
@@ -627,6 +630,7 @@ export function visibleState(s:State,userId:string,selected?:string){
  return {teams:publicTeams,members,mine:my,ownTeams,teamId:tid??"",role:team?.role??"",isOwner:owner,retired:owner?retiredPeople(s):[],
   myTotals:myTotals(s,userId),
   rankPublic:s.users.find(x=>x.id===userId)?.rankPublic===true,national:nationalRanking(s,userId),
+  myRegion:String(teamOf(s,tid??"")?.region??""),regional:teamOf(s,tid??"")?.region?nationalRanking(s,userId,Date.now(),String(teamOf(s,tid??"")!.region)):null,
   // 문의는 본인 것만 본다. 운영자는 답변해야 하므로 전부 본다.
   inquiries:s.inquiries.filter(x=>owner||x.userId===userId).sort((x,y)=>String(y.at).localeCompare(String(x.at))).map(x=>({...x,mine:x.userId===userId})),
   announcements:[...s.announcements].sort((x,y)=>String(y.at).localeCompare(String(x.at))),

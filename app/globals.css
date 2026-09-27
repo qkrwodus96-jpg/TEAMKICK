@@ -189,18 +189,11 @@ html[data-splash="skip"] #teamkick-splash{display:none}
 .news-chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:-6px 0 14px;padding-bottom:2px}.news-chips::-webkit-scrollbar{display:none}.news-chips .chip-mini{flex:0 0 auto}
 .nc-add{color:#12814d;border-style:dashed}
 .nb-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:2px}
-.nc-list{display:grid;gap:10px}
-.nc-card{display:grid;gap:8px;padding:16px 16px 14px;border:1px solid #e3e9e5;border-radius:16px;background:#fff;color:var(--foreground)}
-.nc-card:active{transform:scale(.99)}
-.nc-tag{justify-self:start;font-size:12px;font-weight:700;padding:3px 8px;border-radius:6px;background:#eef2f0;color:#3d5144}
-.nc-title{font-size:16.5px;font-weight:750;line-height:1.45;letter-spacing:-.03em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.nc-meta{display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted-foreground)}.nc-meta b{font-weight:700;color:#5d6d63}.nc-meta svg{margin-left:auto;color:#9aaa9f}
 .nc-more{width:100%;margin-top:10px}
 .nc-state{display:grid;justify-items:start;gap:6px;padding:18px;border:1px solid #e3e9e5;border-radius:16px}
 .nc-state p{font-weight:700;font-size:15px}.nc-state span{font-size:13px;color:var(--muted-foreground)}.nc-state .btn{margin-top:6px;min-height:38px}
 .nc-state.error{border-color:#f0dcd8;background:#fffafa}
 .sk{display:block;border-radius:6px;background:linear-gradient(90deg,#eef1ef,#f6f8f7,#eef1ef);background-size:200% 100%;animation:sk 1.2s ease-in-out infinite}
-.sk-tag{height:18px;width:64px}.sk-line{height:16px;width:100%}.sk-line.short{width:60%}.sk-meta{height:12px;width:34%;margin-top:2px}
 @keyframes sk{0%{background-position:100% 0}100%{background-position:-100% 0}}
 @media (prefers-reduced-motion:reduce){.sk{animation:none}}
 .news-group{display:grid;gap:8px}
@@ -209,3 +202,28 @@ html[data-splash="skip"] #teamkick-splash{display:none}
 .nb-team>span:last-of-type{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nb-team.on{border-color:#168b53;background:#f1faf4}.nb-check{position:absolute;top:6px;right:6px;color:#168b53}
 .nb-badge{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:12px;letter-spacing:-.04em;line-height:1}
+/* 1.13.0 소식 화면 — 참고 시안 색감: 초록 칩, 연초록 키워드 상자, 글 중심 목록(사진 없음) */
+.nl-sections{display:flex;gap:18px;border-bottom:1px solid #e6ebe8;margin:0 0 16px}
+.nl-sections button{border:0;background:transparent;padding:8px 2px 10px;font-size:15px;font-weight:700;color:#8a978f;border-bottom:2.5px solid transparent;margin-bottom:-1px}
+.nl-sections button.on{color:#14281d;border-bottom-color:#1f7a4d}
+.nl-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:14px}
+.nl-head h2{font-size:24px;font-weight:800;letter-spacing:-.04em;line-height:1.25}
+.nl-head p{font-size:13.5px;color:var(--muted-foreground);margin-top:4px}
+.nl-chip{padding:8px 16px;font-size:14px;border-color:#dfe6e1}
+.nl-chip.on{background:#1f7a4d;border-color:#1f7a4d;color:#fff}
+.nl-chip.on .nb-dot{box-shadow:0 0 0 2px #fff}
+.nl-words{border:1px solid #cfe8d8;background:#f1faf4;border-radius:14px;padding:12px 14px;margin:2px 0 8px}
+.nl-words-head{display:flex;align-items:center;gap:6px;font-size:14px;color:#1f7a4d}.nl-words-head strong{color:#14281d}.nl-words-head .text-link{margin-left:auto;color:#1f7a4d}
+.nl-word-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.nl-word-chips button{border:1px solid #cfe8d8;background:#fff;color:#1f5f3d;border-radius:999px;padding:5px 12px;font-size:13px;font-weight:700}
+.nl-word-chips button.on{background:#1f7a4d;border-color:#1f7a4d;color:#fff}
+.nl-list{display:grid}
+.nl-row{display:flex;align-items:flex-start;gap:12px;padding:16px 2px;border-bottom:1px solid #edf1ee;color:var(--foreground)}
+.nl-row:last-child{border-bottom:0}.nl-row:active{background:#f7faf8}
+.nl-text{display:grid;gap:6px;min-width:0;flex:1}
+.nl-team{font-size:12.5px;font-weight:800;letter-spacing:-.01em}
+.nl-title{font-size:16.5px;font-weight:750;line-height:1.45;letter-spacing:-.03em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.nl-meta{font-size:12.5px;color:#8a978f}
+.nl-go{flex:0 0 auto;color:#a7b3ac;margin-top:4px}
+.nl-row .sk-line{height:16px}
+.sk-line{height:16px;width:100%}.sk-line.short{width:60%}.sk-meta{height:12px;width:34%;margin-top:2px}

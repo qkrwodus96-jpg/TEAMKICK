@@ -3192,3 +3192,12 @@ test('축구 소식 서버: 키 없으면 준비 중, 30분 캐시, 네이버 �
     if(saved.hkey===undefined)delete env.NAVER_API_HUB_KEY;else env.NAVER_API_HUB_KEY=saved.hkey;
   }
 });
+
+test('오늘의 키워드는 불러온 제목에서 두 번 이상 나온 이름만, 많은 순으로 보여준다',()=>{
+  const titles=['손흥민 멀티골','토트넘 손흥민 인터뷰','맨유 이적 소식','맨유 감독 발표','리버풀 승리','맨유 부상자 복귀'];
+  assert.deepEqual(news.todayKeywords(titles),['맨유','손흥민']);
+  assert.equal(news.teamInTitle('레알 마드리드, 결승 진출').id,'rma');
+  assert.equal(news.teamInTitle('오늘의 축구 소식'),undefined);
+  // 모든 소식 종류는 검색어가 있다
+  for(const t of [...news.NEWS_BASE,...news.NEWS_TEAMS])assert.ok(t.query&&t.id&&t.name,t.id);
+});

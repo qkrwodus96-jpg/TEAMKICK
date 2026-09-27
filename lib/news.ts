@@ -8,9 +8,31 @@ export type NewsItem={title:string;url:string;press:string;at:string};
 // bg·fg 는 팀킥이 칩에 쓰는 팀 색이다(엠블럼은 쓰지 않는다 — 상표·저작물).
 export type NewsTopic={id:string;name:string;query:string;group:string;bg:string;fg:string};
 export const NEWS_BASE:NewsTopic[]=[
- {id:"world",name:"해외",query:"해외축구",group:"기본",bg:"#1f2a24",fg:"#fff"},
- {id:"korea",name:"국내",query:"K리그",group:"기본",bg:"#1f2a24",fg:"#fff"},
+ {id:"world",name:"전체",query:"해외축구",group:"해외",bg:"#1f2a24",fg:"#fff"},
+ {id:"epl",name:"EPL",query:"프리미어리그",group:"해외",bg:"#3d195b",fg:"#fff"},
+ {id:"laliga",name:"라리가",query:"라리가",group:"해외",bg:"#ee4b2b",fg:"#fff"},
+ {id:"bundes",name:"분데스리가",query:"분데스리가",group:"해외",bg:"#d20515",fg:"#fff"},
+ {id:"ucl",name:"챔스",query:"챔피언스리그",group:"해외",bg:"#0b1f4b",fg:"#fff"},
+ {id:"transfer",name:"이적시장",query:"축구 이적시장",group:"해외",bg:"#1f2a24",fg:"#fff"},
+ {id:"korea",name:"전체",query:"K리그",group:"국내",bg:"#1f2a24",fg:"#fff"},
+ {id:"k1",name:"K리그1",query:"K리그1",group:"국내",bg:"#12814d",fg:"#fff"},
+ {id:"k2",name:"K리그2",query:"K리그2",group:"국내",bg:"#12814d",fg:"#fff"},
+ {id:"nt",name:"대표팀",query:"축구 대표팀",group:"국내",bg:"#1f3b73",fg:"#fff"},
 ];
+// 소식 화면 위쪽 구분. 제목·설명은 화면 머리에 쓴다.
+export const NEWS_SECTIONS=[
+ {id:"world",name:"해외",title:"해외축구 뉴스",sub:"세계 축구 소식을 한곳에서"},
+ {id:"korea",name:"국내",title:"국내축구 뉴스",sub:"K리그와 대표팀 소식"},
+ {id:"mine",name:"내 팀",title:"내 팀 뉴스",sub:"좋아하는 팀 소식만 모아서"},
+] as const;
+// 오늘의 키워드: 불러온 기사 제목에서 이 이름들이 몇 번 나왔는지 세서 많은 순으로 보여준다(추가 호출 없음).
+export const NEWS_KEYWORDS=["손흥민","이강인","김민재","황희찬","이재성","홍명보","이적","부상","감독","결승","데뷔","복귀","재계약","챔스","EPL","K리그"];
+export function todayKeywords(titles:string[],limit=5){
+ const names=[...new Set([...NEWS_TEAMS.map(t=>t.name),...NEWS_KEYWORDS])];
+ return names.map(k=>({k,n:titles.filter(t=>t.includes(k)).length})).filter(x=>x.n>=2).sort((a,b)=>b.n-a.n||a.k.localeCompare(b.k,"ko")).slice(0,limit).map(x=>x.k);
+}
+// 제목에 나온 팀(있으면)을 찾는다 — 목록 왼쪽 타일 색에 쓴다. 긴 이름부터 본다(예: "레알 마드리드").
+export function teamInTitle(title:string){return [...NEWS_TEAMS].sort((a,b)=>b.name.length-a.name.length).find(t=>t.id!=="kor"&&title.includes(t.name))}
 export const NEWS_TEAMS:NewsTopic[]=[
  {id:"mu",name:"맨유",query:"맨유",group:"해외 구단",bg:"#DA291C",fg:"#fff"},
  {id:"mci",name:"맨시티",query:"맨시티",group:"해외 구단",bg:"#6CABDD",fg:"#0b2540"},

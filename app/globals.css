@@ -180,3 +180,32 @@ html[data-splash="skip"] #teamkick-splash{display:none}
 .next-match .intra-score{color:#fff}.detail-score.intra .intra-score{color:#1f3b2b}
 .rank-periods{flex-wrap:wrap}
 .intra-score.vs{font-size:15px;letter-spacing:3px;color:#88a28e!important}
+/* 1.13.0 축구 소식 — 홈 맨 위 전환 + 카드형 기사(사진 없음) */
+.home-switch{display:grid;grid-template-columns:1fr 1fr;background:#f1f4f2;border-radius:12px;padding:4px;gap:4px;margin:0 0 20px;max-width:520px}
+.home-switch button{border:0;background:transparent;border-radius:9px;padding:10px 0;font-size:15px;font-weight:700;color:var(--muted-foreground);position:relative}
+.home-switch button.on{background:#fff;color:var(--foreground);box-shadow:0 1px 2px rgba(16,35,26,.12)}
+.hs-dot{position:absolute;top:9px;margin-left:3px;width:7px;height:7px;border-radius:50%;background:#e5484d;display:inline-block}
+.news-screen{max-width:760px}
+.news-chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:-6px 0 14px;padding-bottom:2px}.news-chips::-webkit-scrollbar{display:none}.news-chips .chip-mini{flex:0 0 auto}
+.nc-add{color:#12814d;border-style:dashed}
+.nb-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:2px}
+.nc-list{display:grid;gap:10px}
+.nc-card{display:grid;gap:8px;padding:16px 16px 14px;border:1px solid #e3e9e5;border-radius:16px;background:#fff;color:var(--foreground)}
+.nc-card:active{transform:scale(.99)}
+.nc-tag{justify-self:start;font-size:12px;font-weight:700;padding:3px 8px;border-radius:6px;background:#eef2f0;color:#3d5144}
+.nc-title{font-size:16.5px;font-weight:750;line-height:1.45;letter-spacing:-.03em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.nc-meta{display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted-foreground)}.nc-meta b{font-weight:700;color:#5d6d63}.nc-meta svg{margin-left:auto;color:#9aaa9f}
+.nc-more{width:100%;margin-top:10px}
+.nc-state{display:grid;justify-items:start;gap:6px;padding:18px;border:1px solid #e3e9e5;border-radius:16px}
+.nc-state p{font-weight:700;font-size:15px}.nc-state span{font-size:13px;color:var(--muted-foreground)}.nc-state .btn{margin-top:6px;min-height:38px}
+.nc-state.error{border-color:#f0dcd8;background:#fffafa}
+.sk{display:block;border-radius:6px;background:linear-gradient(90deg,#eef1ef,#f6f8f7,#eef1ef);background-size:200% 100%;animation:sk 1.2s ease-in-out infinite}
+.sk-tag{height:18px;width:64px}.sk-line{height:16px;width:100%}.sk-line.short{width:60%}.sk-meta{height:12px;width:34%;margin-top:2px}
+@keyframes sk{0%{background-position:100% 0}100%{background-position:-100% 0}}
+@media (prefers-reduced-motion:reduce){.sk{animation:none}}
+.news-group{display:grid;gap:8px}
+.nb-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.nb-team{position:relative;display:grid;justify-items:center;gap:6px;padding:12px 4px;border:1.5px solid var(--border);border-radius:12px;background:#fff;font-size:13px;font-weight:600;min-width:0}
+.nb-team>span:last-of-type{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nb-team.on{border-color:#168b53;background:#f1faf4}.nb-check{position:absolute;top:6px;right:6px;color:#168b53}
+.nb-badge{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:12px;letter-spacing:-.04em;line-height:1}

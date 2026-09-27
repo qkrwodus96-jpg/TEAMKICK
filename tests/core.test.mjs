@@ -12,11 +12,12 @@ fs.mkdirSync(runtime,{recursive:true});
 function compile(file,name,replace=s=>s){
   fs.writeFileSync(path.join(runtime,name),ts.transpileModule(replace(fs.readFileSync(file,'utf8')),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText);
 }
-compile('lib/model.ts','model.mjs');
+compile('lib/model.ts','model.mjs',s=>s.replace('"./news"','"./news.mjs"'));
 compile('lib/store.ts','store.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/owner-config.ts','owner-config.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;'));
 compile('lib/legal.ts','legal.mjs');
 compile('lib/news.ts','news.mjs');
+compile('lib/news-server.ts','news-server.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./news"','"./news.mjs"'));
 compile('lib/kakao.ts','kakao.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/schema.ts','schema.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/mail.ts','mail.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./legal"','"./legal.mjs"'));
@@ -48,6 +49,7 @@ const auth=await import(path.join(runtime,'auth.mjs'));
 const mail=await import(path.join(runtime,'mail.mjs'));
 const legal=await import(path.join(runtime,'legal.mjs'));
 const news=await import(path.join(runtime,'news.mjs'));
+const newsServer=await import(path.join(runtime,'news-server.mjs'));
 const schema=await import(path.join(runtime,'schema.mjs'));
 const kakao=await import(path.join(runtime,'kakao.mjs'));
 const ownerConfig=await import(path.join(runtime,'owner-config.mjs'));
@@ -3143,4 +3145,41 @@ test('네이버 뉴스 응답은 태그·기호를 정리하고, 원문 주소·
   assert.equal(news.agoText(items[2].at,now),'1일 전');
   assert.equal(news.cleanTitle('&lt;b&gt;굵게&lt;/b&gt;'),'<b>굵게</b>','되돌린 기호는 글자로 남는다(화면에 글자로만 넣음)');
   assert.deepEqual(news.parseNaverNews(null),[]);
+});
+
+test('좋아하는 팀은 목록에 있는 것만, 중복 없이, 최대 5개까지 본인 것만 저장된다',()=>{
+  const f=fixture();
+  command(f.s,A,{type:'setNewsTeams',teams:['mu','jb','mu','없는팀','<script>']});
+  assert.deepEqual(visibleState(f.s,A.id).newsTeams,['mu','jb']);
+  assert.deepEqual(visibleState(f.s,B.id).newsTeams,[],'다른 사람에게는 섞이지 않는다');
+  assert.throws(()=>command(f.s,A,{type:'setNewsTeams',teams:['mu','jb','tot','liv','ars','che']}),/5개까지/);
+  command(f.s,A,{type:'setNewsTeams',teams:[]});
+  assert.deepEqual(visibleState(f.s,A.id).newsTeams,[]);
+});
+
+test('축구 소식 서버: 키 없으면 준비 중, 30분 캐시, 네이버 실패 시 직전 결과 또는 오류',async()=>{
+  const env=globalThis.__teamkickTestEnv;const saved={id:env.NAVER_CLIENT_ID,secret:env.NAVER_CLIENT_SECRET};const realFetch=globalThis.fetch;
+  newsServer.clearNewsCache();
+  try{
+    delete env.NAVER_CLIENT_ID;delete env.NAVER_CLIENT_SECRET;
+    await assert.rejects(newsServer.fetchNews('world'),e=>e.status===503&&/준비 중/.test(e.message));
+    await assert.rejects(newsServer.fetchNews('없는것'),e=>e.status===400);
+    env.NAVER_CLIENT_ID='id';env.NAVER_CLIENT_SECRET='secret';
+    let calls=0,sent=null,fail=false;
+    globalThis.fetch=async(url,init)=>{calls++;sent={url:String(url),headers:init.headers};if(fail)return new Response('{}',{status:500});
+      return Response.json({items:[{title:'<b>맨유</b> 소식',originallink:'https://www.yna.co.kr/1',link:'',pubDate:'Sun, 27 Sep 2026 21:00:00 +0900'}]})};
+    const t0=Date.parse('2026-09-27T12:00:00Z');
+    const a=await newsServer.fetchNews('mu',t0);
+    assert.equal(a.items[0].title,'맨유 소식');assert.equal(a.items[0].press,'연합뉴스');
+    assert.ok(sent.url.includes('query='+encodeURIComponent('맨유')),'검색어만 보낸다');
+    assert.equal(sent.headers['X-Naver-Client-Id'],'id');
+    await newsServer.fetchNews('mu',t0+29*60e3);assert.equal(calls,1,'30분 안에는 다시 부르지 않는다');
+    fail=true;
+    const stale=await newsServer.fetchNews('mu',t0+31*60e3);assert.equal(stale.stale,true,'실패하면 직전 결과를 오래된 것으로 표시');assert.equal(calls,2);
+    await assert.rejects(newsServer.fetchNews('jb',t0),e=>e.status===503,'직전 결과가 없으면 오류(가짜 기사로 채우지 않음)');
+  }finally{
+    globalThis.fetch=realFetch;newsServer.clearNewsCache();
+    if(saved.id===undefined)delete env.NAVER_CLIENT_ID;else env.NAVER_CLIENT_ID=saved.id;
+    if(saved.secret===undefined)delete env.NAVER_CLIENT_SECRET;else env.NAVER_CLIENT_SECRET=saved.secret;
+  }
 });

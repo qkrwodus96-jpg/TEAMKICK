@@ -1,3 +1,4 @@
+import {cleanNewsTeams,NEWS_TEAMS_MAX} from "./news";
 export type Row={id:string;[key:string]:any};
 export type State={users:Row[];teams:Row[];members:Row[];games:Row[];sides:Row[];requests:Row[];guests:Row[];notices:Row[];notifications:Row[];invites:Row[];audit:Row[];receipts:Row[];settings:Row[];inquiries:Row[];announcements:Row[]};
 export const collections=["users","teams","members","games","sides","requests","guests","notices","notifications","invites","audit","receipts","settings","inquiries","announcements"] as const;
@@ -615,6 +616,8 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  }
  // 전국 랭킹 참여 켜기·끄기. 본인만 바꾼다. 꺼도 기록은 그대로, 전국 목록에서만 빠진다.
  else if(type==="setRankPublic"){const u=s.users.find(x=>x.id===a.id)!;u.rankPublic=c.on===true;u.rankPublicAt=stamp;}
+ // 축구 소식에서 고른 좋아하는 팀(선택). 목록에 있는 것만, 최대 NEWS_TEAMS_MAX 개.
+ else if(type==="setNewsTeams"){const teams=cleanNewsTeams(c.teams);ensure(teams.length<=NEWS_TEAMS_MAX,"좋아하는 팀은 "+NEWS_TEAMS_MAX+"개까지 고를 수 있어요.");const u=s.users.find(x=>x.id===a.id)!;u.newsTeams=teams;}
  else if(type==="readNotifications"){for(const n of s.notifications.filter(x=>x.userId===a.id))n.read=true;}
  else if(type==="correctRequest"){requireTeam(s,t,a.id);for(const m of s.members.filter(x=>x.teamId===t&&["captain","manager"].includes(x.role)&&x.status==="active"))userNotice(s,m.userId,"기록 정정 요청",a.name+": "+textValue(c.message,500),t,"records");}
  else throw new AppError("지원하지 않는 작업이에요.");
@@ -630,7 +633,7 @@ export function visibleState(s:State,userId:string,selected?:string){
  return {teams:publicTeams,members,mine:my,ownTeams,teamId:tid??"",role:team?.role??"",isOwner:owner,retired:owner?retiredPeople(s):[],
   myTotals:myTotals(s,userId),
   rankPublic:s.users.find(x=>x.id===userId)?.rankPublic===true,national:nationalRanking(s,userId),
-  myRegion:String(teamOf(s,tid??"")?.region??""),regional:teamOf(s,tid??"")?.region?nationalRanking(s,userId,Date.now(),String(teamOf(s,tid??"")!.region)):null,
+  newsTeams:cleanNewsTeams(s.users.find(x=>x.id===userId)?.newsTeams),myRegion:String(teamOf(s,tid??"")?.region??""),regional:teamOf(s,tid??"")?.region?nationalRanking(s,userId,Date.now(),String(teamOf(s,tid??"")!.region)):null,
   // 문의는 본인 것만 본다. 운영자는 답변해야 하므로 전부 본다.
   inquiries:s.inquiries.filter(x=>owner||x.userId===userId).sort((x,y)=>String(y.at).localeCompare(String(x.at))).map(x=>({...x,mine:x.userId===userId})),
   announcements:[...s.announcements].sort((x,y)=>String(y.at).localeCompare(String(x.at))),

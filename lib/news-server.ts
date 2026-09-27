@@ -37,12 +37,14 @@ export async function fetchNews(topicId:string,now=Date.now()){
   console.error("TeamKick news",res.status);
   // 방금 전 결과가 있으면 그것이라도 보여준다(오래된 것임을 알린다).
   if(hit)return {items:hit.items,at:iso(hit.at),stale:true};
+  // 원인을 화면에서 바로 알 수 있게 응답 코드와 어느 쪽(HUB/개발자센터)으로 불렀는지 붙인다(키 값은 넣지 않는다).
+  const where=src!.url===HUB?"HUB":"개발자센터";const code=res.status===599?"연결 실패":String(res.status);
   throw new AppError(res.status===401||res.status===403
-   ?"축구 소식 설정을 확인해야 해요. (네이버 검색 API 키·권한)"
-   :"지금은 소식을 불러올 수 없어요. 잠시 뒤 다시 시도해주세요.",503);
+   ?"축구 소식 설정을 확인해야 해요. (네이버 "+where+" 응답 "+code+" — 키 이름·값 확인)"
+   :"지금은 소식을 불러올 수 없어요. (네이버 "+where+" 응답 "+code+")",503);
  }
  const items=parseNaverNews(await res.json()).slice(0,30);
- cache.set(topic!.id,{at:now,items});
+ if(cache.size>300)cache.delete(cache.keys().next().value!);cache.set(topic!.id,{at:now,items});
  return {items,at:iso(now),stale:false};
 }
 export const clearNewsCache=()=>cache.clear();

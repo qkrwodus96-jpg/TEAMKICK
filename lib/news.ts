@@ -33,37 +33,32 @@ export function todayKeywords(titles:string[],limit=5){
 }
 // 제목에 나온 팀(있으면)을 찾는다 — 목록 왼쪽 타일 색에 쓴다. 긴 이름부터 본다(예: "레알 마드리드").
 export function teamInTitle(title:string){return [...NEWS_TEAMS].sort((a,b)=>b.name.length-a.name.length).find(t=>t.id!=="kor"&&title.includes(t.name))}
+const T=(group:string,list:[string,string,string,string,string?][]):NewsTopic[]=>list.map(([id,name,query,bg,fg])=>({id,name,query,group,bg,fg:fg??"#fff"}));
 export const NEWS_TEAMS:NewsTopic[]=[
- {id:"mu",name:"맨유",query:"맨유",group:"해외 구단",bg:"#DA291C",fg:"#fff"},
- {id:"mci",name:"맨시티",query:"맨시티",group:"해외 구단",bg:"#6CABDD",fg:"#0b2540"},
- {id:"liv",name:"리버풀",query:"리버풀",group:"해외 구단",bg:"#C8102E",fg:"#fff"},
- {id:"ars",name:"아스널",query:"아스널",group:"해외 구단",bg:"#EF0107",fg:"#fff"},
- {id:"che",name:"첼시",query:"첼시",group:"해외 구단",bg:"#034694",fg:"#fff"},
- {id:"tot",name:"토트넘",query:"토트넘",group:"해외 구단",bg:"#132257",fg:"#fff"},
- {id:"bar",name:"바르셀로나",query:"바르셀로나",group:"해외 구단",bg:"#A50044",fg:"#fff"},
- {id:"rma",name:"레알 마드리드",query:"레알 마드리드",group:"해외 구단",bg:"#FEBE10",fg:"#1b1b1b"},
- {id:"fcb",name:"바이에른",query:"바이에른 뮌헨",group:"해외 구단",bg:"#DC052D",fg:"#fff"},
- {id:"psg",name:"PSG",query:"PSG",group:"해외 구단",bg:"#004170",fg:"#fff"},
- {id:"jb",name:"전북",query:"전북 현대",group:"국내 구단",bg:"#1B5E3B",fg:"#fff"},
- {id:"ul",name:"울산",query:"울산 HD",group:"국내 구단",bg:"#1D4E9E",fg:"#fff"},
- {id:"ph",name:"포항",query:"포항 스틸러스",group:"국내 구단",bg:"#C8102E",fg:"#fff"},
- {id:"fcs",name:"FC서울",query:"FC서울",group:"국내 구단",bg:"#B7131F",fg:"#fff"},
- {id:"ic",name:"인천",query:"인천 유나이티드",group:"국내 구단",bg:"#1C3F94",fg:"#fff"},
- {id:"sw",name:"수원 삼성",query:"수원 삼성 블루윙즈",group:"국내 구단",bg:"#1E4FA3",fg:"#fff"},
- {id:"dj",name:"대전",query:"대전하나시티즌",group:"국내 구단",bg:"#6E2C8C",fg:"#fff"},
- {id:"gw",name:"강원",query:"강원FC",group:"국내 구단",bg:"#F26522",fg:"#fff"},
- {id:"gj",name:"광주",query:"광주FC",group:"국내 구단",bg:"#F7B500",fg:"#1b1b1b"},
- {id:"kor",name:"대표팀",query:"축구 대표팀",group:"대표팀 · 선수",bg:"#1f3b73",fg:"#fff"},
- {id:"son",name:"손흥민",query:"손흥민",group:"대표팀 · 선수",bg:"#2c3e50",fg:"#fff"},
- {id:"lki",name:"이강인",query:"이강인",group:"대표팀 · 선수",bg:"#2c3e50",fg:"#fff"},
- {id:"kmj",name:"김민재",query:"김민재",group:"대표팀 · 선수",bg:"#2c3e50",fg:"#fff"},
+ ...T("해외 구단",[["mu","맨유","맨유","#DA291C"],["mci","맨시티","맨시티","#6CABDD","#0b2540"],["liv","리버풀","리버풀","#C8102E"],["ars","아스널","아스널","#EF0107"],["che","첼시","첼시","#034694"],["tot","토트넘","토트넘","#132257"],
+  ["new","뉴캐슬","뉴캐슬","#241F20"],["avl","애스턴 빌라","애스턴 빌라","#670E36"],["whu","웨스트햄","웨스트햄","#7A263A"],["bha","브라이턴","브라이턴","#0057B8"],["wol","울버햄튼","울버햄튼","#FDB913","#1b1b1b"],["eve","에버턴","에버턴","#003399"],
+  ["bar","바르셀로나","바르셀로나","#A50044"],["rma","레알 마드리드","레알 마드리드","#FEBE10","#1b1b1b"],["atm","아틀레티코","아틀레티코 마드리드","#CB3524"],
+  ["fcb","바이에른","바이에른 뮌헨","#DC052D"],["bvb","도르트문트","도르트문트","#FDE100","#1b1b1b"],["b04","레버쿠젠","레버쿠젠","#E32221"],
+  ["int","인터 밀란","인터 밀란","#0068A8"],["acm","AC 밀란","AC 밀란","#FB090B"],["juv","유벤투스","유벤투스","#1b1b1b"],["nap","나폴리","나폴리","#12A0D7"],
+  ["psg","PSG","PSG","#004170"]]),
+ ...T("국내 구단",[["jb","전북","전북 현대","#1B5E3B"],["ul","울산","울산 HD","#1D4E9E"],["ph","포항","포항 스틸러스","#C8102E"],["fcs","FC서울","FC서울","#B7131F"],["ic","인천","인천 유나이티드","#1C3F94"],
+  ["dj","대전","대전하나시티즌","#6E2C8C"],["gw","강원","강원FC","#F26522"],["gj","광주","광주FC","#F7B500","#1b1b1b"],["jj","제주","제주 SK","#F47920"],["dg","대구","대구FC","#0B9ED9"],
+  ["gc","김천","김천 상무","#C8102E"],["swf","수원FC","수원FC","#00308F"],["sw","수원 삼성","수원 삼성 블루윙즈","#1E4FA3"],["bc","부천","부천FC","#B01E23"],["ay","안양","FC안양","#512D6D"],
+  ["bs","부산","부산 아이파크","#E4032E"],["jn","전남","전남 드래곤즈","#FDD100","#1b1b1b"],["sen","서울 이랜드","서울 이랜드","#0A1F44"],["sn","성남","성남FC","#1b1b1b"],["gn","경남","경남FC","#E10E1E"]]),
+ ...T("대표팀 · 선수",[["kor","대표팀","축구 대표팀","#1f3b73"],["kwt","여자 대표팀","여자 축구 대표팀","#1f3b73"],["u23","U-23 대표팀","U-23 축구 대표팀","#1f3b73"],
+  ["son","손흥민","손흥민","#2c3e50"],["lki","이강인","이강인","#2c3e50"],["kmj","김민재","김민재","#2c3e50"],["hhc","황희찬","황희찬","#2c3e50"],["hib","황인범","황인범","#2c3e50"],["ljs","이재성","이재성","#2c3e50"],
+  ["ohk","오현규","오현규","#2c3e50"],["bjh","배준호","배준호","#2c3e50"],["ymh","양민혁","양민혁","#2c3e50"],["jgs","조규성","조규성","#2c3e50"],["chw","조현우","조현우","#2c3e50"]]),
 ];
-export const NEWS_TEAMS_MAX=5;
-export const newsTopic=(id:string)=>[...NEWS_BASE,...NEWS_TEAMS].find(x=>x.id===id);
+export const NEWS_TEAMS_MAX=8;
+// 목록에 없는 팀·선수는 이용자가 검색어를 직접 넣는다(id "q:검색어"). 글자·숫자·공백·점·가운뎃점·하이픈만, 2~15자.
+export const CUSTOM_PREFIX="q:";
+export function cleanCustom(v:unknown){const t=String(v??"").replace(/\s+/g," ").trim();return /^[가-힣A-Za-z0-9 .·\-]{2,15}$/.test(t)?t:""}
+const customTopic=(id:string):NewsTopic|undefined=>{const t=cleanCustom(id.slice(CUSTOM_PREFIX.length));return t?{id:CUSTOM_PREFIX+t,name:t,query:t,group:"직접 추가",bg:"#4b5563",fg:"#fff"}:undefined};
+export const newsTopic=(id:string)=>id.startsWith(CUSTOM_PREFIX)?customTopic(id):[...NEWS_BASE,...NEWS_TEAMS].find(x=>x.id===id);
 // 저장할 팀 목록 정리: 목록에 있는 것만, 중복 없이, 최대 개수까지. 순서는 고른 순서.
 export function cleanNewsTeams(v:unknown){
  const ids=Array.isArray(v)?v.map(String):[];const out:string[]=[];
- for(const id of ids)if(NEWS_TEAMS.some(t=>t.id===id)&&!out.includes(id))out.push(id);
+ for(const raw of ids){const id=raw.startsWith(CUSTOM_PREFIX)?(customTopic(raw)?.id??""):raw;if(id&&(id.startsWith(CUSTOM_PREFIX)||NEWS_TEAMS.some(t=>t.id===id))&&!out.includes(id))out.push(id)}
  return out;
 }
 

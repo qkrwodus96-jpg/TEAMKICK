@@ -227,3 +227,16 @@ html[data-splash="skip"] #teamkick-splash{display:none}
 .nl-go{flex:0 0 auto;color:#a7b3ac;margin-top:4px}
 .nl-row .sk-line{height:16px}
 .sk-line{height:16px;width:100%}.sk-line.short{width:60%}.sk-meta{height:12px;width:34%;margin-top:2px}
+/* 1.14.0 경기 날씨 · 캘린더 */
+.wx{display:grid;gap:6px}
+.wx-main{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;font-size:13.5px}
+.wx-main b{font-weight:750}.wx-main svg{flex:0 0 auto}
+.next-match .wx{padding:12px 0;border-bottom:1px solid #ffffff1f;justify-items:center}
+.next-match .wx-main{color:#e6f1ea;justify-content:center}.next-match .wx-main svg{color:#cef18a}
+.next-match .wx.rainy .wx-main svg{color:#9fd3ff}
+.wx-detail{padding:12px 14px;border:1px solid #dfe9e2;border-radius:10px;background:#fff}
+.wx-detail .wx-main{font-size:14.5px;color:#2d4337}.wx-detail .wx-main svg{color:#1f7a4d}
+.wx-detail.rainy{border-color:#cfe0f5;background:#f5f9ff}.wx-detail.rainy .wx-main svg{color:#2f6fd6}
+.wx-rain{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;color:#2f5f9e;font-weight:600}.wx-rain .text-link{color:#2f6fd6;font-weight:700}
+.wx-src{font-size:11.5px;color:#8a978f}
+.wx-note{font-size:12.5px;color:#8a978f}

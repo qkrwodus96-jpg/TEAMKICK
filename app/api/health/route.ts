@@ -9,6 +9,7 @@ import {ownerCodeFromEnv} from "@/lib/owner-config";
 import {pushReady} from "@/lib/push";
 import {socialReady} from "@/lib/social";
 import {newsSource} from "@/lib/news-server";
+import {weatherReady} from "@/lib/weather-server";
 import {load} from "@/lib/store";
 
 export const dynamic="force-dynamic";
@@ -63,5 +64,7 @@ export async function GET(req:Request){
   pushReady:pushReady(),
   // 축구 소식: hub(NAVER API HUB 키) / developers(예전 개발자센터 키) / none
   newsSource:newsSource(),
+  // 경기 날씨·미세먼지: 공공데이터포털 키(DATA_GO_KR_KEY)가 들어 있는지
+  weatherReady:weatherReady(),
  });
 }

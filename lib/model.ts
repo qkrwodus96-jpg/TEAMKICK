@@ -623,6 +623,15 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  else throw new AppError("지원하지 않는 작업이에요.");
  s.audit.push({id:id(),actor:a.id,teamId:t||null,type,at:stamp,gameId:c.gameId??null,reason:c.reason??null});return output;
 }
+// 캘린더 파일처럼 경기 하나만 따로 볼 때: 그 경기 팀의 활동 중인 팀원이거나 승인된 용병만.
+export function canSeeGame(s:State,userId:string,gameId:string){
+ const g=s.games.find(x=>x.id===gameId);if(!g||g.status==="cancelled")return null;
+ const member=s.members.some(m=>m.userId===userId&&m.status==="active"&&[g.home,g.away].includes(m.teamId)&&teamOf(s,m.teamId)?.status==="active");
+ const guest=s.guests.some(x=>x.userId===userId&&x.gameId===gameId&&x.status==="approved");
+ return member||guest?g:null;
+}
+// 경기 제목: "한강 FC vs 서강 FC" / "한강 FC 자체전"
+export function gameTitle(s:State,g:Row){const home=String(teamOf(s,g.home)?.name??"");if(isIntra(g))return home+" 자체전";return home+" vs "+String(teamOf(s,g.away)?.name??g.external??"상대팀 미정")}
 export function visibleState(s:State,userId:string,selected?:string){
  const owner=isOwner(s,userId),my=s.members.filter(m=>m.userId===userId),active=my.filter(m=>m.status==="active"&&["active","suspended"].includes(teamOf(s,m.teamId)?.status)),team=active.find(x=>x.teamId===selected)??active[0];
  const tid=team?.teamId;const activeAccess=active.some(m=>teamOf(s,m.teamId)?.status==="active");

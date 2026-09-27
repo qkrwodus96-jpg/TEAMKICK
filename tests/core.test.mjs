@@ -17,6 +17,9 @@ compile('lib/store.ts','store.mjs',s=>s.replace('import {env} from "cloudflare:w
 compile('lib/owner-config.ts','owner-config.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;'));
 compile('lib/legal.ts','legal.mjs');
 compile('lib/news.ts','news.mjs');
+compile('lib/weather.ts','weather.mjs');
+compile('lib/calendar.ts','calendar.mjs');
+compile('lib/weather-server.ts','weather-server.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./weather"','"./weather.mjs"'));
 compile('lib/news-server.ts','news-server.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./news"','"./news.mjs"'));
 compile('lib/kakao.ts','kakao.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/schema.ts','schema.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
@@ -35,7 +38,7 @@ compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:wor
 compile('lib/signup-policy.ts','signup-policy.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;'));
 compile('lib/social.ts','social.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/push.ts','push.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
-compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {pushReady} from "@/lib/push";','const pushReady=()=>true;').replace('import {socialReady} from "@/lib/social";','const socialReady=(p)=>p==="google";').replace('import {newsSource} from "@/lib/news-server";','const newsSource=()=>"hub";').replace('import {APP_VERSION} from "@/lib/version";','const APP_VERSION="9.9.9";').replace('import {schemaStatus,BUILD} from "@/lib/schema";','const schemaStatus=async()=>globalThis.__teamkickTestSchema??{db:true,tables:{},error:""};const BUILD="test";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady,mailAccount,fromDomain} from "@/lib/mail";','const mailReady=()=>true;const mailAccount=async()=>"ok";const fromDomain=()=>"teamkick.co.kr";').replace('import {hashPassword,currentUser} from "@/lib/auth";','const hashPassword=async()=>"";const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";','const kakaoReady=()=>true;const kakaoSecretSet=()=>true;').replace('import {ownerCodeFromEnv} from "@/lib/owner-config";','const ownerCodeFromEnv=()=>true;').replace('"@/lib/store"','"./store.mjs"'));
+compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {pushReady} from "@/lib/push";','const pushReady=()=>true;').replace('import {socialReady} from "@/lib/social";','const socialReady=(p)=>p==="google";').replace('import {newsSource} from "@/lib/news-server";','const newsSource=()=>"hub";').replace('import {weatherReady} from "@/lib/weather-server";','const weatherReady=()=>true;').replace('import {APP_VERSION} from "@/lib/version";','const APP_VERSION="9.9.9";').replace('import {schemaStatus,BUILD} from "@/lib/schema";','const schemaStatus=async()=>globalThis.__teamkickTestSchema??{db:true,tables:{},error:""};const BUILD="test";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady,mailAccount,fromDomain} from "@/lib/mail";','const mailReady=()=>true;const mailAccount=async()=>"ok";const fromDomain=()=>"teamkick.co.kr";').replace('import {hashPassword,currentUser} from "@/lib/auth";','const hashPassword=async()=>"";const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";','const kakaoReady=()=>true;const kakaoSecretSet=()=>true;').replace('import {ownerCodeFromEnv} from "@/lib/owner-config";','const ownerCodeFromEnv=()=>true;').replace('"@/lib/store"','"./store.mjs"'));
 compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./schema"','"./schema.mjs"').replace('"./store"','"./store.mjs"'));
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
 compile('app/api/auth/route.ts','auth-api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword,limit,clientKey,verifyEmail,resendVerification,currentUser,completeSocialSignup,cancelSocialSignup,clearedSignupCookie} from "@/lib/auth";','const completeSocialSignup=async()=>({user:{userId:"u",fullName:"새 사람"},token:"t"});const cancelSocialSignup=async()=>{};const clearedSignupCookie=()=>"";const signUp=async()=>{(globalThis.__teamkickSignups??=[]).push(1);return {user:{userId:"u",fullName:"새 사람"},token:"t",verificationSent:false}};const signIn=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const signOut=async()=>{};const sessionCookie=()=>"";const clearedCookie=()=>"";const requestPasswordReset=async()=>{};const resetPassword=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const limit=async()=>{};const clientKey=()=>"k";const verifyEmail=async()=>{};const resendVerification=async()=>true;const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>!!globalThis.__teamkickSocial;').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>false;').replace('"@/lib/model"','"./model.mjs"'));
@@ -43,12 +46,15 @@ compile('app/api/app/route.ts','api.mjs',s=>s.replace('"@/lib/signup-policy"','"
 compile('lib/unlink.ts','unlink.mjs',s=>s.replace('"./social"','"./social.mjs"'));
 compile('lib/close.ts','close.mjs',s=>s.replace('"./store"','"./store.mjs"').replace('"./model"','"./model.mjs"').replace('"./auth"','"./auth.mjs"').replace('"./unlink"','"./unlink.mjs"'));
 globalThis.__teamkickTestEnv={};
-const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp,mvpView,mvpWinners,periodRange,rankRows,nationalRanking}=await import(path.join(runtime,'model.mjs'));
+const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp,mvpView,mvpWinners,periodRange,rankRows,nationalRanking,canSeeGame,gameTitle}=await import(path.join(runtime,'model.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
 const auth=await import(path.join(runtime,'auth.mjs'));
 const mail=await import(path.join(runtime,'mail.mjs'));
 const legal=await import(path.join(runtime,'legal.mjs'));
 const news=await import(path.join(runtime,'news.mjs'));
+const weather=await import(path.join(runtime,'weather.mjs'));
+const calendar=await import(path.join(runtime,'calendar.mjs'));
+const weatherServer=await import(path.join(runtime,'weather-server.mjs'));
 const newsServer=await import(path.join(runtime,'news-server.mjs'));
 const schema=await import(path.join(runtime,'schema.mjs'));
 const kakao=await import(path.join(runtime,'kakao.mjs'));
@@ -3200,4 +3206,81 @@ test('오늘의 키워드는 불러온 제목에서 두 번 이상 나온 이름
   assert.equal(news.teamInTitle('오늘의 축구 소식'),undefined);
   // 모든 소식 종류는 검색어가 있다
   for(const t of [...news.NEWS_BASE,...news.NEWS_TEAMS])assert.ok(t.query&&t.id&&t.name,t.id);
+});
+
+// --- 1.14.0: 경기 날씨 · 캘린더 ---
+test('기상청 격자 변환과 발표 시각(한국 시간, 발표 15분 뒤부터)',()=>{
+  assert.deepEqual(weather.toGrid(37.5665,126.9780),{nx:60,ny:127},'서울시청');
+  assert.deepEqual(weather.toGrid(35.1796,129.0756),{nx:98,ny:76},'부산시청');
+  // 9/27 14:10 KST → 14시 발표는 아직(15분 전) → 11시
+  assert.deepEqual(weather.baseFor(Date.parse('2026-09-27T14:10:00+09:00')),{date:'20260927',time:'1100'});
+  assert.deepEqual(weather.baseFor(Date.parse('2026-09-27T14:20:00+09:00')),{date:'20260927',time:'1400'});
+  // 새벽 1시 → 전날 23시
+  assert.deepEqual(weather.baseFor(Date.parse('2026-09-28T01:00:00+09:00')),{date:'20260927',time:'2300'});
+});
+
+test('경기 시각의 예보를 고르고, 비 예보를 알아본다',()=>{
+  const it=(category,fcstValue,fcstTime='1000',fcstDate='20260928')=>({category,fcstValue,fcstTime,fcstDate});
+  const items=[it('TMP','18'),it('POP','70'),it('PTY','1'),it('SKY','4'),it('WSD','3.2'),it('TMP','25','1400')];
+  const f=weather.pickForecast(items,Date.parse('2026-09-28T10:30:00+09:00'));
+  assert.deepEqual([f.temp,f.pop,f.label,f.rainy],[18,70,'비',true]);
+  const clear=weather.pickForecast([it('TMP','20'),it('POP','10'),it('PTY','0'),it('SKY','1')],Date.parse('2026-09-28T10:00:00+09:00'));
+  assert.deepEqual([clear.label,clear.rainy],['맑음',false]);
+  assert.equal(weather.pickForecast(items,Date.parse('2026-10-05T10:00:00+09:00')),null,'예보 범위 밖');
+});
+
+test('대기질 예보는 경기 지역 권역의 등급만 고른다',()=>{
+  assert.equal(weather.airRegion('경기 남부'),'경기남부');assert.equal(weather.airRegion('강원',128.9),'영동');assert.equal(weather.airRegion('강원',127.7),'영서');
+  const items=[{informCode:'PM10',informData:'2026-09-28',informGrade:'서울 : 보통,제주 : 좋음,경기남부 : 나쁨'}];
+  assert.equal(weather.pickAir(items,'PM10','2026-09-28','경기남부'),'나쁨');
+  assert.equal(weather.pickAir(items,'PM10','2026-09-29','서울'),null,'그날 예보가 없으면 없음');
+});
+
+test('날씨 서버: 키 없음·키 오류·지난 경기·먼 경기·정상, 미세먼지 실패해도 날씨는 보인다',async()=>{
+  const env=globalThis.__teamkickTestEnv;const saved=env.DATA_GO_KR_KEY;const realFetch=globalThis.fetch;weatherServer.clearWeatherCache();
+  const now=Date.parse('2026-09-27T15:00:00+09:00'),g={lat:37.5665,lng:126.978,region:'서울',start:'2026-09-28T01:00:00.000Z'};// 9/28 10시 KST
+  try{
+    delete env.DATA_GO_KR_KEY;
+    await assert.rejects(weatherServer.gameWeather(g,now),e=>e.status===503&&/준비 중/.test(e.message));
+    assert.deepEqual(await weatherServer.gameWeather({...g,start:'2026-09-20T01:00:00.000Z'},now),{status:'past'},'지난 경기는 부르지 않는다');
+    await assert.rejects(weatherServer.gameWeather({...g,lat:10},now),e=>e.status===400);
+    env.DATA_GO_KR_KEY='abc%2Bdef';
+    let urls=[];let mode='keyError';
+    globalThis.fetch=async(url)=>{urls.push(String(url));
+      if(mode==='keyError')return new Response('<OpenAPI_ServiceResponse><returnAuthMsg>SERVICE_KEY_IS_NOT_REGISTERED_ERROR</returnAuthMsg></OpenAPI_ServiceResponse>',{status:200});
+      if(String(url).includes('ArpltnInforInqireSvc'))return new Response('fail',{status:500});
+      const item=(category,fcstValue)=>({category,fcstValue,fcstDate:'20260928',fcstTime:'1000'});
+      return Response.json({response:{header:{resultCode:'00'},body:{totalCount:4,items:{item:[item('TMP','17'),item('POP','20'),item('PTY','0'),item('SKY','3')]}}}})};
+    await assert.rejects(weatherServer.gameWeather(g,now),e=>/인증키/.test(e.message),'키 오류는 키 확인 안내');
+    assert.ok(new URL(urls[0]).searchParams.get('serviceKey')==='abc+def','인코딩된 키는 풀어서 보낸다');
+    assert.ok(urls[0].includes('nx=60')&&urls[0].includes('ny=127')&&urls[0].includes('base_time=1400'),urls[0]);
+    mode='ok';weatherServer.clearWeatherCache();urls=[];
+    const w=await weatherServer.gameWeather(g,now);
+    assert.equal(w.status,'ok');assert.equal(w.forecast.label,'구름많음');assert.equal(w.forecast.temp,17);assert.equal(w.air,null,'미세먼지 실패는 날씨를 막지 않는다');
+    const calls=urls.filter(u=>u.includes('VilageFcst')).length;
+    await weatherServer.gameWeather(g,now+10*60e3);assert.equal(urls.filter(u=>u.includes('VilageFcst')).length,calls,'같은 발표는 다시 부르지 않는다');
+    assert.deepEqual(await weatherServer.gameWeather({...g,start:'2026-10-10T01:00:00.000Z'},now),{status:'far'});
+  }finally{globalThis.fetch=realFetch;weatherServer.clearWeatherCache();if(saved===undefined)delete env.DATA_GO_KR_KEY;else env.DATA_GO_KR_KEY=saved}
+});
+
+test('캘린더 파일: 기호 이스케이프, 긴 줄 접기, 3시간 전 알림, 구글 링크',()=>{
+  const ics=calendar.icsFor({id:'g1',title:'[팀킥] 한강 FC vs 서강 FC',start:'2026-09-28T01:00:00.000Z',end:'2026-09-28T03:00:00.000Z',location:'난지천공원, 서울 마포구; 1번 구장',description:'11인제\n참석 투표',url:'https://teamkick.co.kr'},Date.parse('2026-09-27T00:00:00Z'));
+  assert.ok(ics.includes('DTSTART:20260928T010000Z')&&ics.includes('DTEND:20260928T030000Z'));
+  assert.ok(ics.includes('LOCATION:난지천공원\\, 서울 마포구\; 1번 구장'));
+  assert.ok(ics.includes('DESCRIPTION:11인제\\n참석 투표'));
+  assert.ok(ics.includes('TRIGGER:-PT3H'));
+  for(const line of ics.split('\r\n'))assert.ok(new TextEncoder().encode(line).length<=75,'한 줄 75바이트 이하: '+line);
+  const g=calendar.googleCalendarUrl({id:'g1',title:'A',start:'2026-09-28T01:00:00.000Z',end:'2026-09-28T03:00:00.000Z',location:'L',description:'D',url:''});
+  assert.ok(g.startsWith('https://calendar.google.com/calendar/render?')&&g.includes('dates=20260928T010000Z%2F20260928T030000Z'));
+});
+
+test('캘린더 파일은 그 경기 팀원과 승인된 용병만 받는다',()=>{
+  const f=guestFixture();const z=f.s.games.find(x=>x.id===f.gameId);
+  assert.ok(canSeeGame(f.s,A.id,f.gameId),'주장');
+  assert.equal(canSeeGame(f.s,B.id,f.gameId),null,'다른 팀');
+  const gid=applyGuest(f.s,f.a,f.gameId,G1);
+  assert.equal(canSeeGame(f.s,G1.id,f.gameId),null,'신청만 한 용병은 아직');
+  command(f.s,A,{type:'approveGuest',teamId:f.a,gameId:f.gameId,guestId:gid});
+  assert.ok(canSeeGame(f.s,G1.id,f.gameId),'승인된 용병');
+  assert.equal(gameTitle(f.s,z),'팀 0 vs 외부 FC');
 });

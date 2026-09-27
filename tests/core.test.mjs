@@ -16,6 +16,7 @@ compile('lib/model.ts','model.mjs');
 compile('lib/store.ts','store.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/owner-config.ts','owner-config.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;'));
 compile('lib/legal.ts','legal.mjs');
+compile('lib/news.ts','news.mjs');
 compile('lib/kakao.ts','kakao.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/schema.ts','schema.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/mail.ts','mail.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./legal"','"./legal.mjs"'));
@@ -46,6 +47,7 @@ const repository=await import(path.join(runtime,'store.mjs'));
 const auth=await import(path.join(runtime,'auth.mjs'));
 const mail=await import(path.join(runtime,'mail.mjs'));
 const legal=await import(path.join(runtime,'legal.mjs'));
+const news=await import(path.join(runtime,'news.mjs'));
 const schema=await import(path.join(runtime,'schema.mjs'));
 const kakao=await import(path.join(runtime,'kakao.mjs'));
 const ownerConfig=await import(path.join(runtime,'owner-config.mjs'));
@@ -3119,4 +3121,26 @@ test('출석 확정은 MVP 투표 알림을 몇 명에게 보냈는지 돌려준
   // 정정(다시 확정)할 때는 투표가 이미 열려 있어 새 알림이 없다
   const again=command(f.s,A,{type:'attendance',teamId:f.a,gameId:f.gameId,values:Object.fromEntries(rosterFor(f.s,z,g).map(x=>[x.id,true]))});
   assert.equal(again.mvpNotified,undefined);
+});
+
+// --- 축구 소식(B안): 네이버 응답 → 제목·언론사·시간·링크만 ---
+test('네이버 뉴스 응답은 태그·기호를 정리하고, 원문 주소·언론사·시간만 남긴다',()=>{
+  const now=Date.parse('2026-09-27T12:30:00Z');
+  const items=news.parseNaverNews({items:[
+    {title:'<b>K리그1</b> &quot;한 경기&quot; &amp; 순위',originallink:'https://sports.khan.co.kr/a/1',link:'https://n.news.naver.com/1',description:'본문 요약',pubDate:'Sun, 27 Sep 2026 21:18:00 +0900'},
+    {title:'원문 없음',originallink:'',link:'https://n.news.naver.com/2',description:'',pubDate:'Sat, 26 Sep 2026 21:00:00 +0900'},
+    {title:'모르는 곳',originallink:'https://www.unknown-news.kr/3',link:'',description:'',pubDate:'Sun, 27 Sep 2026 20:00:00 +0900'},
+    {title:'<b>K리그1</b> &quot;한 경기&quot; &amp; 순위',originallink:'https://other.kr/dup',link:'',description:'',pubDate:'Sun, 27 Sep 2026 21:00:00 +0900'},
+    {title:'나쁜 주소',originallink:'javascript:alert(1)',link:'',description:'',pubDate:'Sun, 27 Sep 2026 21:00:00 +0900'},
+    {title:'&lt;script&gt;',originallink:'https://x.kr/5',link:'',description:'',pubDate:'시간 아님'},
+  ]});
+  assert.deepEqual(items.map(x=>x.title),['K리그1 "한 경기" & 순위','모르는 곳','원문 없음'],'같은 제목·잘못된 주소·시간 없는 글은 뺀다');
+  assert.equal(items[0].url,'https://sports.khan.co.kr/a/1');assert.equal(items[0].press,'스포츠경향');
+  assert.equal(items[1].press,'unknown-news.kr','모르는 언론사는 주소 그대로');
+  assert.equal(items[2].press,'네이버 뉴스');
+  assert.ok(!('description' in items[0]),'본문 요약은 쓰지 않는다');
+  assert.equal(news.agoText(items[0].at,now),'12분 전');
+  assert.equal(news.agoText(items[2].at,now),'1일 전');
+  assert.equal(news.cleanTitle('&lt;b&gt;굵게&lt;/b&gt;'),'<b>굵게</b>','되돌린 기호는 글자로 남는다(화면에 글자로만 넣음)');
+  assert.deepEqual(news.parseNaverNews(null),[]);
 });

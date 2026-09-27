@@ -129,7 +129,6 @@ html[data-splash="skip"] #teamkick-splash{display:none}
 .podium-card strong{font-size:14px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.podium-card small{font-size:11.5px;color:var(--muted-foreground);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:15px}
 .podium-card .player-avatar{width:46px;height:46px;font-size:14px;border:3px solid #fff;box-shadow:0 0 0 2px var(--medal,#c9d3cd)}
 .place-1 .podium-card .player-avatar{width:58px;height:58px;font-size:16px}
-.podium-medal{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:12.5px;font-weight:800;color:#fff;background:var(--medal,#9aa6a0)}
 .podium-value{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.03em;line-height:1.1}.podium-value small{font-size:12px;font-weight:500;margin-left:2px;color:var(--muted-foreground)}
 .place-1{--medal:#d4a017}.place-2{--medal:#9aa6ae}.place-3{--medal:#c07a45}
 .podium-step{border-radius:10px 10px 0 0;background:linear-gradient(#eef6f1,#e3efe8)}.place-1 .podium-step{height:54px;background:#dcefe4}.place-2 .podium-step{height:36px}.place-3 .podium-step{height:24px}
@@ -147,3 +146,84 @@ html[data-splash="skip"] #teamkick-splash{display:none}
 @media(min-width:768px){.rankings{background:#fff;border:1px solid var(--border);border-radius:15px;padding:23px}}
 .score-word{letter-spacing:0!important;font-size:22px!important;font-weight:700}
 .invite-note{margin-bottom:18px}
+/* 1.12.1 자체전 머리: "우리 팀 자체전"을 가운데, 그 아래 "1팀 vs 2팀" */
+.intra-vs{display:grid;justify-items:center;gap:16px;padding:22px 8px 20px;text-align:center}
+.intra-head{display:flex;align-items:center;justify-content:center;gap:9px;min-width:0;max-width:100%}
+.intra-head .club-crest{width:34px;height:34px;min-width:34px;font-size:12px;letter-spacing:-.5px}
+.intra-head strong{font-size:18px;font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.intra-tag{font-size:13px;font-weight:700;padding:3px 9px;border-radius:999px;background:#c4ef75;color:#1f4a2c;white-space:nowrap}
+.intra-squads{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap}
+.intra-squads.n3,.intra-squads.n4{gap:8px}
+.intra-squad{display:grid;justify-items:center;gap:5px;min-width:56px}
+.intra-squad i{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:15px;font-weight:800;color:#fff;background:#168b53;border:2px solid rgba(255,255,255,.75)}
+.intra-squad.squad-1 i{background:#2f6fd6}.intra-squad.squad-2 i{background:#d4731c}.intra-squad.squad-3 i{background:#6d5bd0}
+.intra-squad b{font-size:15px;font-weight:700}
+.intra-squad em{font-style:normal;font-size:28px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.intra-sep{font-size:14px;font-weight:700;letter-spacing:2px;color:#88a28e;align-self:center}
+.intra-squads.n3 .intra-sep,.intra-squads.n4 .intra-sep{font-size:12px;letter-spacing:0}
+.next-match .intra-head strong,.next-match .intra-squad b,.next-match .intra-squad em{color:#fff}
+.detail-score.intra{padding:18px 5px 8px}
+.detail-score.intra .intra-head strong,.detail-score.intra .intra-squad b,.detail-score.intra .intra-squad em{color:#1f3b2b}
+.detail-score.intra .intra-sep{color:#9aaa9f}
+.detail-score.intra .intra-tag{background:#e6f5eb;color:#13874f}
+/* 1.12.1 시상대: 초록 막대 대신 회색 단상 + 메달색 윗선 + 등수 숫자 */
+.podium{gap:4px}
+.podium-step{display:grid;place-items:start center;padding-top:6px;border-radius:6px 6px 0 0;background:linear-gradient(#f3f5f4,#e9edeb);border-top:4px solid var(--medal,#c9d3cd)}
+.podium-step span{font-size:22px;font-weight:800;line-height:1;color:#7d8983;font-variant-numeric:tabular-nums}
+.place-1 .podium-step{height:66px;background:linear-gradient(#f3f5f4,#e9edeb)}.place-2 .podium-step{height:46px}.place-3 .podium-step{height:34px}
+.place-1 .podium-step span{font-size:26px;color:#5f6b65}
+.podium-card{padding-bottom:8px}
+.podium-card.empty{padding-bottom:22px}
+.rank-periods{align-items:center}.rank-range{font-size:12.5px;color:var(--muted-foreground);margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums}
+.intra-two{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px;width:100%;max-width:320px}
+.intra-score{font-size:30px;font-weight:800;letter-spacing:2px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.next-match .intra-score{color:#fff}.detail-score.intra .intra-score{color:#1f3b2b}
+.rank-periods{flex-wrap:wrap}
+.intra-score.vs{font-size:15px;letter-spacing:3px;color:#88a28e!important}
+/* 1.13.0 축구 소식 — 홈 맨 위 전환 + 카드형 기사(사진 없음) */
+.home-switch{display:grid;grid-template-columns:1fr 1fr;background:#f1f4f2;border-radius:12px;padding:4px;gap:4px;margin:0 0 20px;max-width:520px}
+.home-switch button{border:0;background:transparent;border-radius:9px;padding:10px 0;font-size:15px;font-weight:700;color:var(--muted-foreground);position:relative}
+.home-switch button.on{background:#fff;color:var(--foreground);box-shadow:0 1px 2px rgba(16,35,26,.12)}
+.hs-dot{position:absolute;top:9px;margin-left:3px;width:7px;height:7px;border-radius:50%;background:#e5484d;display:inline-block}
+.news-screen{max-width:760px}
+.news-chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:-6px 0 14px;padding-bottom:2px}.news-chips::-webkit-scrollbar{display:none}.news-chips .chip-mini{flex:0 0 auto}
+.nc-add{color:#12814d;border-style:dashed}
+.nb-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:2px}
+.nc-more{width:100%;margin-top:10px}
+.nc-state{display:grid;justify-items:start;gap:6px;padding:18px;border:1px solid #e3e9e5;border-radius:16px}
+.nc-state p{font-weight:700;font-size:15px}.nc-state span{font-size:13px;color:var(--muted-foreground)}.nc-state .btn{margin-top:6px;min-height:38px}
+.nc-state.error{border-color:#f0dcd8;background:#fffafa}
+.sk{display:block;border-radius:6px;background:linear-gradient(90deg,#eef1ef,#f6f8f7,#eef1ef);background-size:200% 100%;animation:sk 1.2s ease-in-out infinite}
+@keyframes sk{0%{background-position:100% 0}100%{background-position:-100% 0}}
+@media (prefers-reduced-motion:reduce){.sk{animation:none}}
+.news-group{display:grid;gap:8px}
+.nb-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.nb-team{position:relative;display:grid;justify-items:center;gap:6px;padding:12px 4px;border:1.5px solid var(--border);border-radius:12px;background:#fff;font-size:13px;font-weight:600;min-width:0}
+.nb-team>span:last-of-type{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nb-team.on{border-color:#168b53;background:#f1faf4}.nb-check{position:absolute;top:6px;right:6px;color:#168b53}
+.nb-badge{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:12px;letter-spacing:-.04em;line-height:1}
+/* 1.13.0 소식 화면 — 참고 시안 색감: 초록 칩, 연초록 키워드 상자, 글 중심 목록(사진 없음) */
+.nl-sections{display:flex;gap:18px;border-bottom:1px solid #e6ebe8;margin:0 0 16px}
+.nl-sections button{border:0;background:transparent;padding:8px 2px 10px;font-size:15px;font-weight:700;color:#8a978f;border-bottom:2.5px solid transparent;margin-bottom:-1px}
+.nl-sections button.on{color:#14281d;border-bottom-color:#1f7a4d}
+.nl-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:14px}
+.nl-head h2{font-size:24px;font-weight:800;letter-spacing:-.04em;line-height:1.25}
+.nl-head p{font-size:13.5px;color:var(--muted-foreground);margin-top:4px}
+.nl-chip{padding:8px 16px;font-size:14px;border-color:#dfe6e1}
+.nl-chip.on{background:#1f7a4d;border-color:#1f7a4d;color:#fff}
+.nl-chip.on .nb-dot{box-shadow:0 0 0 2px #fff}
+.nl-words{border:1px solid #cfe8d8;background:#f1faf4;border-radius:14px;padding:12px 14px;margin:2px 0 8px}
+.nl-words-head{display:flex;align-items:center;gap:6px;font-size:14px;color:#1f7a4d}.nl-words-head strong{color:#14281d}.nl-words-head .text-link{margin-left:auto;color:#1f7a4d}
+.nl-word-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.nl-word-chips button{border:1px solid #cfe8d8;background:#fff;color:#1f5f3d;border-radius:999px;padding:5px 12px;font-size:13px;font-weight:700}
+.nl-word-chips button.on{background:#1f7a4d;border-color:#1f7a4d;color:#fff}
+.nl-list{display:grid}
+.nl-row{display:flex;align-items:flex-start;gap:12px;padding:16px 2px;border-bottom:1px solid #edf1ee;color:var(--foreground)}
+.nl-row:last-child{border-bottom:0}.nl-row:active{background:#f7faf8}
+.nl-text{display:grid;gap:6px;min-width:0;flex:1}
+.nl-team{font-size:12.5px;font-weight:800;letter-spacing:-.01em}
+.nl-title{font-size:16.5px;font-weight:750;line-height:1.45;letter-spacing:-.03em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.nl-meta{font-size:12.5px;color:#8a978f}
+.nl-go{flex:0 0 auto;color:#a7b3ac;margin-top:4px}
+.nl-row .sk-line{height:16px}
+.sk-line{height:16px;width:100%}.sk-line.short{width:60%}.sk-meta{height:12px;width:34%;margin-top:2px}

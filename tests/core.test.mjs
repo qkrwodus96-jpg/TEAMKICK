@@ -12,10 +12,12 @@ fs.mkdirSync(runtime,{recursive:true});
 function compile(file,name,replace=s=>s){
   fs.writeFileSync(path.join(runtime,name),ts.transpileModule(replace(fs.readFileSync(file,'utf8')),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText);
 }
-compile('lib/model.ts','model.mjs');
+compile('lib/model.ts','model.mjs',s=>s.replace('"./news"','"./news.mjs"'));
 compile('lib/store.ts','store.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/owner-config.ts','owner-config.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;'));
 compile('lib/legal.ts','legal.mjs');
+compile('lib/news.ts','news.mjs');
+compile('lib/news-server.ts','news-server.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./news"','"./news.mjs"'));
 compile('lib/kakao.ts','kakao.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/schema.ts','schema.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/mail.ts','mail.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./legal"','"./legal.mjs"'));
@@ -33,7 +35,7 @@ compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:wor
 compile('lib/signup-policy.ts','signup-policy.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;'));
 compile('lib/social.ts','social.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/push.ts','push.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
-compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {pushReady} from "@/lib/push";','const pushReady=()=>true;').replace('import {socialReady} from "@/lib/social";','const socialReady=(p)=>p==="google";').replace('import {APP_VERSION} from "@/lib/version";','const APP_VERSION="9.9.9";').replace('import {schemaStatus,BUILD} from "@/lib/schema";','const schemaStatus=async()=>globalThis.__teamkickTestSchema??{db:true,tables:{},error:""};const BUILD="test";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady,mailAccount,fromDomain} from "@/lib/mail";','const mailReady=()=>true;const mailAccount=async()=>"ok";const fromDomain=()=>"teamkick.co.kr";').replace('import {hashPassword,currentUser} from "@/lib/auth";','const hashPassword=async()=>"";const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";','const kakaoReady=()=>true;const kakaoSecretSet=()=>true;').replace('import {ownerCodeFromEnv} from "@/lib/owner-config";','const ownerCodeFromEnv=()=>true;').replace('"@/lib/store"','"./store.mjs"'));
+compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {pushReady} from "@/lib/push";','const pushReady=()=>true;').replace('import {socialReady} from "@/lib/social";','const socialReady=(p)=>p==="google";').replace('import {newsSource} from "@/lib/news-server";','const newsSource=()=>"hub";').replace('import {APP_VERSION} from "@/lib/version";','const APP_VERSION="9.9.9";').replace('import {schemaStatus,BUILD} from "@/lib/schema";','const schemaStatus=async()=>globalThis.__teamkickTestSchema??{db:true,tables:{},error:""};const BUILD="test";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady,mailAccount,fromDomain} from "@/lib/mail";','const mailReady=()=>true;const mailAccount=async()=>"ok";const fromDomain=()=>"teamkick.co.kr";').replace('import {hashPassword,currentUser} from "@/lib/auth";','const hashPassword=async()=>"";const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";','const kakaoReady=()=>true;const kakaoSecretSet=()=>true;').replace('import {ownerCodeFromEnv} from "@/lib/owner-config";','const ownerCodeFromEnv=()=>true;').replace('"@/lib/store"','"./store.mjs"'));
 compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./schema"','"./schema.mjs"').replace('"./store"','"./store.mjs"'));
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
 compile('app/api/auth/route.ts','auth-api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword,limit,clientKey,verifyEmail,resendVerification,currentUser,completeSocialSignup,cancelSocialSignup,clearedSignupCookie} from "@/lib/auth";','const completeSocialSignup=async()=>({user:{userId:"u",fullName:"새 사람"},token:"t"});const cancelSocialSignup=async()=>{};const clearedSignupCookie=()=>"";const signUp=async()=>{(globalThis.__teamkickSignups??=[]).push(1);return {user:{userId:"u",fullName:"새 사람"},token:"t",verificationSent:false}};const signIn=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const signOut=async()=>{};const sessionCookie=()=>"";const clearedCookie=()=>"";const requestPasswordReset=async()=>{};const resetPassword=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const limit=async()=>{};const clientKey=()=>"k";const verifyEmail=async()=>{};const resendVerification=async()=>true;const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>!!globalThis.__teamkickSocial;').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>false;').replace('"@/lib/model"','"./model.mjs"'));
@@ -46,6 +48,8 @@ const repository=await import(path.join(runtime,'store.mjs'));
 const auth=await import(path.join(runtime,'auth.mjs'));
 const mail=await import(path.join(runtime,'mail.mjs'));
 const legal=await import(path.join(runtime,'legal.mjs'));
+const news=await import(path.join(runtime,'news.mjs'));
+const newsServer=await import(path.join(runtime,'news-server.mjs'));
 const schema=await import(path.join(runtime,'schema.mjs'));
 const kakao=await import(path.join(runtime,'kakao.mjs'));
 const ownerConfig=await import(path.join(runtime,'owner-config.mjs'));
@@ -3077,4 +3081,123 @@ test('전국 랭킹은 정지·해산된 팀의 기록과 탈퇴한 사람을 �
   command(f.s,owner,{type:'restoreTeam',teamId:f.a});
   command(f.s,{id:'p1',name:'선수1'},{type:'closeAccount'});
   assert.equal(nationalRanking(f.s,'x').year.goals.length,0,'탈퇴한 사람');
+});
+
+// --- 1.12.1: 내 지역 랭킹 · 일요일 경기 ---
+test('내 지역 랭킹은 참여를 켠 사람이 그 지역 팀에서 남긴 기록만 센다',()=>{
+  const f=intraFixture();attendAll(f);
+  command(f.s,A,{type:'squads',teamId:f.a,gameId:f.gameId,assign:{[f.p1.id]:0}});
+  command(f.s,A,{type:'matchRecord',teamId:f.a,gameId:f.gameId,values:{[f.p1.id]:{goals:2,assists:0}},extra:[0,0]});
+  command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:true});
+  assert.equal(nationalRanking(f.s,'x',Date.now(),'서울').year.goals.length,1);
+  assert.equal(nationalRanking(f.s,'x',Date.now(),'부산').year.goals.length,0,'다른 지역 팀 기록은 안 센다');
+  const v=visibleState(f.s,'p1',f.a);
+  assert.equal(v.myRegion,'서울');assert.equal(v.regional.year.goals[0].me,true);
+  // 켜지 않은 사람은 지역 랭킹에도 없다
+  command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:false});
+  assert.equal(visibleState(f.s,'p1',f.a).regional.year.goals.length,0);
+});
+
+test('일요일 오전 경기는 그날 밤 "이번 주" 랭킹에 들어간다(주는 월~일)',()=>{
+  const KST=h=>Date.parse('2026-09-27T00:00:00+09:00')+h*3600e3;// 일요일
+  const f=fixture();const p=addPlayer(f.s,f.a,{id:'s1',name:'일요선수'},KST(-24*20));
+  const {gameId}=command(f.s,A,{type:'createGame',teamId:f.a,kind:'intra',squads:2,start:iso(KST(8)),end:iso(KST(10)),venue:'v',address:'서울'},KST(-24));
+  const z=sideOf(f.s,gameId,f.a),g=f.s.games.find(x=>x.id===gameId);
+  command(f.s,A,{type:'completeGame',teamId:f.a,gameId},KST(11));
+  command(f.s,A,{type:'attendance',teamId:f.a,gameId,values:Object.fromEntries(rosterFor(f.s,z,g).map(x=>[x.id,true]))},KST(11));
+  command(f.s,A,{type:'squads',teamId:f.a,gameId,assign:{[p.id]:0}},KST(11));
+  command(f.s,A,{type:'matchRecord',teamId:f.a,gameId,values:{[p.id]:{goals:1,assists:0}},extra:[0,0]},KST(11));
+  const {from,to}=periodRange('week',KST(21.5));
+  const row=summaries(visibleState(f.s,A.id,f.a),from,to).players.find(x=>x.id===p.id);
+  assert.equal(row.goals,1);assert.equal(row.attend,1);
+  // 다음 날(월)이 되면 새 주라 빠진다
+  const next=periodRange('week',KST(24.5));
+  assert.equal(summaries(visibleState(f.s,A.id,f.a),next.from,next.to).players.find(x=>x.id===p.id).goals,0);
+});
+
+test('출석 확정은 MVP 투표 알림을 몇 명에게 보냈는지 돌려준다(본인 제외)',()=>{
+  const f=intraFixture();const z=sideOf(f.s,f.gameId,f.a),g=f.s.games.find(x=>x.id===f.gameId);
+  command(f.s,A,{type:'completeGame',teamId:f.a,gameId:f.gameId});
+  const out=command(f.s,A,{type:'attendance',teamId:f.a,gameId:f.gameId,values:Object.fromEntries(rosterFor(f.s,z,g).map(x=>[x.id,true]))});
+  assert.equal(out.mvpNotified,3,'주장 빼고 출석한 3명');
+  // 정정(다시 확정)할 때는 투표가 이미 열려 있어 새 알림이 없다
+  const again=command(f.s,A,{type:'attendance',teamId:f.a,gameId:f.gameId,values:Object.fromEntries(rosterFor(f.s,z,g).map(x=>[x.id,true]))});
+  assert.equal(again.mvpNotified,undefined);
+});
+
+// --- 축구 소식(B안): 네이버 응답 → 제목·언론사·시간·링크만 ---
+test('네이버 뉴스 응답은 태그·기호를 정리하고, 원문 주소·언론사·시간만 남긴다',()=>{
+  const now=Date.parse('2026-09-27T12:30:00Z');
+  const items=news.parseNaverNews({items:[
+    {title:'<b>K리그1</b> &quot;한 경기&quot; &amp; 순위',originallink:'https://sports.khan.co.kr/a/1',link:'https://n.news.naver.com/1',description:'본문 요약',pubDate:'Sun, 27 Sep 2026 21:18:00 +0900'},
+    {title:'원문 없음',originallink:'',link:'https://n.news.naver.com/2',description:'',pubDate:'Sat, 26 Sep 2026 21:00:00 +0900'},
+    {title:'모르는 곳',originallink:'https://www.unknown-news.kr/3',link:'',description:'',pubDate:'Sun, 27 Sep 2026 20:00:00 +0900'},
+    {title:'<b>K리그1</b> &quot;한 경기&quot; &amp; 순위',originallink:'https://other.kr/dup',link:'',description:'',pubDate:'Sun, 27 Sep 2026 21:00:00 +0900'},
+    {title:'나쁜 주소',originallink:'javascript:alert(1)',link:'',description:'',pubDate:'Sun, 27 Sep 2026 21:00:00 +0900'},
+    {title:'&lt;script&gt;',originallink:'https://x.kr/5',link:'',description:'',pubDate:'시간 아님'},
+  ]});
+  assert.deepEqual(items.map(x=>x.title),['K리그1 "한 경기" & 순위','모르는 곳','원문 없음'],'같은 제목·잘못된 주소·시간 없는 글은 뺀다');
+  assert.equal(items[0].url,'https://sports.khan.co.kr/a/1');assert.equal(items[0].press,'스포츠경향');
+  assert.equal(items[1].press,'unknown-news.kr','모르는 언론사는 주소 그대로');
+  assert.equal(items[2].press,'네이버 뉴스');
+  assert.ok(!('description' in items[0]),'본문 요약은 쓰지 않는다');
+  assert.equal(news.agoText(items[0].at,now),'12분 전');
+  assert.equal(news.agoText(items[2].at,now),'1일 전');
+  assert.equal(news.cleanTitle('&lt;b&gt;굵게&lt;/b&gt;'),'<b>굵게</b>','되돌린 기호는 글자로 남는다(화면에 글자로만 넣음)');
+  assert.deepEqual(news.parseNaverNews(null),[]);
+});
+
+test('좋아하는 팀은 목록에 있는 것만, 중복 없이, 최대 5개까지 본인 것만 저장된다',()=>{
+  const f=fixture();
+  command(f.s,A,{type:'setNewsTeams',teams:['mu','jb','mu','없는팀','<script>']});
+  assert.deepEqual(visibleState(f.s,A.id).newsTeams,['mu','jb']);
+  assert.deepEqual(visibleState(f.s,B.id).newsTeams,[],'다른 사람에게는 섞이지 않는다');
+  assert.throws(()=>command(f.s,A,{type:'setNewsTeams',teams:['mu','jb','tot','liv','ars','che']}),/5개까지/);
+  command(f.s,A,{type:'setNewsTeams',teams:[]});
+  assert.deepEqual(visibleState(f.s,A.id).newsTeams,[]);
+});
+
+test('축구 소식 서버: 키 없으면 준비 중, 30분 캐시, 네이버 실패 시 직전 결과 또는 오류',async()=>{
+  const env=globalThis.__teamkickTestEnv;const saved={id:env.NAVER_CLIENT_ID,secret:env.NAVER_CLIENT_SECRET,hid:env.NAVER_API_HUB_KEY_ID,hkey:env.NAVER_API_HUB_KEY};const realFetch=globalThis.fetch;
+  newsServer.clearNewsCache();
+  try{
+    delete env.NAVER_CLIENT_ID;delete env.NAVER_CLIENT_SECRET;delete env.NAVER_API_HUB_KEY_ID;delete env.NAVER_API_HUB_KEY;
+    await assert.rejects(newsServer.fetchNews('world'),e=>e.status===503&&/준비 중/.test(e.message));
+    await assert.rejects(newsServer.fetchNews('없는것'),e=>e.status===400);
+    env.NAVER_CLIENT_ID='id';env.NAVER_CLIENT_SECRET='secret';
+    let calls=0,sent=null,fail=false;
+    globalThis.fetch=async(url,init)=>{calls++;sent={url:String(url),headers:init.headers};if(fail)return new Response('{}',{status:500});
+      return Response.json({items:[{title:'<b>맨유</b> 소식',originallink:'https://www.yna.co.kr/1',link:'',pubDate:'Sun, 27 Sep 2026 21:00:00 +0900'}]})};
+    const t0=Date.parse('2026-09-27T12:00:00Z');
+    const a=await newsServer.fetchNews('mu',t0);
+    assert.equal(a.items[0].title,'맨유 소식');assert.equal(a.items[0].press,'연합뉴스');
+    assert.ok(sent.url.includes('query='+encodeURIComponent('맨유')),'검색어만 보낸다');
+    assert.equal(sent.headers['X-Naver-Client-Id'],'id');
+    await newsServer.fetchNews('mu',t0+29*60e3);assert.equal(calls,1,'30분 안에는 다시 부르지 않는다');
+    fail=true;
+    const stale=await newsServer.fetchNews('mu',t0+31*60e3);assert.equal(stale.stale,true,'실패하면 직전 결과를 오래된 것으로 표시');assert.equal(calls,2);
+    await assert.rejects(newsServer.fetchNews('jb',t0),e=>e.status===503,'직전 결과가 없으면 오류(가짜 기사로 채우지 않음)');
+    // NAVER API HUB 키가 있으면 새 주소·헤더로 부른다(2026-07-31 이후 새 신청은 HUB 만 됨)
+    fail=false;env.NAVER_API_HUB_KEY_ID='hid';env.NAVER_API_HUB_KEY='hkey';newsServer.clearNewsCache();
+    assert.equal(newsServer.newsSource(),'hub');
+    await newsServer.fetchNews('kor',t0);
+    assert.ok(sent.url.startsWith('https://naverapihub.apigw.ntruss.com/search/v1/news?'),sent.url);
+    assert.equal(sent.headers['X-NCP-APIGW-API-KEY-ID'],'hid');assert.equal(sent.headers['X-NCP-APIGW-API-KEY'],'hkey');
+    assert.equal(sent.headers['X-Naver-Client-Id'],undefined);
+  }finally{
+    globalThis.fetch=realFetch;newsServer.clearNewsCache();
+    if(saved.id===undefined)delete env.NAVER_CLIENT_ID;else env.NAVER_CLIENT_ID=saved.id;
+    if(saved.secret===undefined)delete env.NAVER_CLIENT_SECRET;else env.NAVER_CLIENT_SECRET=saved.secret;
+    if(saved.hid===undefined)delete env.NAVER_API_HUB_KEY_ID;else env.NAVER_API_HUB_KEY_ID=saved.hid;
+    if(saved.hkey===undefined)delete env.NAVER_API_HUB_KEY;else env.NAVER_API_HUB_KEY=saved.hkey;
+  }
+});
+
+test('오늘의 키워드는 불러온 제목에서 두 번 이상 나온 이름만, 많은 순으로 보여준다',()=>{
+  const titles=['손흥민 멀티골','토트넘 손흥민 인터뷰','맨유 이적 소식','맨유 감독 발표','리버풀 승리','맨유 부상자 복귀'];
+  assert.deepEqual(news.todayKeywords(titles),['맨유','손흥민']);
+  assert.equal(news.teamInTitle('레알 마드리드, 결승 진출').id,'rma');
+  assert.equal(news.teamInTitle('오늘의 축구 소식'),undefined);
+  // 모든 소식 종류는 검색어가 있다
+  for(const t of [...news.NEWS_BASE,...news.NEWS_TEAMS])assert.ok(t.query&&t.id&&t.name,t.id);
 });

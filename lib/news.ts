@@ -82,21 +82,36 @@ export function pressOf(url:string){
 // "대표팀", "리버풀", "나폴리"처럼 다른 종목·도시 기사가 섞이는 검색어가 있어 축구 기사만 남긴다.
 const FOOTBALL=/축구|풋살|K리그|EPL|프리미어리그|라리가|분데스리가|세리에|리그1|챔피언스리그|챔스|유로파|월드컵|아시안컵|아시안게임|FIFA|UEFA|AFC|골키퍼|멀티골|결승골|동점골|선제골|득점|어시스트|해트트릭|페널티|이적|감독|킥오프|구단|FC|유나이티드|A매치|국가대표|국대|대표팀/;
 const OTHER_SPORT=/야구|KBO|MLB|배구|V리그|농구|KBL|NBA|WKBL|핸드볼|하키|골프|LPGA|KLPGA|PGA|e스포츠|이스포츠|롤드컵|테니스|복싱|UFC|수영|육상|펜싱|양궁|탁구|배드민턴|피겨|쇼트트랙|씨름|당구|볼링/;
-export function isFootball(title:string,desc=""){
+// 예능·가요 기사: "전현무 해외축구 직관" 같은 연예 기사가 '축구'라는 말 때문에 섞였다.
+const ENTERTAIN=/예능|방송|출연|컴백|앨범|아이돌|걸그룹|보이그룹|드라마|배우|가수|뮤직|음원|콘서트|팬미팅|OST|시청률|MC|유튜버|웹툰|열애|결혼|화보|뮤지컬|팬덤|멤버|신곡|무대/;
+// 축구 기사임이 분명한 말(연예 기사에도 '축구'는 나오므로 따로 본다).
+const STRONG=/K리그|EPL|프리미어리그|라리가|분데스리가|세리에|챔피언스리그|챔스|유로파|월드컵|아시안컵|골키퍼|멀티골|결승골|동점골|선제골|득점|어시스트|해트트릭|페널티|이적|감독|킥오프|A매치|국가대표|대표팀|선발|교체|풀타임/;
+export function isFootball(title:string,desc="",link=""){
  const text=title+" "+desc;
+ if(/entertain\.naver\.com/.test(link))return false;
  if(OTHER_SPORT.test(title)&&!/축구|풋살/.test(title))return false;
+ if(ENTERTAIN.test(title)&&!STRONG.test(title))return false;
  return FOOTBALL.test(text);
 }
 // 제목 위에 붙이는 작은 키워드 태그: 팀·선수·대회 이름이 제목에 나오면 나온 순서대로 최대 3개.
 export const NEWS_TAGS=["대표팀","국대","아시안게임","아시안컵","월드컵","올림픽","챔스","유로파","이적시장",
  "벨링엄","홀란","음바페","살라","케인","비니시우스","야말","메시","호날두","네이마르","더브라위너","외데고르","사카","포든","로드리","레반도프스키","래시포드","브루노"];
+// "홍명보호", "모레노호"처럼 감독 이름 + 호 는 대표팀을 부르는 말이다(선호·보호 같은 낱말과 두 글자 이름은 뺀다).
+const HO_STOP=new Set(["선호","보호","기호","구호","애호","번호","신호","간호","옹호","수호","환호","국호","칭호","암호","부호","호호","양호","우호"]);
+function nationalTeamWord(t:string){
+ if(/국가대표|태극전사|A매치|대표팀/.test(t))return true;
+ for(const m of t.matchAll(/(?:^|[\s'"‘“(\[])([가-힣]{2,4}호)(?=[\s,.…'"’”)!?\]]|$)/g))if(!HO_STOP.has(m[1])&&m[1].length>=3)return true;
+ return false;
+}
 export function tagsFor(title:string,limit=3){
  const t=title.replace(/챔피언스리그/g,"챔스");
  const names=[...NEWS_TEAMS.filter(x=>x.id!=="kor").map(x=>x.name),...NEWS_TAGS];
  const hits=[...new Set(names)].map(n=>({n,i:t.indexOf(n)})).filter(x=>x.i>=0);
  // 긴 이름이 짧은 이름을 품으면(예: "레알 마드리드" ⊃ …) 짧은 쪽은 뺀다.
  const keep=hits.filter(a=>!hits.some(b=>b!==a&&b.n.length>a.n.length&&b.n.includes(a.n)));
- return keep.sort((a,b)=>a.i-b.i).slice(0,limit).map(x=>x.n);
+ const out=keep.sort((a,b)=>a.i-b.i).map(x=>x.n);
+ if(!out.includes("대표팀")&&nationalTeamWord(t))out.push("대표팀");
+ return out.slice(0,limit);
 }
 export function parseNaverNews(body:unknown):NewsItem[]{
  const items=Array.isArray((body as {items?:unknown})?.items)?(body as {items:Record<string,unknown>[]}).items:[];
@@ -105,7 +120,7 @@ export function parseNaverNews(body:unknown):NewsItem[]{
   const url=[x.originallink,x.link].map(v=>String(v??"")).find(v=>/^https?:\/\//.test(v));const title=cleanTitle(String(x.title??""));const t=Date.parse(String(x.pubDate??""));
   if(!url||!title||!Number.isFinite(t)||seen.has(title))continue;
   // 축구 기사만: 요약(description)은 화면에 쓰지 않지만, 축구 기사인지 가려내는 데만 쓴다.
-  if(!isFootball(title,cleanTitle(String(x.description??""))))continue;
+  if(!isFootball(title,cleanTitle(String(x.description??"")),String(x.link??"")))continue;
   seen.add(title);
   out.push({title,url,press:pressOf(url),at:new Date(t).toISOString()});
  }

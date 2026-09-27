@@ -48,8 +48,9 @@ export function airRegion(region:string,lng?:number|null){
  return r;
 }
 // informGrade 예: "서울 : 보통,제주 : 좋음,경기북부 : 나쁨"
-export function pickAir(items:{informCode?:string;informData?:string;informGrade?:string}[],code:"PM10"|"PM25",dateDash:string,region:string){
- const row=items.find(x=>x.informCode===code&&x.informData===dateDash);if(!row?.informGrade)return null;
+export function pickAir(items:{informCode?:string;informData?:string;informGrade?:string;dataTime?:string}[],code:"PM10"|"PM25",dateDash:string,region:string){
+ // 같은 날 예보가 여러 번 발표되면 가장 최근 발표(dataTime 예: "2026-09-27 23시 발표")를 쓴다.
+ const row=items.filter(x=>x.informCode===code&&x.informData===dateDash&&x.informGrade).sort((a,b)=>String(b.dataTime??"").localeCompare(String(a.dataTime??""),"ko",{numeric:true}))[0];if(!row?.informGrade)return null;
  for(const part of row.informGrade.split(",")){const [name,grade]=part.split(":").map(x=>x.trim());if(name===region&&grade)return grade}
  return null;
 }

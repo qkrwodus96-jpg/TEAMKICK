@@ -3331,3 +3331,28 @@ test('미세먼지: 활용신청 안 된 키·예보 없는 날은 이유를 알
     w=await weatherServer.gameWeather({...g,region:'제주'},now);assert.equal(w.air,null);assert.equal(w.airNote,'none','그 권역 예보가 없으면 none');
   }finally{globalThis.fetch=realFetch;weatherServer.clearWeatherCache();if(saved===undefined)delete env.DATA_GO_KR_KEY;else env.DATA_GO_KR_KEY=saved}
 });
+
+test('연예 기사는 빼고, 감독 이름+호(모레노호)는 대표팀 태그, 대기질은 어제 발표도 본다',async()=>{
+  assert.equal(news.isFootball('전현무, 해외축구 직관 인증…인피니트 멤버와 여행','해외축구 경기장'),false,'예능·가요');
+  assert.equal(news.isFootball('해외축구 소식','축구','https://m.entertain.naver.com/article/1'),false,'연예 섹션 주소');
+  assert.equal(news.isFootball('손흥민, 결승골로 팀 승리 이끌어',''),true);
+  assert.ok(news.tagsFor('남미 강호 우루과이 정조준 모레노호').includes('대표팀'),'감독 이름+호');
+  assert.ok(news.tagsFor('홍명보호, 10월 A매치 명단').includes('대표팀'));
+  assert.ok(!news.tagsFor('팬 선호도 1위는 누구').includes('대표팀'),'선호 같은 낱말은 아님');
+  // 같은 날 예보가 여러 번이면 최근 발표
+  const rows=[{informCode:'PM10',informData:'2026-09-29',informGrade:'서울 : 나쁨',dataTime:'2026-09-27 17시 발표'},{informCode:'PM10',informData:'2026-09-29',informGrade:'서울 : 보통',dataTime:'2026-09-27 23시 발표'}];
+  assert.equal(weather.pickAir(rows,'PM10','2026-09-29','서울'),'보통');
+  // 새벽(오늘 발표 전)에는 어제 발표로 내일 경기 미세먼지를 보여준다
+  const env=globalThis.__teamkickTestEnv;const saved=env.DATA_GO_KR_KEY;const realFetch=globalThis.fetch;weatherServer.clearWeatherCache();
+  const now=Date.parse('2026-09-28T01:30:00+09:00'),g={lat:37.5665,lng:126.978,region:'서울',start:'2026-09-29T02:00:00.000Z'};// 9/29 11시
+  const item=(category,fcstValue)=>({category,fcstValue,fcstDate:'20260929',fcstTime:'1100'});
+  try{
+    env.DATA_GO_KR_KEY='k';
+    globalThis.fetch=async(url)=>{const u=new URL(String(url));
+      if(u.pathname.includes('ArpltnInforInqireSvc')){const d=u.searchParams.get('searchDate'),code=u.searchParams.get('InformCode');
+        return Response.json({response:{header:{resultCode:'00'},body:{items:d==='2026-09-27'?[{informCode:code,informData:'2026-09-29',informGrade:'서울 : 좋음',dataTime:'2026-09-27 23시 발표'}]:[]}}})}
+      return Response.json({response:{header:{resultCode:'00'},body:{totalCount:4,items:{item:[item('TMP','19'),item('POP','0'),item('PTY','0'),item('SKY','1')]}}}})};
+    const w=await weatherServer.gameWeather(g,now);
+    assert.deepEqual(w.air,{pm10:'좋음',pm25:'좋음'},'어제(27일) 23시 발표로 29일 예보');
+  }finally{globalThis.fetch=realFetch;weatherServer.clearWeatherCache();if(saved===undefined)delete env.DATA_GO_KR_KEY;else env.DATA_GO_KR_KEY=saved}
+});

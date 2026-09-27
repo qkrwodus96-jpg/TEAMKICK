@@ -36,6 +36,7 @@ export function WeatherLine({g,detail=false,onRain}:{g:Game;detail?:boolean;onRa
  return <div className={"wx"+(detail?" wx-detail":"")+(f.rainy?" rainy":"")}>
   <span className="wx-main"><Icon pty={f.pty} sky={f.sky}/><b>{f.label}{f.temp!=null&&" "+f.temp+"°"}</b>{f.pop!=null&&<span>강수 {f.pop}%</span>}{air&&<span>{air}</span>}</span>
   {detail&&f.rainy&&<span className="wx-rain"><Umbrella size={15}/>비 예보가 있어요.{onRain&&<button type="button" className="text-link" onClick={onRain}>우천 공지 쓰기</button>}</span>}
+  {detail&&!w.air&&w.airNote&&<small className="wx-note">미세먼지: {w.airNote==="none"?"대기질 예보는 오늘~모레 경기만 나와요.":w.airNote==="key"?"에어코리아 대기오염정보 활용신청(공공데이터포털)이 필요해요.":w.airNote==="timeout"?"에어코리아 서버가 늦게 응답해서 이번엔 빠졌어요.":"지금은 불러오지 못했어요."}</small>}
   {detail&&<small className="wx-src">날씨: 기상청 · 미세먼지: 한국환경공단 에어코리아 (예보라 바뀔 수 있어요)</small>}
  </div>;
 }

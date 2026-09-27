@@ -26,7 +26,7 @@ export const NEWS_SECTIONS=[
  {id:"mine",name:"내 팀",title:"내 팀 뉴스",sub:"좋아하는 팀 소식만 모아서"},
 ] as const;
 // 오늘의 키워드: 불러온 기사 제목에서 이 이름들이 몇 번 나왔는지 세서 많은 순으로 보여준다(추가 호출 없음).
-export const NEWS_KEYWORDS=["손흥민","이강인","김민재","황희찬","이재성","홍명보","이적","부상","감독","결승","데뷔","복귀","재계약","챔스","EPL","K리그"];
+export const NEWS_KEYWORDS=["홍명보","이적","부상","감독","결승","데뷔","복귀","재계약","EPL","K리그","대표팀","국대","아시안게임","월드컵","챔스","벨링엄","홀란","음바페","살라","케인","야말","메시","호날두"];
 export function todayKeywords(titles:string[],limit=5){
  const names=[...new Set([...NEWS_TEAMS.map(t=>t.name),...NEWS_KEYWORDS])];
  return names.map(k=>({k,n:titles.filter(t=>t.includes(k)).length})).filter(x=>x.n>=2).sort((a,b)=>b.n-a.n||a.k.localeCompare(b.k,"ko")).slice(0,limit).map(x=>x.k);
@@ -79,12 +79,34 @@ export function pressOf(url:string){
  try{const h=new URL(url).hostname;return PRESS[h]??PRESS[h.replace(/^www\./,"")]??PRESS["www."+h]??h.replace(/^www\./,"")}catch{return ""}
 }
 // 원문(언론사) 주소를 우선 쓰고, 없으면 네이버 뉴스 주소. http(s) 가 아니면 버린다.
+// "대표팀", "리버풀", "나폴리"처럼 다른 종목·도시 기사가 섞이는 검색어가 있어 축구 기사만 남긴다.
+const FOOTBALL=/축구|풋살|K리그|EPL|프리미어리그|라리가|분데스리가|세리에|리그1|챔피언스리그|챔스|유로파|월드컵|아시안컵|아시안게임|FIFA|UEFA|AFC|골키퍼|멀티골|결승골|동점골|선제골|득점|어시스트|해트트릭|페널티|이적|감독|킥오프|구단|FC|유나이티드|A매치|국가대표|국대|대표팀/;
+const OTHER_SPORT=/야구|KBO|MLB|배구|V리그|농구|KBL|NBA|WKBL|핸드볼|하키|골프|LPGA|KLPGA|PGA|e스포츠|이스포츠|롤드컵|테니스|복싱|UFC|수영|육상|펜싱|양궁|탁구|배드민턴|피겨|쇼트트랙|씨름|당구|볼링/;
+export function isFootball(title:string,desc=""){
+ const text=title+" "+desc;
+ if(OTHER_SPORT.test(title)&&!/축구|풋살/.test(title))return false;
+ return FOOTBALL.test(text);
+}
+// 제목 위에 붙이는 작은 키워드 태그: 팀·선수·대회 이름이 제목에 나오면 나온 순서대로 최대 3개.
+export const NEWS_TAGS=["대표팀","국대","아시안게임","아시안컵","월드컵","올림픽","챔스","유로파","이적시장",
+ "벨링엄","홀란","음바페","살라","케인","비니시우스","야말","메시","호날두","네이마르","더브라위너","외데고르","사카","포든","로드리","레반도프스키","래시포드","브루노"];
+export function tagsFor(title:string,limit=3){
+ const t=title.replace(/챔피언스리그/g,"챔스");
+ const names=[...NEWS_TEAMS.filter(x=>x.id!=="kor").map(x=>x.name),...NEWS_TAGS];
+ const hits=[...new Set(names)].map(n=>({n,i:t.indexOf(n)})).filter(x=>x.i>=0);
+ // 긴 이름이 짧은 이름을 품으면(예: "레알 마드리드" ⊃ …) 짧은 쪽은 뺀다.
+ const keep=hits.filter(a=>!hits.some(b=>b!==a&&b.n.length>a.n.length&&b.n.includes(a.n)));
+ return keep.sort((a,b)=>a.i-b.i).slice(0,limit).map(x=>x.n);
+}
 export function parseNaverNews(body:unknown):NewsItem[]{
  const items=Array.isArray((body as {items?:unknown})?.items)?(body as {items:Record<string,unknown>[]}).items:[];
  const out:NewsItem[]=[];const seen=new Set<string>();
  for(const x of items){
   const url=[x.originallink,x.link].map(v=>String(v??"")).find(v=>/^https?:\/\//.test(v));const title=cleanTitle(String(x.title??""));const t=Date.parse(String(x.pubDate??""));
-  if(!url||!title||!Number.isFinite(t)||seen.has(title))continue;seen.add(title);
+  if(!url||!title||!Number.isFinite(t)||seen.has(title))continue;
+  // 축구 기사만: 요약(description)은 화면에 쓰지 않지만, 축구 기사인지 가려내는 데만 쓴다.
+  if(!isFootball(title,cleanTitle(String(x.description??""))))continue;
+  seen.add(title);
   out.push({title,url,press:pressOf(url),at:new Date(t).toISOString()});
  }
  return out.sort((a,b)=>b.at.localeCompare(a.at));

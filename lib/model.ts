@@ -624,6 +624,15 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  s.audit.push({id:id(),actor:a.id,teamId:t||null,type,at:stamp,gameId:c.gameId??null,reason:c.reason??null});return output;
 }
 // 캘린더 파일처럼 경기 하나만 따로 볼 때: 그 경기 팀의 활동 중인 팀원이거나 승인된 용병만.
+// 다른 지역 랭킹도 볼 수 있게: 참여를 켠 선수가 뛰는(활동 중인) 팀이 있는 지역만 계산한다.
+export function regionRankings(s:State,userId:string,now=Date.now()){
+ const open=new Set(s.users.filter(u=>u.rankPublic===true).map(u=>u.id as string));
+ const regions=new Set<string>();
+ for(const m of s.members)if(m.userId&&open.has(m.userId)&&m.status==="active"){const t=teamOf(s,m.teamId);if(t?.status==="active"&&t.region)regions.add(String(t.region))}
+ const out:Record<string,ReturnType<typeof nationalRanking>>={};
+ for(const r of REGIONS)if(regions.has(r))out[r]=nationalRanking(s,userId,now,r);
+ return out;
+}
 export function canSeeGame(s:State,userId:string,gameId:string){
  const g=s.games.find(x=>x.id===gameId);if(!g||g.status==="cancelled")return null;
  const member=s.members.some(m=>m.userId===userId&&m.status==="active"&&[g.home,g.away].includes(m.teamId)&&teamOf(s,m.teamId)?.status==="active");
@@ -642,7 +651,7 @@ export function visibleState(s:State,userId:string,selected?:string){
  return {teams:publicTeams,members,mine:my,ownTeams,teamId:tid??"",role:team?.role??"",isOwner:owner,retired:owner?retiredPeople(s):[],
   myTotals:myTotals(s,userId),
   rankPublic:s.users.find(x=>x.id===userId)?.rankPublic===true,national:nationalRanking(s,userId),
-  newsTeams:cleanNewsTeams(s.users.find(x=>x.id===userId)?.newsTeams),myRegion:String(teamOf(s,tid??"")?.region??""),regional:teamOf(s,tid??"")?.region?nationalRanking(s,userId,Date.now(),String(teamOf(s,tid??"")!.region)):null,
+  newsTeams:cleanNewsTeams(s.users.find(x=>x.id===userId)?.newsTeams),myRegion:String(teamOf(s,tid??"")?.region??""),regional:teamOf(s,tid??"")?.region?nationalRanking(s,userId,Date.now(),String(teamOf(s,tid??"")!.region)):null,regions:regionRankings(s,userId),
   // 문의는 본인 것만 본다. 운영자는 답변해야 하므로 전부 본다.
   inquiries:s.inquiries.filter(x=>owner||x.userId===userId).sort((x,y)=>String(y.at).localeCompare(String(x.at))).map(x=>({...x,mine:x.userId===userId})),
   announcements:[...s.announcements].sort((x,y)=>String(y.at).localeCompare(String(x.at))),

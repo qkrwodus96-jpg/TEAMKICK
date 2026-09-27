@@ -3153,12 +3153,16 @@ test('네이버 뉴스 응답은 태그·기호를 정리하고, 원문 주소·
   assert.deepEqual(news.parseNaverNews(null),[]);
 });
 
-test('좋아하는 팀은 목록에 있는 것만, 중복 없이, 최대 5개까지 본인 것만 저장된다',()=>{
+test('좋아하는 팀은 목록에 있거나 직접 추가한 검색어만, 중복 없이, 최대 8개까지 본인 것만 저장된다',()=>{
   const f=fixture();
   command(f.s,A,{type:'setNewsTeams',teams:['mu','jb','mu','없는팀','<script>']});
   assert.deepEqual(visibleState(f.s,A.id).newsTeams,['mu','jb']);
   assert.deepEqual(visibleState(f.s,B.id).newsTeams,[],'다른 사람에게는 섞이지 않는다');
-  assert.throws(()=>command(f.s,A,{type:'setNewsTeams',teams:['mu','jb','tot','liv','ars','che']}),/5개까지/);
+  assert.throws(()=>command(f.s,A,{type:'setNewsTeams',teams:['mu','jb','tot','liv','ars','che','bar','rma','fcb']}),/8개까지/);
+  // 목록에 없는 팀·선수는 검색어로 직접 추가(2~15자, 글자·숫자만)
+  command(f.s,A,{type:'setNewsTeams',teams:['q:울버햄튼 원더러스','q:<b>x</b>','q:a','q:  황인범  ','mu']});
+  assert.deepEqual(visibleState(f.s,A.id).newsTeams,['q:울버햄튼 원더러스','q:황인범','mu']);
+  assert.equal(news.newsTopic('q:황인범').query,'황인범');assert.equal(news.newsTopic('q:<script>'),undefined);
   command(f.s,A,{type:'setNewsTeams',teams:[]});
   assert.deepEqual(visibleState(f.s,A.id).newsTeams,[]);
 });
@@ -3283,4 +3287,15 @@ test('캘린더 파일은 그 경기 팀원과 승인된 용병만 받는다',()
   command(f.s,A,{type:'approveGuest',teamId:f.a,gameId:f.gameId,guestId:gid});
   assert.ok(canSeeGame(f.s,G1.id,f.gameId),'승인된 용병');
   assert.equal(gameTitle(f.s,z),'팀 0 vs 외부 FC');
+});
+
+test('다른 지역 랭킹: 참여한 선수가 있는 지역만, 그 지역 팀 기록으로',()=>{
+  const f=intraFixture();attendAll(f);
+  command(f.s,A,{type:'squads',teamId:f.a,gameId:f.gameId,assign:{[f.p1.id]:0}});
+  command(f.s,A,{type:'matchRecord',teamId:f.a,gameId:f.gameId,values:{[f.p1.id]:{goals:2,assists:0}},extra:[0,0]});
+  assert.deepEqual(Object.keys(visibleState(f.s,'x').regions),[],'아무도 참여하지 않으면 빈 목록');
+  command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:true});
+  const v=visibleState(f.s,B.id,f.b);
+  assert.deepEqual(Object.keys(v.regions),['서울']);
+  assert.equal(v.regions['서울'].year.goals[0].name,'선수1','다른 팀 사람도 그 지역 랭킹을 볼 수 있다');
 });

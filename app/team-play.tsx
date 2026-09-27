@@ -123,21 +123,24 @@ export function Rankings({v,busy,run,onOpen}:{v:Row;busy:boolean;run:(c:Record<s
  const [period,setPeriod]=useState<string>("month");
  const [key,setKey]=useState<string>("goals");
  const [more,setMore]=useState(false);
+ const [area,setArea]=useState<string>(String(v.myRegion??""));
+ const areas=[...new Set([String(v.myRegion??""),...Object.keys(v.regions??{})].filter(Boolean))];
  const tab=RANK_TABS.find(x=>x.key===key)!;
  const rows:Row[]=useMemo(()=>{
   if(scope==="national")return (v.national?.[period]?.[key]??[]) as Row[];
-  if(scope==="region")return (v.regional?.[period]?.[key]??[]) as Row[];
+  if(scope==="region")return ((area===v.myRegion?v.regional:v.regions?.[area])?.[period]?.[key]??[]) as Row[];
   const {from,to}=periodRange(period);
   const players=summaries({...v,games:v.games??[],members:v.members??[],sides:v.sides??[]},from,to).players.map((p:Row)=>({...p,me:p.userId===v.user?.id}));
   return rankRows(players,key) as Row[];
- },[v,scope,period,key]);
+ },[v,scope,period,key,area]);
  const podium=rows.slice(0,3),rest=rows.slice(3),shown=more?rest:rest.filter(r=>rows.indexOf(r)<9);
  const label=(r:Row)=>r.value+tab.unit;
  const who=(r:Row)=>scope!=="team"?r.team:[backNo(r.number),r.position].filter(Boolean).join(" · ");
  const open=(r:Row)=>{if(scope==="team")onOpen(r)};
  return <div className="rankings">
-  <div className="panel-title"><h2>랭킹</h2><div className="seg" role="tablist" aria-label="랭킹 범위">{[{k:"team",t:"팀 내"},...(v.myRegion?[{k:"region",t:"내 지역"}]:[]),{k:"national",t:"전국"}].map(x=><button key={x.k} role="tab" aria-selected={scope===x.k} className={scope===x.k?"on":""} onClick={()=>{setScope(x.k as "team"|"region"|"national");setMore(false)}}>{x.t}</button>)}</div></div>
+  <div className="panel-title"><h2>랭킹</h2><div className="seg" role="tablist" aria-label="랭킹 범위">{[{k:"team",t:"팀 내"},...(v.myRegion?[{k:"region",t:"지역"}]:[]),{k:"national",t:"전국"}].map(x=><button key={x.k} role="tab" aria-selected={scope===x.k} className={scope===x.k?"on":""} onClick={()=>{setScope(x.k as "team"|"region"|"national");setMore(false)}}>{x.t}</button>)}</div></div>
   <div className="chip-row rank-periods">{PERIODS.map(x=><button key={x.key} className={"chip-mini"+(period===x.key?" on":"")} onClick={()=>{setPeriod(x.key);setMore(false)}}>{x.label}</button>)}<span className="rank-range">{rangeText(period)}</span></div>
+  {scope==="region"&&areas.length>1&&<div className="chip-row rank-areas" aria-label="지역 고르기">{areas.map(r=><button key={r} className={"chip-mini"+(area===r?" on":"")} onClick={()=>{setArea(r);setMore(false)}}>{r}{r===v.myRegion&&" (우리 팀)"}</button>)}</div>}
   <div className="rank-keys" role="tablist" aria-label="랭킹 항목">{RANK_TABS.map(x=><button key={x.key} role="tab" aria-selected={key===x.key} className={key===x.key?"on":""} onClick={()=>{setKey(x.key);setMore(false)}}><x.icon size={15}/>{x.label}왕</button>)}</div>
   {scope!=="team"&&<div className="rank-optin">{v.rankPublic?<p className="small muted">지역·전국 랭킹에 참여 중이에요. <button className="text-link" disabled={busy} onClick={()=>run({type:"setRankPublic",on:false})}>빠지기</button></p>:<div className="task-box"><strong>지역·전국 랭킹은 참여를 켠 선수만 보여요</strong><p className="small muted">켜면 내 선수 이름·팀 이름·기록 숫자가 다른 팀 이용자에게도 보여요. 언제든 끌 수 있어요.</p><button className="btn btn-green" disabled={busy} onClick={()=>run({type:"setRankPublic",on:true})}>지역·전국 랭킹 참여하기</button></div>}</div>}
   {rows.length?<>
@@ -147,7 +150,7 @@ export function Rankings({v,busy,run,onOpen}:{v:Row;busy:boolean;run:(c:Record<s
    {rest.length>shown.length&&<button className="btn rank-more" onClick={()=>setMore(true)}>더 보기 ({rest.length-shown.length}명)</button>}
    {more&&rest.length>6&&<button className="text-link rank-more" onClick={()=>setMore(false)}>접기</button>}
   </>:<p className="small muted rank-empty">{scope!=="team"&&!v.rankPublic?"아직 참여한 선수가 없거나 이 기간 기록이 없어요.":"이 기간에 "+tab.label+" 기록이 없어요."}</p>}
-  <p className="data-note">{scope==="team"?"우리 팀 기록 기준(자체전 포함). 골·도움은 결과가 확정된 경기, 출석은 출석 확정, MVP는 마감된 투표만 세요.":scope==="region"?"내 지역은 우리 팀 활동 지역("+v.myRegion+") 기준이에요. 참여를 켠 선수가 "+v.myRegion+" 팀에서 남긴 기록만 합쳐요. 상위 50명까지 보여요.":"참여를 켠 선수의 모든 팀 기록을 합쳐요. 활동 중인 팀의 기록만 세고, 상위 50명까지 보여요."} 이번 주는 월요일부터 일요일까지예요.</p>
+  <p className="data-note">{scope==="team"?"우리 팀 기록 기준(자체전 포함). 골·도움은 결과가 확정된 경기, 출석은 출석 확정, MVP는 마감된 투표만 세요.":scope==="region"?"참여를 켠 선수가 "+area+" 지역 팀에서 남긴 기록만 합쳐요. 참여한 선수가 있는 지역만 고를 수 있고, 상위 50명까지 보여요.":"참여를 켠 선수의 모든 팀 기록을 합쳐요. 활동 중인 팀의 기록만 세고, 상위 50명까지 보여요."} 이번 주는 월요일부터 일요일까지예요.</p>
  </div>;
 }
 

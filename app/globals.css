@@ -240,3 +240,10 @@ html[data-splash="skip"] #teamkick-splash{display:none}
 .wx-rain{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;color:#2f5f9e;font-weight:600}.wx-rain .text-link{color:#2f6fd6;font-weight:700}
 .wx-src{font-size:11.5px;color:#8a978f}
 .wx-note{font-size:12.5px;color:#8a978f}
+.nb-search{display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:10px;padding:0 12px;background:#fff;font-weight:400}
+.nb-search svg{color:#8a978f;flex:0 0 auto}.nb-search input{border:0!important;padding:11px 0!important;margin:0!important;outline:none}
+.nb-picked{display:flex;flex-wrap:wrap;gap:6px}
+.nb-pick{display:inline-flex;align-items:center;gap:5px;border:1px solid #cfe8d8;background:#f1faf4;color:#1f5f3d;border-radius:999px;padding:5px 10px;font-size:13px;font-weight:700}
+.nb-custom{width:100%;margin-top:4px;border-style:dashed;color:#12814d}
+.nb-more{justify-self:start;margin-top:2px}
+.rank-areas{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}

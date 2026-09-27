@@ -3,8 +3,8 @@
 // 제목·언론사·시간만 보여주고 누르면 언론사 사이트(새 창)로 간다. 기사 사진·엠블럼은 쓰지 않는다.
 import {useEffect,useState} from "react";
 import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from "@/components/ui/dialog";
-import {ExternalLink,Heart,Plus,RotateCw,Check,ChevronDown,Flame} from "lucide-react";
-import {NEWS_BASE,NEWS_TEAMS,NEWS_TEAMS_MAX,NEWS_SECTIONS,newsTopic,agoText,todayKeywords,teamInTitle,type NewsItem,type NewsTopic} from "@/lib/news";
+import {ExternalLink,Heart,Plus,RotateCw,Check,ChevronDown,Flame,Search,X} from "lucide-react";
+import {NEWS_BASE,NEWS_TEAMS,NEWS_TEAMS_MAX,NEWS_SECTIONS,CUSTOM_PREFIX,cleanCustom,newsTopic,agoText,todayKeywords,teamInTitle,type NewsItem,type NewsTopic} from "@/lib/news";
 
 type Feed={items:NewsItem[];at:string;stale?:boolean};
 // 같은 화면 안에서 칩을 오가도 다시 부르지 않게 5분 동안 들고 있는다(서버는 30분 캐시).
@@ -81,11 +81,26 @@ export function NewsScreen({v,demo,loggedIn,save}:{v:Record<string,unknown>;demo
 
 function TeamPicker({initial,onClose,onSave}:{initial:string[];onClose:()=>void;onSave:(teams:string[])=>Promise<void>}){
  const [sel,setSel]=useState<string[]>(initial);const [busy,setBusy]=useState(false);const [err,setErr]=useState("");
+ const [q,setQ]=useState("");const [open,setOpen]=useState<string[]>([]);
  const groups=[...new Set(NEWS_TEAMS.map(t=>t.group))];
  const toggle=(id:string)=>setSel(s=>s.includes(id)?s.filter(x=>x!==id):s.length<NEWS_TEAMS_MAX?[...s,id]:s);
- return <Dialog open onOpenChange={o=>!o&&onClose()}><DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto rounded-2xl"><DialogHeader><DialogTitle>좋아하는 팀 고르기</DialogTitle><DialogDescription>여러 팀을 고를 수 있어요(최대 {NEWS_TEAMS_MAX}개). 고른 팀은 소식 칩에 더해져요.</DialogDescription></DialogHeader>
+ const term=q.trim();const hits=term?NEWS_TEAMS.filter(t=>t.name.includes(term)||t.query.includes(term)):[];
+ const custom=cleanCustom(term);const customId=CUSTOM_PREFIX+custom;
+ const canAdd=!!custom&&!NEWS_TEAMS.some(t=>t.name===custom)&&!sel.includes(customId);
+ const tile=(t:NewsTopic)=>{const on=sel.includes(t.id);return <button key={t.id} type="button" aria-pressed={on} className={"nb-team"+(on?" on":"")} onClick={()=>toggle(t.id)}><span className="nb-badge" style={{background:t.bg,color:t.fg,fontSize:t.name.length>=4?10:12}}>{t.name.length>4?t.name.slice(0,2):t.name}</span><span>{t.name}</span>{on&&<Check className="nb-check" size={16}/>}</button>};
+ const picked=sel.map(id=>newsTopic(id)).filter(Boolean) as NewsTopic[];
+ return <Dialog open onOpenChange={o=>!o&&onClose()}><DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto rounded-2xl"><DialogHeader><DialogTitle>좋아하는 팀 고르기</DialogTitle><DialogDescription>팀·선수를 여러 개 고를 수 있어요(최대 {NEWS_TEAMS_MAX}개). 목록에 없으면 검색해서 직접 추가하세요.</DialogDescription></DialogHeader>
   <div className="gap-grid">
-   {groups.map(g=><div key={g} className="news-group"><p className="small muted">{g}</p><div className="nb-grid">{NEWS_TEAMS.filter(t=>t.group===g).map(t=>{const on=sel.includes(t.id);return <button key={t.id} type="button" aria-pressed={on} className={"nb-team"+(on?" on":"")} onClick={()=>toggle(t.id)}><span className="nb-badge" style={{background:t.bg,color:t.fg,fontSize:t.name.length>=4?10:12}}>{t.name.length>4?t.name.slice(0,2):t.name}</span><span>{t.name}</span>{on&&<Check className="nb-check" size={16}/>}</button>})}</div></div>)}
+   {!!picked.length&&<div className="nb-picked">{picked.map(t=><button key={t.id} type="button" className="nb-pick" onClick={()=>toggle(t.id)} aria-label={t.name+" 빼기"}><i className="nb-dot" style={{background:t.bg}}/>{t.name}<X size={14}/></button>)}</div>}
+   <label className="nb-search"><Search size={16}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="팀·선수 이름 검색 (예: 울버햄튼, 황인범)" maxLength={15}/></label>
+   {term?<div className="news-group">
+    {!!hits.length&&<div className="nb-grid">{hits.map(tile)}</div>}
+    {canAdd&&<button type="button" className="btn nb-custom" disabled={sel.length>=NEWS_TEAMS_MAX} onClick={()=>{setSel(s=>[...s,customId]);setQ("")}}><Plus size={16}/>“{custom}” 직접 추가</button>}
+    {!hits.length&&!canAdd&&<p className="small muted">{custom?"이미 골랐어요.":"2~15자, 한글·영문·숫자로 입력해주세요."}</p>}
+    {canAdd&&<p className="small muted">직접 추가한 이름은 그 이름이 들어간 기사를 모아요. 같은 이름의 다른 사람 기사가 섞일 수 있어요.</p>}
+   </div>
+   :groups.map(g=>{const list=NEWS_TEAMS.filter(t=>t.group===g),more=open.includes(g),shown=more?list:list.slice(0,9);
+    return <div key={g} className="news-group"><p className="small muted">{g}</p><div className="nb-grid">{shown.map(tile)}</div>{list.length>9&&<button type="button" className="text-link nb-more" onClick={()=>setOpen(o=>more?o.filter(x=>x!==g):[...o,g])}>{more?"접기":"더 보기 ("+(list.length-9)+")"}</button>}</div>})}
    <p className="small muted">{sel.length}/{NEWS_TEAMS_MAX}개 골랐어요{sel.length>=NEWS_TEAMS_MAX?" — 더 고르려면 하나를 빼주세요.":"."}</p>
    {err&&<p className="error-bar" style={{margin:0}}>{err}</p>}
    <button className="btn btn-green" disabled={busy} onClick={async()=>{setBusy(true);setErr("");try{await onSave(sel)}catch(e){setErr((e as Error).message)}finally{setBusy(false)}}}>저장</button>

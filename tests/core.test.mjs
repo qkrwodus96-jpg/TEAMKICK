@@ -3136,13 +3136,13 @@ test('네이버 뉴스 응답은 태그·기호를 정리하고, 원문 주소·
   const now=Date.parse('2026-09-27T12:30:00Z');
   const items=news.parseNaverNews({items:[
     {title:'<b>K리그1</b> &quot;한 경기&quot; &amp; 순위',originallink:'https://sports.khan.co.kr/a/1',link:'https://n.news.naver.com/1',description:'본문 요약',pubDate:'Sun, 27 Sep 2026 21:18:00 +0900'},
-    {title:'원문 없음',originallink:'',link:'https://n.news.naver.com/2',description:'축구 소식',pubDate:'Sat, 26 Sep 2026 21:00:00 +0900'},
-    {title:'모르는 곳',originallink:'https://www.unknown-news.kr/3',link:'',description:'K리그 경기',pubDate:'Sun, 27 Sep 2026 20:00:00 +0900'},
+    {title:'원문 없음 축구 소식',originallink:'',link:'https://n.news.naver.com/2',description:'축구 소식',pubDate:'Sat, 26 Sep 2026 21:00:00 +0900'},
+    {title:'모르는 곳 K리그 소식',originallink:'https://www.unknown-news.kr/3',link:'',description:'K리그 경기',pubDate:'Sun, 27 Sep 2026 20:00:00 +0900'},
     {title:'<b>K리그1</b> &quot;한 경기&quot; &amp; 순위',originallink:'https://other.kr/dup',link:'',description:'축구',pubDate:'Sun, 27 Sep 2026 21:00:00 +0900'},
     {title:'나쁜 주소',originallink:'javascript:alert(1)',link:'',description:'축구',pubDate:'Sun, 27 Sep 2026 21:00:00 +0900'},
     {title:'&lt;script&gt;',originallink:'https://x.kr/5',link:'',description:'축구',pubDate:'시간 아님'},
   ]});
-  assert.deepEqual(items.map(x=>x.title),['K리그1 "한 경기" & 순위','모르는 곳','원문 없음'],'같은 제목·잘못된 주소·시간 없는 글은 뺀다');
+  assert.deepEqual(items.map(x=>x.title),['K리그1 "한 경기" & 순위','모르는 곳 K리그 소식','원문 없음 축구 소식'],'같은 제목·잘못된 주소·시간 없는 글은 뺀다');
   assert.equal(items[0].url,'https://sports.khan.co.kr/a/1');assert.equal(items[0].press,'스포츠경향');
   assert.equal(items[1].press,'unknown-news.kr','모르는 언론사는 주소 그대로');
   assert.equal(items[2].press,'네이버 뉴스');
@@ -3339,6 +3339,20 @@ test('연예 기사는 빼고, 감독 이름+호(모레노호)는 대표팀 태�
   assert.ok(news.tagsFor('남미 강호 우루과이 정조준 모레노호').includes('대표팀'),'감독 이름+호');
   assert.ok(news.tagsFor('홍명보호, 10월 A매치 명단').includes('대표팀'));
   assert.ok(!news.tagsFor('팬 선호도 1위는 누구').includes('대표팀'),'선호 같은 낱말은 아님');
+  // 1.15 보드 메모: 정치·사회 기사, 제목에 축구 흔적이 없는 기사, 다른 나라 대표팀, 팀 다른 이름
+  assert.equal(news.isFootball('이대통령, 한미 정상회담 앞두고','축구 대표팀 격려도'),false,'정치 기사');
+  assert.equal(news.isFootball('부산 앞바다에 상어 출몰','부산 아이파크 경기장 인근'),false,'사회 기사');
+  assert.equal(news.isFootball('돈이 원수인가','구단 재정 축구'),false,'제목에 축구 흔적이 없으면 뺀다');
+  assert.equal(news.isFootball('봉준호 감독 신작 개봉','축구 장면'),false,'영화 감독');
+  assert.equal(news.isFootball('첼시, 재정 위기에 선수 매각','프리미어리그 구단'),true,'팀 이름 + 요약이 축구');
+  assert.equal(news.isFootball('맨체스터 유나이티드, 3-1 역전승','프리미어리그'),true);
+  assert.equal(news.teamInTitle('맨체스터 유나이티드, 3-1 역전승').id,'mu','다른 이름도 같은 팀');
+  assert.ok(news.tagsFor('맨체스터 시티, 홀란 멀티골').includes('맨시티'));
+  assert.ok(news.tagsFor('아스날 사카 부상').includes('아스널'));
+  assert.ok(!news.tagsFor('중국 대표팀, 월드컵 예선 탈락 위기').includes('대표팀'),'다른 나라 대표팀');
+  assert.ok(!news.tagsFor('일본 모리야스호, 브라질과 평가전').includes('대표팀'));
+  assert.ok(news.tagsFor('홍명보호, 중국 대표팀과 맞대결').includes('대표팀'),'우리 대표팀이 같이 나오면 붙인다');
+  assert.ok(news.tagsFor('남미 강호 우루과이 정조준 모레노호').includes('대표팀'),'상대 나라 이름만으로는 빼지 않는다');
   // 같은 날 예보가 여러 번이면 최근 발표
   const rows=[{informCode:'PM10',informData:'2026-09-29',informGrade:'서울 : 나쁨',dataTime:'2026-09-27 17시 발표'},{informCode:'PM10',informData:'2026-09-29',informGrade:'서울 : 보통',dataTime:'2026-09-27 23시 발표'}];
   assert.equal(weather.pickAir(rows,'PM10','2026-09-29','서울'),'보통');
@@ -3355,4 +3369,29 @@ test('연예 기사는 빼고, 감독 이름+호(모레노호)는 대표팀 태�
     const w=await weatherServer.gameWeather(g,now);
     assert.deepEqual(w.air,{pm10:'좋음',pm25:'좋음'},'어제(27일) 23시 발표로 29일 예보');
   }finally{globalThis.fetch=realFetch;weatherServer.clearWeatherCache();if(saved===undefined)delete env.DATA_GO_KR_KEY;else env.DATA_GO_KR_KEY=saved}
+});
+
+// --- 1.15 초대 코드 ---
+test('초대 코드는 6자리이고, 코드로 팀을 찾으며, 폐기·만료된 코드는 못 쓰고, 1시간 10번까지만 넣을 수 있다',()=>{
+  const f=fixture();
+  assert.throws(()=>command(f.s,member,{type:'invite',teamId:f.a}),/권한/,'주장만 만든다');
+  const {invite,code}=command(f.s,A,{type:'invite',teamId:f.a});
+  assert.match(code,/^[A-HJ-NP-Z2-9]{6}$/,'헷갈리는 글자(0·O·1·I) 없이 6자리');
+  const found=command(f.s,member,{type:'inviteCode',code:code.toLowerCase().slice(0,3)+'-'+code.slice(3)});
+  assert.deepEqual(found,{found:true,invite,teamId:f.a,teamName:'팀 0'},'소문자·하이픈을 넣어도 찾는다');
+  assert.deepEqual(command(f.s,member,{type:'inviteCode',code:'ZZZZZZ'===code?'YYYYYY':'ZZZZZZ'}),{found:false});
+  assert.throws(()=>command(f.s,member,{type:'inviteCode',code:'AB'}),/6자리/);
+  // 폐기하면 못 쓴다
+  command(f.s,A,{type:'revokeInvite',teamId:f.a,inviteId:invite});
+  assert.equal(command(f.s,C,{type:'inviteCode',code}).found,false,'폐기한 코드');
+  // 만료
+  const second=command(f.s,A,{type:'invite',teamId:f.a},NOW-8*DAY);
+  assert.equal(command(f.s,C,{type:'inviteCode',code:second.code}).found,false,'7일 지난 코드');
+  // 마구 넣어보기 막기: 이미 2번 넣은 C 는 8번 더 넣으면(모두 10번) 11번째가 막힌다
+  for(let i=0;i<8;i++)command(f.s,C,{type:'inviteCode',code:'WWWWW'+i%10});
+  assert.throws(()=>command(f.s,C,{type:'inviteCode',code}),/1시간 뒤/);
+  assert.equal(command(f.s,C,{type:'inviteCode',code:'WWWWW2'},NOW+3601e3).found,false,'1시간 지나면 다시 된다');
+  // 코드는 주장에게만 보인다
+  assert.ok(visibleState(f.s,A.id,f.a).invites.every(x=>x.code));
+  assert.equal(visibleState(f.s,member.id).invites.length,0);
 });

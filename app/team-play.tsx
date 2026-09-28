@@ -179,12 +179,14 @@ export function QrCode({text,size=184}:{text:string;size?:number}){
  const m=2;
  return <svg className="qr" width={size} height={size} viewBox={(-m)+" "+(-m)+" "+(count+2*m)+" "+(count+2*m)} role="img" aria-label="초대 링크 QR 코드" shapeRendering="crispEdges"><rect x={-m} y={-m} width={count+2*m} height={count+2*m} fill="#fff"/><path d={path} fill="#111"/></svg>;
 }
-export function InviteShare({link,teamName}:{link:string;teamName:string}){
+export function InviteShare({link,teamName,code}:{link:string;teamName:string;code?:string}){
+ const copyCode=async()=>{try{await navigator.clipboard.writeText(code??"");toast.success("초대 코드를 복사했어요.")}catch{toast.error("복사하지 못했어요.")}};
  const copy=async()=>{try{await navigator.clipboard.writeText(link);toast.success("초대 링크를 복사했어요.")}catch{toast.error("복사하지 못했어요. 링크를 길게 눌러 복사해주세요.")}};
  const canShare=typeof navigator!=="undefined"&&typeof navigator.share==="function";
- const share=async()=>{try{await navigator.share({title:"팀킥 팀 초대",text:teamName+" 팀에 함께해요. 링크를 열고 가입을 신청해주세요.",url:link})}catch(e){if((e as Error)?.name!=="AbortError")copy()}};
+ const share=async()=>{try{await navigator.share({title:"팀킥 팀 초대",text:teamName+" 팀에 함께해요. 링크를 열고 가입을 신청해주세요."+(code?" (초대 코드 "+code+")":""),url:link})}catch(e){if((e as Error)?.name!=="AbortError")copy()}};
  return <div className="invite-share">
   <div className="qr-wrap"><QrCode text={link}/><p className="small muted">운동장에서 휴대폰 카메라로 찍으면 바로 열려요.</p></div>
+  {code&&<div className="invite-code"><span>초대 코드</span><b>{code}</b><button type="button" className="btn" onClick={copyCode}><Copy size={15}/>복사</button><small>링크가 안 열리면 이 코드를 <strong>MY → 다른 팀 가입</strong>에 넣으면 돼요.</small></div>}
   <input aria-label="초대 링크" readOnly value={link} onFocus={e=>e.currentTarget.select()}/>
   <div className="action-strip">{canShare&&<button className="btn btn-green" onClick={share}><Share2 size={16}/>카톡 등으로 공유</button>}<button className={"btn"+(canShare?"":" btn-green")} onClick={copy}><Copy size={16}/>링크 복사</button></div>
  </div>;

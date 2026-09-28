@@ -250,3 +250,63 @@ html[data-splash="skip"] #teamkick-splash{display:none}
 .nl-tags .nl-team{color:#5d6d63}
 .rank-area{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13.5px;font-weight:600;color:#3d5144}
 .rank-area select{border:1px solid var(--border);border-radius:9px;padding:7px 10px;background:#fff;font:inherit;font-weight:600;color:var(--foreground)}
+/* 1.15 팀킥 준비하기 — 칩 버튼 두 개. 끝낸 것은 체크, 둘 다 끝나면 사라짐 */
+.setup-card{display:grid;gap:12px;padding:16px;border:1px solid var(--border);border-radius:14px;background:#fff;margin-bottom:14px}
+.setup-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.setup-head strong{display:block;font-size:15.5px}
+.setup-head span{font-size:13px;color:#6f7d76}
+.setup-x{border:0;background:none;color:#8a968e;padding:4px;cursor:pointer;border-radius:8px}
+.setup-chips{display:flex;flex-wrap:wrap;gap:8px}
+.setup-chip{display:inline-flex;align-items:center;gap:7px;padding:10px 15px;border:1px solid #cfd8d2;border-radius:999px;background:#fff;color:#172923;font:inherit;font-size:14.5px;font-weight:650;cursor:pointer}
+.setup-chip:active{transform:scale(.98)}
+.setup-chip.done{border-color:#e3e8e5;color:#8a968e;background:#f6f8f7;cursor:default}
+.setup-chip.done svg{color:#148b54}
+.setup-help{font-size:13.5px;line-height:1.6;color:#4d5d53;margin:0;padding-top:10px;border-top:1px dashed #e3e8e5}
+.setup-fold{display:flex;width:100%;justify-content:space-between;align-items:center;padding:11px 14px;margin-bottom:14px;border:1px solid var(--border);border-radius:12px;background:#fff;font:inherit;font-size:14px;font-weight:600;color:#3d5144;cursor:pointer}
+/* 1.15 경기 상세 — 색 상자 대신 줄 목록 */
+.detail-meta.info-list{display:block;padding:0;background:none;border-radius:0;color:var(--foreground);border-top:1px solid #e8ece9}
+.info-row{display:grid;grid-template-columns:22px 64px minmax(0,1fr);gap:8px;align-items:start;padding:13px 2px;border-bottom:1px solid #e8ece9;font-size:14.5px}
+.info-row>svg{width:17px;height:17px;color:#8a968e;margin-top:2px}
+.info-row>b{font-weight:600;color:#6f7d76;font-size:13.5px;padding-top:1px}
+.info-row .v{display:grid;gap:6px;min-width:0}
+.info-row .sub{font-size:13px;color:#6f7d76}
+.info-row .links{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.info-row .links a,.info-row .links button{display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border:1px solid #dfe5e1;border-radius:999px;background:#fff;color:#2c3d34;font:inherit;font-size:13px;font-weight:600;text-decoration:none;cursor:pointer}
+.info-row .links svg{width:14px;height:14px}
+.info-row .text-link{font-size:13px}
+.detail-meta.info-list .wx{margin:0}
+.match-venue{color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.match-venue small{font-size:12px;opacity:.75;text-decoration:underline;text-underline-offset:2px}
+/* 1.15 경기 시간 칩 */
+.when-fields{display:grid;gap:14px}
+.when-date{display:grid;gap:6px;max-width:220px}
+.hour-chips{display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:6px}
+.hour-chip{padding:9px 0;border:1px solid #d7dfda;border-radius:10px;background:#fff;color:#2c3d34;font:inherit;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;cursor:pointer}
+.hour-chip.on{background:#172923;border-color:#172923;color:#fff}
+.hour-chip:disabled{opacity:.35;cursor:default}
+/* 1.15 매칭 카드 — 작게, 상자로 구분 */
+.mcard-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px}
+.mcard{display:grid;grid-template-columns:52px minmax(0,1fr);gap:4px 12px;align-items:start;padding:13px 14px;border:1px solid #dfe5e1;border-radius:14px;background:#fff;text-align:left;font:inherit;color:inherit;width:100%}
+.mcard-btn{grid-template-columns:52px minmax(0,1fr) 18px;cursor:pointer}
+.mcard-btn:active{transform:scale(.99)}
+.mc-date{display:grid;justify-items:center;align-content:center;gap:0;padding:6px 0;border-radius:10px;background:#f3f5f4;line-height:1.15}
+.mc-date b{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+.mc-date small{font-size:11px;color:#6f7d76;font-weight:600}
+.mc-main{display:grid;gap:2px;min-width:0}
+.mc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.mc-top strong{font-size:15.5px;font-weight:750;overflow-wrap:anywhere;line-height:1.35}
+.mc-top strong .vs{color:#8a968e;font-weight:500;font-size:13px}
+.mc-top .badge{flex:none;font-size:12px!important}
+.mc-time{font-size:13.5px;font-weight:650;color:#2c3d34;font-variant-numeric:tabular-nums}
+.mc-line{font-size:13px;color:#6f7d76;overflow-wrap:anywhere}
+.mc-act{grid-column:2;display:flex;justify-content:flex-end;margin-top:6px}
+.mc-act .btn{min-height:34px;padding:6px 14px;font-size:13.5px}
+.mc-go{width:18px;height:18px;color:#a3aea7;align-self:center}
+@media(max-width:767px){.mcard-list{grid-template-columns:1fr}}
+.code-line{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end;padding-bottom:14px;border-bottom:1px solid #e8ece9}
+.code-line input{letter-spacing:.18em;font-weight:700;text-transform:uppercase}
+.invite-code{display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;align-items:center;padding:12px 14px;border:1px solid #dfe5e1;border-radius:12px}
+.invite-code span{font-size:13px;color:#6f7d76}
+.invite-code b{font-size:22px;letter-spacing:.2em;font-variant-numeric:tabular-nums}
+.invite-code small{grid-column:1/-1;font-size:12.5px;color:#6f7d76}
+.info-wx{padding:12px 2px;border-bottom:1px solid #e8ece9}.info-wx:empty{display:none}

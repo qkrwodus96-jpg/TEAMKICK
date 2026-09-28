@@ -6,7 +6,7 @@ import {Tabs,TabsList,TabsTrigger,TabsContent} from "@/components/ui/tabs";
 import {Checkbox} from "@/components/ui/checkbox";
 import {Table,TableHeader,TableHead,TableBody,TableRow,TableCell} from "@/components/ui/table";
 import {toast} from "sonner";
-import {Upload,Plus,Search,MapPin,CalendarDays,Clock,Users,ShieldCheck,Copy,ExternalLink,Settings,Check,CheckCircle2,X,ArrowLeft,LogOut,Download,LoaderCircle,Goal,Handshake,Bell,Navigation,Megaphone,ChevronRight} from "lucide-react";
+import {Upload,Plus,Search,MapPin,CalendarDays,Clock,Users,ShieldCheck,Copy,ExternalLink,Settings,Check,CheckCircle2,X,ArrowLeft,LogOut,Download,LoaderCircle,Goal,Handshake,Bell,Navigation,Megaphone,SlidersHorizontal} from "lucide-react";
 import {Picker,Crest,imageUrl,Empty,GameBadge,GuestBadge,PlayerPhoto,Vote,koreanDate,time,localDay,inputTime,fromInput,opponent,scoreText,IntraVersus,started,backNo,backNoOr,NoticeList} from "./teamkick";
 import {currentVote,guestStatusOf,REGIONS,FORMATS,LEVELS,DAYS,levelOf,isIntra,SQUAD_NAMES,RULES_MAX,type Row} from "@/lib/model";
 import {Stepper,SquadBoard,MvpPanel,RulesPanel,RULE_TEMPLATES,InviteShare} from "./team-play";
@@ -399,15 +399,20 @@ export function VenuePicker({v,field,ready,demo=false}:{v:{games?:Row[]};field:(
   {!!recent.length&&<div><label style={{marginBottom:6}}>자주 쓰는 구장</label><div className="filter-bar" style={{marginBottom:0}}>{recent.map((r,i)=><button type="button" key={i} className="btn" onClick={()=>choose(r)}>{r.venue}</button>)}</div></div>}
  </div>;
 }
-// 매칭 탭 카드. 팀이 많아져도 한 화면에 여러 개 보이게 작게, 서로 구분되게 상자로.
-// 왼쪽 날짜 · 가운데 팀과 구장 · 오른쪽 상태. 카드 전체를 누르면 상세(확정 매칭), 버튼이 있으면 버튼.
-function MatchCard({start,end,title,badge,lines,action,onOpen}:{start:string;end:string;title:ReactNode;badge:ReactNode;lines:string[];action?:ReactNode;onOpen?:()=>void}){
- const d=new Date(Date.parse(start)+9*3600e3);const wd="일월화수목금토"[d.getUTCDay()];
- const body=<><div className="mc-date"><small>{d.getUTCMonth()+1}월</small><b>{d.getUTCDate()}</b><small>{wd}</small></div>
-  <div className="mc-main"><div className="mc-top"><strong>{title}</strong>{badge}</div><span className="mc-time">{time(start)} – {time(end)}</span>{lines.filter(Boolean).map((x,i)=><span key={i} className="mc-line">{x}</span>)}</div></>;
- if(onOpen)return <button type="button" className="mcard mcard-btn" onClick={onOpen}>{body}<ChevronRight className="mc-go"/></button>;
+// 매칭 탭 카드(스쿼디 참고). 왼쪽 팀 로고 + 팀 이름, 오른쪽 비용, 아래 한 줄에 "10. 5. (월) · 오전 10:00" 과 칩,
+// 그 아래 구장 이름과 주소. 팀이 많아져도 한 화면에 여러 개 보이게 작게, 서로 구분되게 상자로.
+const WD="일월화수목금토";
+function whenLine(start:string){const d=new Date(Date.parse(start)+9*3600e3),h=d.getUTCHours(),m=d.getUTCMinutes();
+ return `${d.getUTCMonth()+1}. ${d.getUTCDate()}. (${WD[d.getUTCDay()]}) · ${h<12?"오전":"오후"} ${h%12||12}:${String(m).padStart(2,"0")}`}
+function MatchCard({team,title,price,start,chips,venue,address,badge,action,onOpen}:{team?:Row;title:ReactNode;price?:string;start:string;chips:string[];venue?:string;address?:string;badge?:ReactNode;action?:ReactNode;onOpen?:()=>void}){
+ const body=<>
+  <div className="mc-top"><Crest name={typeof title==="string"?title:team?.name} color={team?.color} logo={team?.logo}/><strong>{title}</strong>{price&&<span className={"mc-price"+(price==="무료"?" free":"")}>{price}</span>}</div>
+  <div className="mc-when"><b>{whenLine(start)}</b>{chips.filter(Boolean).map(c=><span key={c} className="mc-chip">{c}</span>)}{badge}</div>
+  {venue&&<span className="mc-venue">{venue}</span>}{address&&<span className="mc-addr">{address}</span>}</>;
+ if(onOpen)return <button type="button" className="mcard mcard-btn" onClick={onOpen}>{body}</button>;
  return <article className="mcard">{body}{action&&<div className="mc-act">{action}</div>}</article>;
 }
+const priceText=(cost:unknown)=>Number(cost)>0?Number(cost).toLocaleString()+"원":"무료";
 export function Matching(p:any){
  const {v,busy,setModal,run,captain,manager,initialTab}=p;
  const [tab,setTab]=useState(initialTab||(v.teamId?"open":"guest"));
@@ -431,18 +436,21 @@ export function Matching(p:any){
    &&(!date||localDay(z.start)===date)&&(!term||guestHay(z).includes(term))).sort(byDate);
  const filtered=region!=="all"||format!=="all"||!!date||!!term;
  function resetFilters(){setDraft("");setQuery("");setRegion("all");setFormat("all");setDate("")}
+ const [showFilter,setShowFilter]=useState(false);
+ const count=(region!=="all"?1:0)+(format!=="all"?1:0)+(date?1:0);
  const searchBar=<div className="filter-bar search-bar">
   <form className="search-line" onSubmit={e=>{e.preventDefault();setQuery(draft)}}>
    <div className="search-input"><Search size={17} className="muted"/>
-    <input value={draft} onChange={e=>setDraft(e.target.value)} placeholder="구장 · 주소 · 팀 이름" aria-label="구장, 주소 또는 팀 이름 검색" style={{border:0}}/>
+    <input value={draft} onChange={e=>setDraft(e.target.value)} placeholder="팀 이름 · 구장 · 주소" aria-label="팀 이름, 구장 또는 주소 검색" style={{border:0}}/>
    </div>
    <button type="submit" className="btn btn-green">검색</button>
+   <button type="button" className={"filter-toggle"+(count?" on":"")} aria-expanded={showFilter} onClick={()=>setShowFilter(x=>!x)}><SlidersHorizontal size={16}/>필터{count?" "+count:""}</button>
   </form>
-  <div className="search-line">
-   <Picker value={region} onChange={setRegion} options={[{value:"all",label:"모든 지역"},...REGIONS]}/>
-   <Picker value={format} onChange={setFormat} options={[{value:"all",label:"모든 경기 형식"},"11인제","8인제","6인제","5인제"]}/>
-   <input aria-label="경기 날짜" type="date" value={date} onChange={e=>setDate(e.target.value)}/>
-  </div>
+  {showFilter&&<div className="filter-panel">
+   <label>지역<Picker value={region} onChange={setRegion} options={[{value:"all",label:"전체"},...REGIONS]}/></label>
+   <label>경기 형식<Picker value={format} onChange={setFormat} options={[{value:"all",label:"전체"},"11인제","8인제","6인제","5인제"]}/></label>
+   <label>경기 날짜<input aria-label="경기 날짜" type="date" value={date} onChange={e=>setDate(e.target.value)}/></label>
+  </div>}
   {filtered&&<button type="button" className="text-link" onClick={resetFilters}>조건 지우기</button>}
  </div>;
  const mine=v.requests.filter((r:Row)=>r.teamId===v.teamId),received=v.requests.filter((r:Row)=>v.games.some((g:Row)=>g.id===r.gameId&&g.home===v.teamId));
@@ -450,13 +458,13 @@ export function Matching(p:any){
  const guestLabel:Record<string,string>={pending:"승인 대기",approved:"용병 확정",rejected:"거절됨",withdrawn:"철회됨",closed:"모집 마감",cancelled:"취소됨"};
  const status:any={pending:"수락 대기",accepted:"매칭 확정",rejected:"거절됨",withdrawn:"철회됨",closed:"모집 종료",changed:"조건 변경 · 재신청 필요"};
  return <><Tabs value={tab} onValueChange={setTab}><TabsList className="mb-5 tab-scroll"><TabsTrigger value="open">모집 중</TabsTrigger><TabsTrigger value="confirmed">확정 매칭</TabsTrigger><TabsTrigger value="mine">우리 팀 매칭 내역</TabsTrigger>{captain&&<TabsTrigger value="received">받은 신청 {received.filter((r:Row)=>r.status==="pending").length||""}</TabsTrigger>}<TabsTrigger value="guest">용병 {teamGuests.filter((x:Row)=>x.status==="pending").length||""}</TabsTrigger></TabsList></Tabs>
- {tab==="open"&&<>{searchBar}<div className="mcard-list">{listings.map((g:Row)=>{const t=v.teams.find((t:Row)=>t.id===g.home),sent=mine.find((r:Row)=>r.gameId===g.id&&r.status==="pending");return <MatchCard key={g.id} start={g.start} end={g.end} title={t?.name} badge={<span className="badge badge-green">모집 중</span>} lines={[g.venue,[g.format,t?.level??"실력 협의",g.secured?"구장 확보":"구장 협의 중",Number(g.cost)>0?Number(g.cost).toLocaleString()+"원":""].filter(Boolean).join(" · ")]} action={g.home===v.teamId?<button className="btn" onClick={()=>setModal({kind:"game",id:g.id})}>모집글 관리</button>:<button disabled={busy||!captain||!!sent} className="btn btn-green" onClick={()=>setModal({kind:"applyMatch",game:g})}>{sent?"신청 완료":captain?"매칭 신청":"주장만 신청 가능"}</button>}/>})}</div>{!listings.length&&<section className="panel"><Empty title={filtered?"조건에 맞는 모집글이 없어요":"모집 중인 경기가 없어요"} description={filtered
+ {tab==="open"&&<>{searchBar}<div className="mcard-list">{listings.map((g:Row)=>{const t=v.teams.find((t:Row)=>t.id===g.home),sent=mine.find((r:Row)=>r.gameId===g.id&&r.status==="pending");return <MatchCard key={g.id} team={t} title={t?.name} price={priceText(g.cost)} start={g.start} chips={[g.format,t?.level??"",g.secured?"":"구장 협의 중"]} venue={g.venue} address={g.address} action={g.home===v.teamId?<button className="btn" onClick={()=>setModal({kind:"game",id:g.id})}>모집글 관리</button>:<button disabled={busy||!captain||!!sent} className="btn btn-green" onClick={()=>setModal({kind:"applyMatch",game:g})}>{sent?"신청 완료":captain?"매칭 신청":"주장만 신청 가능"}</button>}/>})}</div>{!listings.length&&<section className="panel"><Empty title={filtered?"조건에 맞는 모집글이 없어요":"모집 중인 경기가 없어요"} description={filtered
   ? "위 조건을 지우면 모든 모집글을 볼 수 있어요."
   : v.listings.length?"":"경기를 만들 때 \u0027상대팀을 모집할게요\u0027 를 체크해야 이 목록에 올라와요. 이미 만든 경기는 일정에서 열어 모집을 열 수 있어요."}/>
   {filtered&&<button type="button" className="btn" style={{marginTop:14}} onClick={resetFilters}>조건 지우기</button>}</section>}</>}
  {(tab==="mine"||tab==="received")&&<section className="panel">{(tab==="mine"?mine:received).length?(tab==="mine"?mine:received).map((r:Row)=>{const g=[...v.games,...v.listings].find((g:Row)=>g.id===r.gameId);return <div className="notice" key={r.id}><div className="row between"><strong>{tab==="mine"?v.teams.find((t:Row)=>t.id===g?.home)?.name??"상대팀 경기":v.teams.find((t:Row)=>t.id===r.teamId)?.name}</strong><span className="badge">{status[r.status]??r.status}</span></div><p className="data-note">{g?koreanDate(g.start)+" · "+g.venue:"신청한 경기"}{r.message&&" · "+r.message}</p><p className="data-note">신청 {localDay(r.at)} {time(r.at)}{r.decidedAt?" · "+(r.status==="accepted"?"확정":r.status==="rejected"?"거절":r.status==="withdrawn"?"철회":"마감")+" "+localDay(r.decidedAt)+" "+time(r.decidedAt):""}</p>{r.status==="pending"&&captain&&<div className="action-strip">{tab==="received"?<><button className="btn btn-green" disabled={busy} onClick={()=>run({type:"acceptMatch",teamId:v.teamId,gameId:r.gameId,requestId:r.id})}>매칭 수락</button><button className="btn" disabled={busy} onClick={()=>run({type:"rejectMatch",teamId:v.teamId,gameId:r.gameId,requestId:r.id})}>거절</button></>:<button className="btn" disabled={busy} onClick={()=>run({type:"withdrawMatch",teamId:v.teamId,gameId:r.gameId,requestId:r.id})}>신청 철회</button>}</div>}</div>}):<Empty title={tab==="mine"?"신청한 매칭이 없어요":"받은 신청이 없어요"}/>}</section>}
  {tab==="guest"&&<>{searchBar}
- <div className="mcard-list">{guestListings.map((z:Row)=><MatchCard key={z.id} start={z.start} end={z.end} title={z.teamName} badge={<span className="badge badge-orange">용병 {z.approved}/{z.needed}</span>} lines={[z.venue,[z.format,z.secured?"구장 확보":"구장 협의 중",Number(z.cost)>0?Number(z.cost).toLocaleString()+"원":""].filter(Boolean).join(" · ")]} action={z.teamId===v.teamId?<button className="btn" onClick={()=>setModal({kind:"game",id:z.gameId})}>모집 관리</button>:<button className="btn btn-green" disabled={busy||!!z.applied} onClick={()=>setModal({kind:"applyGuest",listing:z})}>{z.applied==="approved"?"용병 확정":z.applied?"신청 완료":"용병 신청"}</button>}/>)}</div>
+ <div className="mcard-list">{guestListings.map((z:Row)=><MatchCard key={z.id} team={v.teams.find((t:Row)=>t.id===z.teamId)} title={z.teamName} price={priceText(z.cost)} start={z.start} chips={[z.format,"용병 "+z.approved+"/"+z.needed]} venue={z.venue} address={z.address} action={z.teamId===v.teamId?<button className="btn" onClick={()=>setModal({kind:"game",id:z.gameId})}>모집 관리</button>:<button className="btn btn-green" disabled={busy||!!z.applied} onClick={()=>setModal({kind:"applyGuest",listing:z})}>{z.applied==="approved"?"용병 확정":z.applied?"신청 완료":"용병 신청"}</button>}/>)}</div>
  {!guestListings.length&&<section className="panel"><Empty title={filtered?"조건에 맞는 용병 자리가 없어요":"모집 중인 용병 자리가 없어요"} description={filtered?"위 조건을 지우면 모든 모집을 볼 수 있어요.":"다른 팀이 용병을 모집하면 여기에 표시돼요."}/>{filtered&&<button type="button" className="btn" style={{marginTop:14}} onClick={resetFilters}>조건 지우기</button>}</section>}
  {!!(v.myGuests??[]).length&&<section className="panel" style={{marginTop:18}}><h2 className="view-heading">내 용병 신청</h2>{v.myGuests.map((r:Row)=><div className="notice" key={r.id}><div className="row between"><strong>{r.teamName}</strong><span className={"badge "+(r.status==="approved"?"badge-green":r.status==="pending"?"badge-orange":"")}>{guestLabel[r.status]??r.status}</span></div><p className="data-note">{r.start?koreanDate(r.start)+" · "+r.venue:"경기 정보를 확인할 수 없어요"}</p>{r.status==="pending"&&<div className="action-strip"><button className="btn" disabled={busy} onClick={()=>run({type:"withdrawGuest",teamId:r.teamId,gameId:r.gameId,guestId:r.id})}>신청 철회</button></div>}</div>)}</section>}
  {manager&&!!teamGuests.length&&<section className="panel" style={{marginTop:18}}><h2 className="view-heading">우리 팀 용병 신청</h2>{teamGuests.map((x:Row)=>{const gm=v.games.find((y:Row)=>y.id===x.gameId);return <div className="attendance-item" key={x.id}><div><strong>{x.name}</strong><p className="data-note">{x.position} · {backNoOr(x.number)}{gm?" · "+koreanDate(gm.start)+" "+gm.venue:""}{x.message?" · "+x.message:""}</p></div><div className="row">{x.status==="pending"?<><button className="btn btn-green" disabled={busy} onClick={()=>run({type:"approveGuest",teamId:v.teamId,gameId:x.gameId,guestId:x.id})}>승인</button><button className="btn" disabled={busy} onClick={()=>run({type:"rejectGuest",teamId:v.teamId,gameId:x.gameId,guestId:x.id})}>거절</button></>:<><span className="badge badge-green">용병 확정</span><button className="btn" disabled={busy} onClick={()=>run({type:"cancelGuest",teamId:v.teamId,gameId:x.gameId,guestId:x.id})}>취소</button></>}</div></div>})}</section>}
@@ -476,7 +484,7 @@ export function Matching(p:any){
   return <div className="mcard-list">{done.map((g:Row)=>{
    const us=v.teams.find((t:Row)=>t.id===v.teamId)?.name??"우리 팀",them=opponent(v,g)||"상대팀 미정";
    const score=g.result?.status==="confirmed"?(g.home===v.teamId?g.result.a+" : "+g.result.b:g.result.b+" : "+g.result.a):"";
-   return <MatchCard key={g.id} start={g.start} end={g.end} title={<>{us} <span className="vs">vs</span> {them}</>} badge={<GameBadge g={g}/>} lines={[g.venue||"구장 미정",[g.format,score?"최종 "+score:"",g.secured?"구장 확보":"구장 협의 중"].filter(Boolean).join(" · ")]} onOpen={()=>setModal({kind:"game",id:g.id})}/>})}</div>;
+   return <MatchCard key={g.id} team={v.teams.find((t:Row)=>t.id===(g.home===v.teamId?g.away:g.home))} title={<>{us} <span className="vs">vs</span> {them}</>} price={score?"최종 "+score:undefined} start={g.start} chips={[g.format]} badge={<GameBadge g={g}/>} venue={g.venue||"구장 미정"} address={g.address} onOpen={()=>setModal({kind:"game",id:g.id})}/>})}</div>;
  })()}</>
 }
 // 팀 이름의 일부나 지역만 쳐도 찾히게 한다. "oz" 로 "FCOZ" 를 찾는 식이라

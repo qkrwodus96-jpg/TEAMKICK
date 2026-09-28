@@ -310,3 +310,26 @@ html[data-splash="skip"] #teamkick-splash{display:none}
 .invite-code b{font-size:22px;letter-spacing:.2em;font-variant-numeric:tabular-nums}
 .invite-code small{grid-column:1/-1;font-size:12.5px;color:#6f7d76}
 .info-wx{padding:12px 2px;border-bottom:1px solid #e8ece9}.info-wx:empty{display:none}
+
+/* 1.15.1 다음 경기 카드 — 축구장 선(가운데 원·하프라인·양쪽 박스)과 짙은 초록 사선 그라데이션 */
+.next-match{background:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20400%20240%22%20preserveAspectRatio%3D%22xMidYMid%20slice%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.13%22%20stroke-width%3D%221.6%22%3E%3Crect%20x%3D%228%22%20y%3D%228%22%20width%3D%22384%22%20height%3D%22224%22%20rx%3D%223%22/%3E%3Cline%20x1%3D%22200%22%20y1%3D%228%22%20x2%3D%22200%22%20y2%3D%22232%22/%3E%3Ccircle%20cx%3D%22200%22%20cy%3D%22120%22%20r%3D%2234%22/%3E%3Crect%20x%3D%228%22%20y%3D%2266%22%20width%3D%2246%22%20height%3D%22108%22/%3E%3Crect%20x%3D%228%22%20y%3D%2296%22%20width%3D%2218%22%20height%3D%2248%22/%3E%3Crect%20x%3D%22346%22%20y%3D%2266%22%20width%3D%2246%22%20height%3D%22108%22/%3E%3Crect%20x%3D%22374%22%20y%3D%2296%22%20width%3D%2218%22%20height%3D%2248%22/%3E%3C/g%3E%3Cg%20fill%3D%22%23fff%22%20fill-opacity%3D%22.18%22%3E%3Ccircle%20cx%3D%22200%22%20cy%3D%22120%22%20r%3D%222.4%22/%3E%3Ccircle%20cx%3D%2240%22%20cy%3D%22120%22%20r%3D%222%22/%3E%3Ccircle%20cx%3D%22360%22%20cy%3D%22120%22%20r%3D%222%22/%3E%3C/g%3E%3C/svg%3E") center/cover no-repeat,linear-gradient(135deg,#0c6a40 0%,#0a5636 55%,#07432a 100%)}
+/* 1.15.1 매칭 카드(스쿼디 참고) — 날짜 상자 없이 한 줄 */
+.mcard,.mcard-btn{display:grid;grid-template-columns:minmax(0,1fr);gap:5px;padding:15px 16px}
+.mc-top{display:flex;align-items:center;gap:11px;justify-content:flex-start}
+.mc-top .club-crest{width:40px;height:40px;font-size:14px;border-radius:12px;flex:none;letter-spacing:-.5px}
+.mc-top strong{flex:1;min-width:0;font-size:16px}
+.mc-price{flex:none;font-size:15px;font-weight:750;color:#172923;font-variant-numeric:tabular-nums}
+.mc-price.free{color:#148b54}
+.mc-when{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px}
+.mc-when b{font-size:15px;font-weight:750;font-variant-numeric:tabular-nums;margin-right:2px}
+.mc-chip{font-size:12.5px;font-weight:650;color:#4d5d53;background:#f1f4f2;border-radius:7px;padding:3px 8px}
+.mc-when .badge{font-size:12px!important}
+.mc-venue{font-size:14.5px;color:#2c3d34}
+.mc-addr{font-size:13px;color:#8a968e}
+.mc-act{grid-column:1;justify-content:flex-end;margin-top:4px}
+/* 매칭 검색 — 검색칸 + 필터 버튼, 조건은 펼쳐서 이름을 붙여 고른다 */
+.filter-toggle{display:inline-flex;align-items:center;gap:6px;flex:none;padding:0 14px;border:1px solid #d7dfda;border-radius:10px;background:#fff;font:inherit;font-size:14px;font-weight:650;color:#2c3d34;cursor:pointer}
+.filter-toggle.on{border-color:#148b54;color:#148b54}
+.filter-panel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:12px;border:1px solid #e3e8e5;border-radius:12px;background:#fafbfa}
+.filter-panel label{display:grid;gap:5px;font-size:12.5px;font-weight:650;color:#6f7d76}
+@media(max-width:600px){.filter-panel{grid-template-columns:1fr 1fr}.filter-panel label:last-child{grid-column:1/-1}}

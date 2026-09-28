@@ -30,6 +30,7 @@ export function checkImage(type:string,bytes:Uint8Array){
 }
 
 export const teamLogoPrefix=(teamId:string)=>"teams/"+teamId+"/";
+export const teamPhotoPrefix=(teamId:string)=>"teamphotos/"+teamId+"/";
 export const memberPhotoPrefix=(teamId:string,memberId:string)=>"members/"+teamId+"/"+memberId+"/";
 
 export async function putImage(prefix:string,type:string,bytes:Uint8Array){
@@ -61,6 +62,7 @@ export function parseKey(key:string){
  ensure(/^[A-Za-z0-9/_.-]+$/.test(key)&&!key.includes(".."),"이미지 주소를 확인해주세요.",400);
  const parts=key.split("/");
  if(parts[0]==="teams"&&parts.length===3)return {kind:"teamLogo" as const,teamId:parts[1],memberId:""};
+ if(parts[0]==="teamphotos"&&parts.length===3)return {kind:"teamPhoto" as const,teamId:parts[1],memberId:""};
  if(parts[0]==="members"&&parts.length===4)return {kind:"memberPhoto" as const,teamId:parts[1],memberId:parts[2]};
  throw new AppError("이미지 주소를 확인해주세요.",400);
 }

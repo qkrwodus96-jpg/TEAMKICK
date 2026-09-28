@@ -119,10 +119,41 @@ export const LEVELS=["입문","초급","중급","상급","선수 출신 포함"]
 export const DAYS=["상관없음","평일 저녁","주말","토요일 오전","토요일 오후","토요일 저녁","일요일 오전","일요일 오후","일요일 저녁"];
 // 목록을 만들기 전에 저장된 값이 있다. 고르기 화면이 비어 보이지 않게 맞춰 준다.
 const OLD_LEVELS:Record<string,string>={"하":"초급","중":"중급","상":"상급"};
+// 화면 표기: "11인제" → "11대11", "중급" → "실력 중" (사장님 요청 2026-09-28). 저장 값은 그대로.
+export const formatLabel=(f:unknown)=>{const x=String(f??"").trim(),n=x.match(/^(\d+)인제$/);return n?n[1]+"대"+n[1]:x};
+export const levelChip=(v:unknown)=>"실력 "+levelOf(v).replace(/급$/,"");
 export const levelOf=(v:unknown)=>{const x=String(v??"").trim();return LEVELS.includes(x)?x:(OLD_LEVELS[x]??"중급")};
 export const pick=(v:unknown,list:string[],what:string)=>{
  const x=String(v??"").trim();ensure(list.includes(x),what+"을(를) 목록에서 골라주세요.");return x;
 };
+// --- 선수 프로필(1.16) — 축구고식 세부 포지션 16개. 예전 값(GK·DF·MF·FW)도 그대로 유효하다.
+export const POSITION_GROUPS:[string,string,[string,string][]][]=[
+ ["FW","공격수",[["ST","스트라이커"],["CF","센터포워드"],["LW","왼쪽 윙어"],["RW","오른쪽 윙어"]]],
+ ["MF","미드필더",[["CAM","공격형 미드"],["CM","중앙 미드"],["CDM","수비형 미드"],["LM","왼쪽 미드"],["RM","오른쪽 미드"]]],
+ ["DF","수비수",[["CB","센터백"],["LB","왼쪽 풀백"],["RB","오른쪽 풀백"],["LWB","왼쪽 윙백"],["RWB","오른쪽 윙백"]]],
+ ["GK","골키퍼",[["GK","골키퍼"]]]];
+const POSITION_CODES=new Set(POSITION_GROUPS.flatMap(([g,,list])=>[g,...list.map(x=>x[0])]));
+export const positionGroup=(p:unknown)=>{const x=String(p??"").toUpperCase();return POSITION_GROUPS.find(([g,,list])=>g===x||list.some(y=>y[0]===x))?.[0]??"MF"};
+export const positionName=(p:unknown)=>{const x=String(p??"").toUpperCase();for(const [g,name,list] of POSITION_GROUPS){if(g===x)return name;const hit=list.find(y=>y[0]===x);if(hit)return hit[1]}return ""};
+export const cleanPosition=(p:unknown,fallback="MF")=>{const x=String(p??"").trim().toUpperCase();return POSITION_CODES.has(x)?x:fallback};
+export const FEET=["오른발","왼발","양발"];
+// 계정 하나에 하나. 팀을 옮겨도 따라간다. 키·몸무게는 용병으로 신청한 팀의 주장에게만 보인다(visibleState).
+export function cleanProfile(c:Row,old:Partial<Row>={}){
+ const num=(v:unknown,min:number,max:number)=>{if(v===""||v==null)return null;const n=Math.round(Number(v));ensure(Number.isFinite(n)&&n>=min&&n<=max,"키·몸무게 범위를 확인해주세요.");return n};
+ const insta=String(c.instagram??old.instagram??"").trim().replace(/^@/,"");ensure(!insta||/^[A-Za-z0-9._]{1,30}$/.test(insta),"인스타그램 아이디는 영문·숫자·점·밑줄만 쓸 수 있어요.");
+ const regions=(Array.isArray(c.regions)?c.regions:old.regions??[]).map(String).filter((x:string)=>REGIONS.includes(x));
+ ensure(new Set(regions).size<=3,"활동 지역은 3곳까지 고를 수 있어요.");
+ const main=cleanPosition(c.main??old.main??"MF"),sub=c.sub===""?"":cleanPosition(c.sub??old.sub??"","");
+ const foot=String(c.foot??old.foot??"");ensure(!foot||FEET.includes(foot),"주발을 확인해주세요.");
+ return {main,sub:sub===main?"":sub,foot,height:c.height!==undefined?num(c.height,120,220):old.height??null,weight:c.weight!==undefined?num(c.weight,30,150):old.weight??null,instagram:insta,regions:[...new Set(regions)]};
+}
+// 팀원·용병 신청을 볼 때 쓰는 모양. body=true 는 키·몸무게까지(용병 신청을 받은 팀의 주장만).
+export function profileView(s:State,userId:string,body=false){
+ const p=s.users.find(u=>u.id===userId)?.profile;if(!p)return null;
+ const out:Partial<Row>={main:p.main??"",sub:p.sub??"",foot:p.foot??"",instagram:p.instagram??"",regions:p.regions??[]};
+ if(body){out.height=p.height??null;out.weight=p.weight??null}
+ return out;
+}
 export const REGIONS=["서울","경기 남부","경기 북부","인천","강원","대전","세종","충북","충남","광주","전북","전남","대구","경북","부산","울산","경남","제주"];
 export const regionValue=(v:unknown)=>{const x=String(v??"").trim();ensure(REGIONS.includes(x),"활동 지역을 목록에서 골라주세요.");return x};
 
@@ -277,7 +308,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   ensure(a.verified!==false,"이메일 확인을 먼저 해주세요. 받은 편지함에서 확인 링크를 눌러주세요.",403);
   const team=teamOf(s,t);ensure(team?.status==="active","가입 가능한 팀이 아니에요.",404);const existing=s.members.find(m=>m.userId===a.id&&m.teamId===t);
   ensure(!existing||!["active","pending"].includes(existing.status),"이미 가입했거나 승인 대기 중이에요.",409);
-  const data={userId:a.id,teamId:t,name:textValue(c.name||a.name,30),position:textValue(c.position||"MF",12),number:integer(c.number??0,0,99),role:"member",status:"pending",at:stamp};
+  const data={userId:a.id,teamId:t,name:textValue(c.name||a.name,30),position:cleanPosition(c.position||s.users.find(x=>x.id===a.id)?.profile?.main||"MF"),number:integer(c.number??0,0,99),role:"member",status:"pending",at:stamp};
   if(existing)Object.assign(existing,data);else s.members.push({id:id(),periods:[],...data});
   for(const m of s.members.filter(x=>x.teamId===t&&x.role==="captain"&&x.status==="active"))userNotice(s,m.userId,"팀원 가입 요청",data.name+"님이 가입을 신청했어요.",t,"team");
  }
@@ -288,7 +319,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   if(type==="rejectMember"){ensure(m!.status==="pending","대기 중인 신청이 아니에요.");m!.status="rejected";}
   if(type==="removeMember"){ensure(m!.role!=="captain","주장 인계 후 탈퇴할 수 있어요.");m!.status="removed";if(m!.periods.at(-1))m!.periods.at(-1).end=stamp;}
   if(type==="setRole"){ensure(m!.status==="active"&&m!.role!=="captain","이 팀원의 역할은 변경할 수 없어요.");ensure(["member","manager"].includes(c.role),"역할을 확인해주세요.");m!.role=c.role;}
-  if(type==="editMember"){ensure(m!.status==="active","활동 중인 팀원의 선수 정보만 수정할 수 있어요.");m!.name=textValue(c.name,30);m!.number=integer(c.number,0,99);m!.position=textValue(c.position,12);}
+  if(type==="editMember"){ensure(m!.status==="active","활동 중인 팀원의 선수 정보만 수정할 수 있어요.");m!.name=textValue(c.name,30);m!.number=integer(c.number,0,99);m!.position=cleanPosition(c.position,m!.position??"MF");}
   if(type==="transferCaptain"){ensure(m!.status==="active"&&m!.role!=="captain","인계받을 팀원을 선택해주세요.");teamOf(s,t)!.transferTo=m!.id;}
   if(type==="acceptCaptain"){requireTeam(s,t,a.id);ensure(m!.userId===a.id&&teamOf(s,t)!.transferTo===m!.id,"주장 인계 대상이 아니에요.",403);for(const p of s.members.filter(x=>x.teamId===t&&x.role==="captain"))p.role="member";m!.role="captain";delete teamOf(s,t)!.transferTo;}
   userNotice(s,m!.userId,type==="editMember"?"선수 정보 변경":"팀 가입·권한 변경",teamOf(s,t)!.name+(type==="editMember"?"에서 주장이 선수 정보를 변경했어요.":"의 팀원 상태가 변경되었어요."),t,"team");
@@ -298,8 +329,11 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   ensure(type==="cancelJoin"?m!.status==="pending":m!.status==="active","현재 상태에서는 처리할 수 없어요.");m!.status="left";if(m!.periods.at(-1))m!.periods.at(-1).end=stamp;
  }
  else if(type==="editProfile"){
-  const m=requireTeam(s,t,a.id,"member");m.name=textValue(c.name,30);m.number=integer(c.number,0,99);m.position=textValue(c.position,12);
+  const m=requireTeam(s,t,a.id,"member");m.name=textValue(c.name,30);m.number=integer(c.number,0,99);m.position=cleanPosition(c.position??c.main,m.position??"MF");
+  if(c.profile&&typeof c.profile==="object"){const u=s.users.find(x=>x.id===a.id)!;u.profile=cleanProfile(c.profile,u.profile);m.position=u.profile.main;}
  }
+ // 팀이 없어도 내 선수 프로필은 고칠 수 있다(용병으로 뛸 때 쓰인다).
+ else if(type==="setPlayerProfile"){const u=s.users.find(x=>x.id===a.id)!;u.profile=cleanProfile(c,u.profile);}
  else if(type==="editTeam"){
   requireTeam(s,t,a.id,"captain");const team=teamOf(s,t)!;
   team.name=textValue(c.name,40);team.region=regionValue(c.region);
@@ -309,6 +343,20 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   if(c.format!==undefined)team.format=pick(c.format,FORMATS,"주 경기 형식");
   if(c.days!==undefined)team.days=pick(c.days,DAYS,"주로 뛰는 때");
   if(c.level!==undefined)team.level=pick(c.level,LEVELS,"팀 실력");
+  // 팀 프로필(1.17): 팀원 모집 · 월 회비 · 창단 연도. 값이 없으면 지금 것을 지킨다.
+  if(c.recruiting!==undefined)team.recruiting=c.recruiting===true;
+  if(c.recruitNote!==undefined)team.recruitNote=textValue(c.recruitNote,200,false);
+  if(c.fee!==undefined)team.fee=c.fee===""||c.fee==null?null:integer(c.fee,0,1000000);
+  if(c.founded!==undefined){const y=String(c.founded??"").trim();ensure(!y||/^(19[5-9]\d|20\d\d)$/.test(y),"창단 연도를 확인해주세요.");team.founded=y;}
+ }
+ // 팀 사진(인스타식 격자). 운영진이 올리고 지운다. 파일은 /api/image 가 먼저 올리고 여기에 키만 둔다.
+ else if(type==="addTeamPhoto"||type==="removeTeamPhoto"){
+  requireTeam(s,t,a.id,"manager");const team=teamOf(s,t)!;const photos:Row[]=team.photos??[];
+  if(type==="addTeamPhoto"){
+   const key=imageKey(c.key,"teamphotos/"+t+"/");ensure(key,"사진을 먼저 올려주세요.");ensure(photos.length<30,"팀 사진은 30장까지 올릴 수 있어요. 예전 사진을 지운 뒤 올려주세요.",409);
+   ensure(!photos.some(p=>p.key===key),"이미 올린 사진이에요.",409);
+   team.photos=[{id:id(),key,caption:textValue(c.caption,100,false),by:a.id,at:stamp},...photos];
+  }else{ensure(photos.some(p=>p.key===c.key),"사진을 찾을 수 없어요.",404);team.photos=photos.filter(p=>p.key!==c.key);output={removed:c.key};}
  }
  // 팀 회칙. 주장·운영진이 쓴다. 가입을 신청하려는 사람도 미리 읽을 수 있게 공개 정보로 보낸다(화면에 안내).
  else if(type==="editRules"){
@@ -318,7 +366,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  }
  else if(type==="createGame"){
   requireTeam(s,t,a.id,"manager");const d=dates(c.start,c.end);checkConflict(s,t,d.start,d.end,"");
-  const g={id:id(),home:t,away:null,external:textValue(c.external,60,false),...d,venue:textValue(c.venue,100),address:textValue(c.address,200),lat:coord(c.lat,90),lng:coord(c.lng,180),region:regionValue(c.region||teamOf(s,t)!.region),format:textValue(c.format||"11인제",20),secured:c.secured!==false,cost:integer(c.cost??0,0,10000000),status:"scheduled",listing:c.listing?"open":"none",revision:1,result:null,at:stamp};
+  const g={id:id(),home:t,away:null,external:textValue(c.external,60,false),...d,venue:textValue(c.venue,100),address:textValue(c.address,200),lat:coord(c.lat,90),lng:coord(c.lng,180),region:regionValue(c.region||teamOf(s,t)!.region),format:textValue(c.format||"11인제",20),secured:c.secured!==false,cost:integer(c.cost??0,0,10000000),opponentCost:integer(c.opponentCost??0,0,10000000),status:"scheduled",listing:c.listing?"open":"none",revision:1,result:null,at:stamp};
   if(c.kind==="intra"){ensure(!c.listing&&!g.external,"자체전은 상대팀 없이 우리 팀끼리 하는 경기예요.");Object.assign(g,{kind:"intra",squads:integer(c.squads??2,2,4)});}
   const voteCloses=c.deadline?Date.parse(String(c.deadline)):0;if(c.deadline)ensure(Number.isFinite(voteCloses)&&voteCloses>now&&voteCloses<=Date.parse(g.start),"투표 마감은 지금 이후, 경기 시작 시각까지로 정해주세요.");ensure(!g.external||!c.listing,"수기 상대팀과 모집을 동시에 설정할 수 없어요.");ensure(!c.listing||Date.parse(g.start)>now,"지난 경기로 모집할 수 없어요.");
   if(c.listing)requireTeam(s,t,a.id,"captain");s.games.push(g);const side=newSide(g,t);side.needed=integer(c.needed??11,1,50);side.note=textValue(c.note,500,false);if(voteCloses)side.deadline=iso(voteCloses);
@@ -492,7 +540,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   }
   if(type==="confirmResult"){const p=g!.resultProposal;ensure(p&&p.by!==t&&c.revision===p.revision,"확인 가능한 상대팀의 최신 결과가 없어요.",409);if(c.agree===false){p.status="disputed";}else{g!.result={...p,status:"confirmed"};g!.resultProposal=null;clearStaleRecords(s,g!);}notice(s,p.by,c.agree===false?"경기 결과 이견":"경기 결과 확정","경기 결과 확인 상태가 변경되었어요.",g!.id);}
   if(type==="changeGame"){
-   ensure(g!.status==="scheduled"&&now<Date.parse(g!.start),"이미 시작한 경기는 일정 변경을 할 수 없어요.");const d=dates(c.start,c.end);ensure(Date.parse(d.start)>now,"미래 일정을 선택해주세요.");const change={proposalId:id(),...d,venue:textValue(c.venue,100),address:textValue(c.address,200),lat:coord(c.lat,90),lng:coord(c.lng,180),cost:integer(c.cost??g!.cost,0,10000000),by:t,version:g!.revision};
+   ensure(g!.status==="scheduled"&&now<Date.parse(g!.start),"이미 시작한 경기는 일정 변경을 할 수 없어요.");const d=dates(c.start,c.end);ensure(Date.parse(d.start)>now,"미래 일정을 선택해주세요.");const change={proposalId:id(),...d,venue:textValue(c.venue,100),address:textValue(c.address,200),lat:coord(c.lat,90),lng:coord(c.lng,180),cost:integer(c.cost??g!.cost,0,10000000),opponentCost:integer(c.opponentCost??g!.opponentCost??0,0,10000000),by:t,version:g!.revision};
    if(g!.away){g!.change=change;notice(s,g!.home===t?g!.away:g!.home,"일정 변경 제안",change.venue+" · "+change.start,g!.id);}
    else{checkConflict(s,t,d.start,d.end,g!.id);if(g!.listing!=="open"&&!isIntra(g))g!.external=textValue(c.external??g!.external,60,false);Object.assign(g!,change);g!.revision++;for(const z of s.sides.filter(x=>x.gameId===g!.id)){z.voteArchive=[...(z.voteArchive??[]),z.votes];z.votes={};z.deadline=g!.start;}for(const r of s.requests.filter(x=>x.gameId===g!.id&&x.status==="pending"))r.status="changed";}
   }
@@ -510,7 +558,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    ensure(!s.members.some(x=>x.teamId===t&&x.userId===a.id&&["active","pending"].includes(x.status)),"이미 이 팀에 소속되어 있어 용병으로 신청할 수 없어요.",409);
    const old=s.guests.find(x=>x.gameId===g!.id&&x.teamId===t&&x.userId===a.id);
    ensure(!old||!["pending","approved"].includes(old.status),"이미 신청한 경기예요.",409);
-   const value={gameId:g!.id,teamId:t,userId:a.id,name:textValue(c.name||a.name,30),position:textValue(c.position||"MF",12),number:integer(c.number??0,0,99),message:textValue(c.message,300,false),status:"pending",at:stamp};
+   const value={gameId:g!.id,teamId:t,userId:a.id,name:textValue(c.name||a.name,30),position:cleanPosition(c.position||s.users.find(x=>x.id===a.id)?.profile?.main||"MF"),number:integer(c.number??0,0,99),message:textValue(c.message,300,false),status:"pending",at:stamp};
    const row=old?Object.assign(old,value):{id:id(),...value};if(!old)s.guests.push(row);
    for(const m of s.members.filter(x=>x.teamId===t&&["captain","manager"].includes(x.role)&&x.status==="active"))userNotice(s,m.userId,"새 용병 신청",value.name+"님이 용병으로 신청했어요.",t,"matching:guest");
    output={guestId:row.id};
@@ -634,6 +682,21 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  else if(type==="setNewsTeams"){const teams=cleanNewsTeams(c.teams);ensure(teams.length<=NEWS_TEAMS_MAX,"좋아하는 팀은 "+NEWS_TEAMS_MAX+"개까지 고를 수 있어요.");const u=s.users.find(x=>x.id===a.id)!;u.newsTeams=teams;}
  else if(type==="readNotifications"){for(const n of s.notifications.filter(x=>x.userId===a.id))n.read=true;}
  else if(type==="correctRequest"){requireTeam(s,t,a.id);for(const m of s.members.filter(x=>x.teamId===t&&["captain","manager"].includes(x.role)&&x.status==="active"))userNotice(s,m.userId,"기록 정정 요청",a.name+": "+textValue(c.message,500),t,"records");}
+ // 채팅 메시지를 보낸 뒤 화면이 부른다. 방 사람들에게 "새 메시지" 알림을 남긴다(내용은 싣지 않는다 — 잠금화면에 계좌 같은 게 뜨지 않게).
+ // 읽지 않은 같은 방 알림이 10분 안에 이미 있으면 또 만들지 않는다(대화가 오갈 때 알림 폭탄 방지).
+ else if(type==="chatPing"){
+  const r=chatRoom(s,a.id,c.room);ensure(r,"이 채팅방에 들어갈 수 없어요.",403);
+  const to="chat:"+r!.room;let sent=0;
+  for(const u of r!.members){if(u===a.id)continue;
+   if(s.notifications.some(n=>n.userId===u&&n.to===to&&!n.read&&now-Date.parse(n.at)<10*60e3))continue;
+   userNotice(s,u,r!.kind==="team"?"팀 채팅":"경기 대화",(a.name||"팀원")+"님이 "+r!.title.replace(/ 팀 채팅$/,"")+"에 메시지를 보냈어요.",r!.teamOf(u),to);sent++;}
+  output={notified:sent};
+ }
+ // 채팅 신고: 운영자에게 알린다. 신고한 사람과 방·메시지 번호를 남긴다(메시지 원문은 서버가 따로 보관).
+ else if(type==="chatReported"){
+  const r=chatRoom(s,a.id,c.room);ensure(r,"이 채팅방에 들어갈 수 없어요.",403);const o=s.settings.find(x=>x.id==="owner");
+  if(o)userNotice(s,o.userId,"채팅 신고",(a.name||"이용자")+" · "+r!.title+" · "+textValue(c.excerpt,80,false),undefined,"admin");
+ }
  else throw new AppError("지원하지 않는 작업이에요.");
  s.audit.push({id:id(),actor:a.id,teamId:t||null,type,at:stamp,gameId:c.gameId??null,reason:c.reason??null});return output;
 }
@@ -658,9 +721,11 @@ export function gameTitle(s:State,g:Row){const home=String(teamOf(s,g.home)?.nam
 export function visibleState(s:State,userId:string,selected?:string){
  const owner=isOwner(s,userId),my=s.members.filter(m=>m.userId===userId),active=my.filter(m=>m.status==="active"&&["active","suspended"].includes(teamOf(s,m.teamId)?.status)),team=active.find(x=>x.teamId===selected)??active[0];
  const tid=team?.teamId;const activeAccess=active.some(m=>teamOf(s,m.teamId)?.status==="active");
- const ownTeams=s.teams.filter(t=>t.applicant===userId);const publicTeams=s.teams.filter(t=>t.status==="active"||owner||active.some(m=>m.teamId===t.id)||t.applicant===userId).map(t=>{const full=owner||active.some(m=>m.teamId===t.id)||t.applicant===userId;return full?t:{id:t.id,name:t.name,region:t.region,description:t.description,format:t.format,days:t.days,level:t.level,status:t.status,color:t.color,logo:t.logo,rules:t.rules??""}});
+ const ownTeams=s.teams.filter(t=>t.applicant===userId);const publicTeams=s.teams.filter(t=>t.status==="active"||owner||active.some(m=>m.teamId===t.id)||t.applicant===userId).map(t=>{const full=owner||active.some(m=>m.teamId===t.id)||t.applicant===userId;const counts={memberCount:s.members.filter(m=>m.teamId===t.id&&m.status==="active").length,gameCount:s.games.filter(g=>containsTeam(g,t.id)&&g.status==="completed").length};
+  return full?{...t,...counts}:{id:t.id,name:t.name,region:t.region,description:t.description,format:t.format,days:t.days,level:t.level,status:t.status,color:t.color,logo:t.logo,rules:t.rules??"",
+   photos:(t.photos??[]).map((p:Row)=>({id:p.id,key:p.key,caption:p.caption,at:p.at})),recruiting:!!t.recruiting,recruitNote:t.recruitNote??"",fee:t.fee??null,founded:t.founded??"",...counts}});
  const games=s.games.filter(g=>tid&&containsTeam(g,tid));const listings=activeAccess?s.games.filter(g=>g.listing==="open"&&g.status==="scheduled"&&Date.parse(g.start)>Date.now()&&teamOf(s,g.home)?.status==="active"):[];
- const members=tid?s.members.filter(m=>m.teamId===tid&&(m.status==="active"||m.status==="left"||m.status==="removed"||team.role==="captain")):[];
+ const members=tid?s.members.filter(m=>m.teamId===tid&&(m.status==="active"||m.status==="left"||m.status==="removed"||team.role==="captain")).map(m=>({...m,profile:profileView(s,m.userId)})):[];
  const myGuestRows=s.guests.filter(x=>x.userId===userId);const guestGame=(gid:string)=>s.games.find(y=>y.id===gid);
  return {teams:publicTeams,members,mine:my,ownTeams,teamId:tid??"",role:team?.role??"",isOwner:owner,retired:owner?retiredPeople(s):[],
   myTotals:myTotals(s,userId),
@@ -678,10 +743,45 @@ export function visibleState(s:State,userId:string,selected?:string){
  // 공지는 고정한 것을 먼저, 그다음 최근에 쓴 것부터 보여준다. 예전에는 저장된
  // 차례(=오래된 것 먼저) 그대로 나가서 새 공지가 아래에 묻혔다.
  notices:s.notices.filter(x=>x.teamId===tid).sort((x,y)=>(y.pinned?1:0)-(x.pinned?1:0)||String(y.at).localeCompare(String(x.at))),notifications:s.notifications.filter(n=>n.userId===userId&&(!n.teamId||active.some(m=>m.teamId===n.teamId)||my.some(m=>m.teamId===n.teamId))),
- guests:tid?s.guests.filter(x=>x.teamId===tid):[],
+ // 용병 신청을 받은 팀의 운영진은 신청자 스펙(포지션·주발·지역·팀킥 기록)을, 주장은 키·몸무게까지 본다(2A).
+ guests:tid?s.guests.filter(x=>x.teamId===tid).map(x=>["captain","manager"].includes(team?.role)?{...x,spec:guestSpec(s,x.userId,team?.role==="captain")}:x):[],
+ myProfile:s.users.find(x=>x.id===userId)?.profile??null,chatRooms:chatRooms(s,userId),
  myGuests:myGuestRows.map(x=>{const gm=guestGame(x.gameId);return {...x,teamName:teamOf(s,x.teamId)?.name??"",start:gm?.start??"",venue:gm?.venue??"",gameStatus:gm?.status??""}}),
  guestListings:s.sides.filter(z=>{const gm=guestGame(z.gameId);return guestStatusOf(z)==="open"&&!!gm&&gm.status==="scheduled"&&Date.parse(gm.start)>Date.now()&&teamOf(s,z.teamId)?.status==="active"}).map(z=>{const gm=guestGame(z.gameId)!;return {id:z.id,gameId:gm.id,teamId:z.teamId,teamName:teamOf(s,z.teamId)?.name??"",start:gm.start,end:gm.end,venue:gm.venue,address:gm.address,region:gm.region,format:gm.format,cost:gm.cost,secured:gm.secured,needed:z.guestNeeded??0,approved:approvedGuests(s,gm.id,z.teamId),applied:myGuestRows.find(x=>x.gameId===gm.id&&x.teamId===z.teamId&&["pending","approved"].includes(x.status))?.status??""}}),
  invites:s.invites.filter(x=>x.teamId===tid&&team?.role==="captain"),audit:owner?s.audit.slice(-100).reverse():[]};
+}
+// --- 채팅(1.16) ---
+// 방 이름: "team:<팀>"(그 팀 활동 팀원 모두), "match:<경기>:<상대 팀>"(경기를 연 팀과 상대 팀의 주장·운영진).
+// 상대 팀은 매칭이 확정됐거나(away) 신청이 대기·수락 상태일 때만 방이 열린다. 메시지 자체는 state 가 아니라
+// 따로 된 표(chat_messages)에 둔다 — 매 요청마다 읽히면 안 되고 백업에도 넣지 않는다.
+export function chatRoom(s:State,userId:string,room:string){
+ const r=String(room??"");
+ let m=r.match(/^team:([A-Za-z0-9_-]{1,80})$/);
+ if(m){const t=teamOf(s,m[1]);if(t?.status!=="active")return null;const members=s.members.filter(x=>x.teamId===t.id&&x.status==="active").map(x=>String(x.userId));
+  if(!members.includes(userId))return null;return {room:r,kind:"team",title:t.name+" 팀 채팅",sub:"팀원 "+members.length+"명",members,teamOf:(u:string)=>members.includes(u)?t.id:undefined}}
+ m=r.match(/^match:([A-Za-z0-9_-]{1,80}):([A-Za-z0-9_-]{1,80})$/);
+ if(m){const g=s.games.find(x=>x.id===m![1]),other=m[2];if(!g||g.home===other)return null;
+  const linked=g.away===other||s.requests.some(x=>x.gameId===g.id&&x.teamId===other&&["pending","accepted"].includes(x.status));
+  const home=teamOf(s,g.home),away=teamOf(s,other);if(!linked||home?.status!=="active"||away?.status!=="active")return null;
+  const staff=(tid:string)=>s.members.filter(x=>x.teamId===tid&&x.status==="active"&&["captain","manager"].includes(x.role)).map(x=>String(x.userId));
+  const a=staff(g.home),b=staff(other),members=[...new Set([...a,...b])];if(!members.includes(userId))return null;
+  return {room:r,kind:"match",title:home.name+" ↔ "+away.name,sub:seoulStamp(g.start)+" · "+(g.venue||"구장 미정")+" · 두 팀 주장·운영진",members,gameId:g.id,teamOf:(u:string)=>a.includes(u)?g.home:b.includes(u)?other:undefined};}
+ return null;
+}
+// 내가 들어갈 수 있는 방 목록. 경기 대화는 끝난 지 30일이 지나면 목록에서 뺀다.
+export function chatRooms(s:State,userId:string,now=Date.now()){
+ const out:string[]=[];const mine=s.members.filter(x=>x.userId===userId&&x.status==="active"&&teamOf(s,x.teamId)?.status==="active");
+ for(const m of mine)out.push("team:"+m.teamId);
+ const staffOf=new Set(mine.filter(x=>["captain","manager"].includes(x.role)).map(x=>x.teamId));
+ for(const g of s.games){
+  if(g.status==="cancelled"||Date.parse(g.end)<now-30*864e5)continue;
+  const others=new Set<string>([g.away,...s.requests.filter(x=>x.gameId===g.id&&["pending","accepted"].includes(x.status)).map(x=>x.teamId)].filter(Boolean));
+  for(const o of others)if(staffOf.has(g.home)||staffOf.has(o))out.push("match:"+g.id+":"+o);
+ }
+ return [...new Set(out)].map(r=>chatRoom(s,userId,r)).filter(Boolean).map(x=>({room:x!.room,kind:x!.kind,title:x!.title,sub:x!.sub}));
+}
+export function guestSpec(s:State,userId:string,body:boolean){
+ const t=myTotals(s,userId);return {...(profileView(s,userId,body)??{}),played:t.played,goals:t.goals,assists:t.assists};
 }
 // MVP 투표를 화면에 보낼 모양. 표(누가 누구를 뽑았는지)는 보내지 않는다 — 비밀 투표.
 // 마감 전: 내가 고른 사람과 몇 명이 투표했는지만. 마감 후: 사람별 득표 수와 MVP.

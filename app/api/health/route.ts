@@ -11,6 +11,7 @@ import {socialReady} from "@/lib/social";
 import {newsSource} from "@/lib/news-server";
 import {weatherReady} from "@/lib/weather-server";
 import {load} from "@/lib/store";
+import {cronReady} from "@/lib/cron";
 
 export const dynamic="force-dynamic";
 const no=(x:unknown)=>Response.json(x,{headers:{"Cache-Control":"no-store"}});
@@ -66,5 +67,7 @@ export async function GET(req:Request){
   newsSource:newsSource(),
   // 경기 날씨·미세먼지: 공공데이터포털 키(DATA_GO_KR_KEY)가 들어 있는지
   weatherReady:weatherReady(),
+  // 예약 실행(/api/cron) 비밀값(CRON_SECRET, 16자 이상)이 들어 있는지
+  cronReady:cronReady(),
  });
 }

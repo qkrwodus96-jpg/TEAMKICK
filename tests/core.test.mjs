@@ -38,13 +38,15 @@ compile('lib/auth.ts','auth.mjs',s=>s.replace('import {env} from "cloudflare:wor
 compile('lib/signup-policy.ts','signup-policy.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;'));
 compile('lib/social.ts','social.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/push.ts','push.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
-compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {pushReady} from "@/lib/push";','const pushReady=()=>true;').replace('import {socialReady} from "@/lib/social";','const socialReady=(p)=>p==="google";').replace('import {newsSource} from "@/lib/news-server";','const newsSource=()=>"hub";').replace('import {weatherReady} from "@/lib/weather-server";','const weatherReady=()=>true;').replace('import {APP_VERSION} from "@/lib/version";','const APP_VERSION="9.9.9";').replace('import {schemaStatus,BUILD} from "@/lib/schema";','const schemaStatus=async()=>globalThis.__teamkickTestSchema??{db:true,tables:{},error:""};const BUILD="test";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady,mailAccount,fromDomain} from "@/lib/mail";','const mailReady=()=>true;const mailAccount=async()=>"ok";const fromDomain=()=>"teamkick.co.kr";').replace('import {hashPassword,currentUser} from "@/lib/auth";','const hashPassword=async()=>"";const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";','const kakaoReady=()=>true;const kakaoSecretSet=()=>true;').replace('import {ownerCodeFromEnv} from "@/lib/owner-config";','const ownerCodeFromEnv=()=>true;').replace('"@/lib/store"','"./store.mjs"'));
+compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {cronReady} from "@/lib/cron";','const cronReady=()=>true;').replace('import {pushReady} from "@/lib/push";','const pushReady=()=>true;').replace('import {socialReady} from "@/lib/social";','const socialReady=(p)=>p==="google";').replace('import {newsSource} from "@/lib/news-server";','const newsSource=()=>"hub";').replace('import {weatherReady} from "@/lib/weather-server";','const weatherReady=()=>true;').replace('import {APP_VERSION} from "@/lib/version";','const APP_VERSION="9.9.9";').replace('import {schemaStatus,BUILD} from "@/lib/schema";','const schemaStatus=async()=>globalThis.__teamkickTestSchema??{db:true,tables:{},error:""};const BUILD="test";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady,mailAccount,fromDomain} from "@/lib/mail";','const mailReady=()=>true;const mailAccount=async()=>"ok";const fromDomain=()=>"teamkick.co.kr";').replace('import {hashPassword,currentUser} from "@/lib/auth";','const hashPassword=async()=>"";const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";','const kakaoReady=()=>true;const kakaoSecretSet=()=>true;').replace('import {ownerCodeFromEnv} from "@/lib/owner-config";','const ownerCodeFromEnv=()=>true;').replace('"@/lib/store"','"./store.mjs"'));
 compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./schema"','"./schema.mjs"').replace('"./store"','"./store.mjs"'));
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
 compile('app/api/auth/route.ts','auth-api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword,limit,clientKey,verifyEmail,resendVerification,currentUser,completeSocialSignup,cancelSocialSignup,clearedSignupCookie} from "@/lib/auth";','const completeSocialSignup=async()=>({user:{userId:"u",fullName:"새 사람"},token:"t"});const cancelSocialSignup=async()=>{};const clearedSignupCookie=()=>"";const signUp=async()=>{(globalThis.__teamkickSignups??=[]).push(1);return {user:{userId:"u",fullName:"새 사람"},token:"t",verificationSent:false}};const signIn=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const signOut=async()=>{};const sessionCookie=()=>"";const clearedCookie=()=>"";const requestPasswordReset=async()=>{};const resetPassword=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const limit=async()=>{};const clientKey=()=>"k";const verifyEmail=async()=>{};const resendVerification=async()=>true;const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>!!globalThis.__teamkickSocial;').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>false;').replace('"@/lib/model"','"./model.mjs"'));
 compile('app/api/app/route.ts','api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices,devicesAmong,pushReady} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);const hook=globalThis.__teamkickTestWake;if(hook)return hook(ids);return {sent:ids.length,failed:0,results:[]}};const devicesAmong=async(ids)=>ids.filter(x=>(globalThis.__teamkickTestDevices??[]).includes(x)).length;const pushReady=()=>true;').replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 compile('lib/unlink.ts','unlink.mjs',s=>s.replace('"./social"','"./social.mjs"'));
 compile('lib/chat-server.ts','chat-server.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
+compile('lib/cron.ts','cron.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;'));
+compile('app/api/cron/route.ts','cron-api.mjs',s=>s.replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {wakeDevices} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0,results:[]}};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/cron"','"./cron.mjs"'));
 compile('lib/close.ts','close.mjs',s=>s.replace('"./store"','"./store.mjs"').replace('"./model"','"./model.mjs"').replace('"./auth"','"./auth.mjs"').replace('"./unlink"','"./unlink.mjs"'));
 globalThis.__teamkickTestEnv={};
 const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp,mvpView,mvpWinners,periodRange,rankRows,nationalRanking,canSeeGame,gameTitle}=await import(path.join(runtime,'model.mjs'));
@@ -72,6 +74,7 @@ const closeLib=await import(path.join(runtime,'close.mjs'));
 const chatServer=await import(path.join(runtime,'chat-server.mjs'));
 const modelLib=await import(path.join(runtime,'model.mjs'));
 const authApi=await import(path.join(runtime,'auth-api.mjs'));
+const cronApi=await import(path.join(runtime,'cron-api.mjs'));
 const NOW=Date.now(),DAY=864e5;
 const owner={id:'owner',name:'운영자',ownerSetup:true},A={id:'a',name:'A 주장'},B={id:'b',name:'B 주장'},C={id:'c',name:'C 주장'},member={id:'player',name:'선수'};
 function command(s,a,c,when=NOW){return applyCommand(s,a,c,when)}
@@ -3523,4 +3526,51 @@ test('채팅 저장: 보내기·이어 읽기·안 읽은 개수·내 것만 지
   await chatServer.sendMessage('team:z','gone','떠날 사람','안녕',t0+367*864e5);
   await chatServer.forgetChat('gone');
   assert.equal((await chatServer.listMessages('team:z')).length,0,'탈퇴하면 삭제');
+});
+
+test('경기 3시간 전 알림: 3시간 안에 시작하는 경기만, 팀마다 한 번, 불참이라고 한 사람은 빼고 승인된 용병은 넣는다',()=>{
+  const {s,a}=fixture(),D={id:'d',name:'D 선수'},H=3600e3;
+  addPlayer(s,a);addPlayer(s,a,D);
+  const cancelled=game(s,a,{start:NOW+H});command(s,A,{type:'cancelGame',teamId:a,gameId:cancelled,reason:'우천 취소'},NOW-DAY);
+  const soon=game(s,a,{start:NOW+2*H});game(s,a,{start:NOW+5*H});
+  command(s,D,{type:'vote',teamId:a,gameId:soon,value:'no'},NOW-DAY);
+  command(s,A,{type:'openGuests',teamId:a,gameId:soon,needed:2},NOW-DAY);
+  const guestId=command(s,C,{type:'applyGuest',teamId:a,gameId:soon,name:'C 용병',position:'FW',number:10},NOW-DAY).guestId;
+  command(s,A,{type:'approveGuest',teamId:a,gameId:soon,guestId},NOW-DAY);
+  const before=s.notifications.length;
+  assert.equal(modelLib.gameReminders(s,NOW).sides,1,'3시간 안의 경기 하나만');
+  const made=s.notifications.slice(before);
+  assert.deepEqual(made.map(x=>x.userId).sort(),['a','c','player'],'불참(D)은 빼고 용병(C)은 넣는다');
+  for(const n of made){assert.match(n.title,/^오늘 \d\d:\d\d (용병 )?경기$/);assert.match(n.body,/외부 FC/);assert.match(n.body,/축구장/)}
+  const guest=made.find(x=>x.userId==='c');assert.equal(guest.teamId,undefined,'용병 알림은 팀 없이(용병 알림함에 보이게)');
+  assert.ok(visibleState(s,'c').notifications.some(x=>x.id===guest.id),'용병 본인 알림함에 보인다');
+  assert.ok(made.filter(x=>x.userId!=='c').every(x=>x.gameId===soon&&x.to==='schedule'));
+  assert.equal(modelLib.gameReminders(s,NOW+10*60e3).sides,0,'두 번 보내지 않는다');
+  assert.equal(modelLib.gameReminders(s,NOW+3*H).sides,1,'나중 경기는 3시간 안에 들어왔을 때');
+  assert.ok(!s.notifications.some(x=>x.gameId===cancelled&&/^오늘/.test(x.title)),'취소된 경기는 보내지 않는다');
+  // 예약 실행이 멈췄다가 경기 시작 뒤에 돌아도 지난 경기 알림은 보내지 않는다
+  const {s:s2,a:a2}=fixture();game(s2,a2,{start:NOW+H});
+  assert.equal(modelLib.gameReminders(s2,NOW+2*H).sides,0);
+});
+
+test('예약 실행(/api/cron): 비밀값이 맞을 때만, 알림은 한 번만, 응답에는 숫자만',async()=>{
+  localDatabase();const {s,a}=fixture();addPlayer(s,a);game(s,a,{start:Date.now()+2*3600e3});
+  await repository.commit(blank(),s,0);
+  const call=(auth)=>cronApi.GET(new Request('https://teamkick.test/api/cron',{headers:auth?{authorization:auth}:{}}));
+  const secret='test-cron-secret-0123456789';
+  delete globalThis.__teamkickTestEnv.CRON_SECRET;
+  assert.equal((await call('Bearer '+secret)).status,503,'비밀값이 없으면 돌지 않는다');
+  globalThis.__teamkickTestEnv.CRON_SECRET='short';
+  assert.equal((await call('Bearer short')).status,503,'16자보다 짧은 비밀값은 받지 않는다');
+  globalThis.__teamkickTestEnv.CRON_SECRET=secret;
+  assert.equal((await call()).status,401);
+  assert.equal((await call('Bearer wrong-secret-0123456789')).status,401);
+  globalThis.__teamkickTestWoken=[];
+  const first=await call('Bearer '+secret);assert.equal(first.status,200);
+  const body=await first.json();assert.equal(body.reminded,1);assert.equal(body.people,2);
+  assert.deepEqual(Object.keys(body).sort(),['at','failed','ok','people','reminded','sent'],'누구에게 보냈는지는 담지 않는다');
+  assert.deepEqual([...globalThis.__teamkickTestWoken].sort(),['a','player'],'저장 뒤 기기를 깨운다');
+  const {state}=await repository.load();assert.equal(state.notifications.filter(x=>/^오늘/.test(x.title)).length,2,'DB에 저장된다');
+  const again=await (await call('Bearer '+secret)).json();assert.equal(again.reminded,0,'다음 실행에서 다시 보내지 않는다');
+  delete globalThis.__teamkickTestEnv.CRON_SECRET;
 });

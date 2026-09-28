@@ -52,13 +52,24 @@ export const STATEMENTS=[
  // 계정을 만들지 않는다. 동의하면 계정을 만들고 이 줄을 지운다. id 는 쿠키 값의 해시다.
  `CREATE TABLE IF NOT EXISTS social_signups (id text PRIMARY KEY NOT NULL, provider text NOT NULL, subject text NOT NULL, name text NOT NULL, expires text NOT NULL, at text NOT NULL)`,
  `CREATE INDEX IF NOT EXISTS idx_social_signups_expires ON social_signups (expires)`,
+ // 채팅(1.16). 메시지는 entities 가 아니라 여기에 둔다 — 매 요청마다 읽히면 안 되고, 백업(entities)에도 넣지 않는다.
+ // 팀 채팅은 1년, 경기 대화는 60일 지나면 지운다(보낼 때 함께 정리). 탈퇴하면 그 사람 메시지를 지운다.
+ `CREATE TABLE IF NOT EXISTS chat_messages (id text PRIMARY KEY NOT NULL, room text NOT NULL, account_id text NOT NULL, name text NOT NULL, body text NOT NULL, at text NOT NULL, deleted integer DEFAULT 0 NOT NULL)`,
+ `CREATE INDEX IF NOT EXISTS idx_chat_messages_room_at ON chat_messages (room,at)`,
+ `CREATE INDEX IF NOT EXISTS idx_chat_messages_account ON chat_messages (account_id)`,
+ // 방마다 마지막으로 읽은 시각(안 읽은 개수 표시용).
+ `CREATE TABLE IF NOT EXISTS chat_reads (id text PRIMARY KEY NOT NULL, account_id text NOT NULL, room text NOT NULL, at text NOT NULL)`,
+ `CREATE INDEX IF NOT EXISTS idx_chat_reads_account ON chat_reads (account_id)`,
+ // 신고. 운영자가 확인할 수 있게 메시지 내용을 신고 시점 그대로 남긴다(90일 뒤 삭제).
+ `CREATE TABLE IF NOT EXISTS chat_reports (id text PRIMARY KEY NOT NULL, message_id text NOT NULL, room text NOT NULL, reporter text NOT NULL, author text NOT NULL, body text NOT NULL, reason text NOT NULL, at text NOT NULL)`,
+ `CREATE INDEX IF NOT EXISTS idx_chat_reports_at ON chat_reports (at)`,
 ];
 
 // 배포된 코드가 어느 시점 것인지 화면으로 확인하기 위한 표시.
 // 스키마나 진단에 영향을 주는 변경을 할 때 함께 올린다.
-export const BUILD="2026-09-28-setup-chips";
+export const BUILD="2026-09-29-chat-profile";
 
-export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications","push_subs","closed_accounts","social_signups"];
+export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications","push_subs","closed_accounts","social_signups","chat_messages","chat_reads","chat_reports"];
 
 // 카카오만 있던 시절의 계정을 새 열로 옮긴다. 여러 번 돌아도 안전하다.
 export async function backfillAccounts(){

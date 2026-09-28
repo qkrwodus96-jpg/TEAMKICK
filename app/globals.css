@@ -311,8 +311,17 @@ html[data-splash="skip"] #teamkick-splash{display:none}
 .invite-code small{grid-column:1/-1;font-size:12.5px;color:#6f7d76}
 .info-wx{padding:12px 2px;border-bottom:1px solid #e8ece9}.info-wx:empty{display:none}
 
-/* 1.15.1 다음 경기 카드 — 축구장 선(가운데 원·하프라인·양쪽 박스)과 짙은 초록 사선 그라데이션 */
-.next-match{background:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20400%20240%22%20preserveAspectRatio%3D%22xMidYMid%20slice%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.13%22%20stroke-width%3D%221.6%22%3E%3Crect%20x%3D%228%22%20y%3D%228%22%20width%3D%22384%22%20height%3D%22224%22%20rx%3D%223%22/%3E%3Cline%20x1%3D%22200%22%20y1%3D%228%22%20x2%3D%22200%22%20y2%3D%22232%22/%3E%3Ccircle%20cx%3D%22200%22%20cy%3D%22120%22%20r%3D%2234%22/%3E%3Crect%20x%3D%228%22%20y%3D%2266%22%20width%3D%2246%22%20height%3D%22108%22/%3E%3Crect%20x%3D%228%22%20y%3D%2296%22%20width%3D%2218%22%20height%3D%2248%22/%3E%3Crect%20x%3D%22346%22%20y%3D%2266%22%20width%3D%2246%22%20height%3D%22108%22/%3E%3Crect%20x%3D%22374%22%20y%3D%2296%22%20width%3D%2218%22%20height%3D%2248%22/%3E%3C/g%3E%3Cg%20fill%3D%22%23fff%22%20fill-opacity%3D%22.18%22%3E%3Ccircle%20cx%3D%22200%22%20cy%3D%22120%22%20r%3D%222.4%22/%3E%3Ccircle%20cx%3D%2240%22%20cy%3D%22120%22%20r%3D%222%22/%3E%3Ccircle%20cx%3D%22360%22%20cy%3D%22120%22%20r%3D%222%22/%3E%3C/g%3E%3C/svg%3E") center/cover no-repeat,linear-gradient(135deg,#0c6a40 0%,#0a5636 55%,#07432a 100%)}
+/* 1.16 다음 경기 카드(스쿼디 참고) — 카드 정가운데에 하프라인과 가운데 원, 양쪽 끝에 페널티 박스.
+   선은 카드 크기가 바뀌어도 가운데를 지키도록 그림 하나로 늘리지 않고 조각마다 제자리에 둔다. */
+.next-match{position:relative;isolation:isolate;background:linear-gradient(140deg,#0e7648 0%,#0b5d39 48%,#07442a 100%)}
+.next-match::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:
+ radial-gradient(circle at 50% 50%,rgba(255,255,255,.24) 0 2.4px,transparent 3px),
+ radial-gradient(circle at 50% 50%,transparent 0 69px,rgba(255,255,255,.17) 69.5px 71px,transparent 71.5px),
+ linear-gradient(rgba(255,255,255,.17),rgba(255,255,255,.17)) 50% 0/1.5px 100% no-repeat,
+ url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2274%22%20height%3D%22168%22%20viewBox%3D%220%200%2074%20168%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.17%22%20stroke-width%3D%221.5%22%3E%3Cpath%20d%3D%22M0%2024H56V144H0%22/%3E%3Cpath%20d%3D%22M0%2058H24V110H0%22/%3E%3Cpath%20d%3D%22M56%2064A26%2026%200%200%201%2056%20104%22/%3E%3C/g%3E%3Ccircle%20cx%3D%2238%22%20cy%3D%2284%22%20r%3D%222.2%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.22%22/%3E%3C/svg%3E") left center/74px 168px no-repeat,
+ url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2274%22%20height%3D%22168%22%20viewBox%3D%220%200%2074%20168%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.17%22%20stroke-width%3D%221.5%22%3E%3Cpath%20d%3D%22M74%2024H18V144H74%22/%3E%3Cpath%20d%3D%22M74%2058H50V110H74%22/%3E%3Cpath%20d%3D%22M18%2064A26%2026%200%200%200%2018%20104%22/%3E%3C/g%3E%3Ccircle%20cx%3D%2236%22%20cy%3D%2284%22%20r%3D%222.2%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.22%22/%3E%3C/svg%3E") right center/74px 168px no-repeat,
+ linear-gradient(rgba(255,255,255,.17),rgba(255,255,255,.17)) 0 0/100% 0 no-repeat}
+.next-match .match-arrow{z-index:2}
 /* 1.15.1 매칭 카드(스쿼디 참고) — 날짜 상자 없이 한 줄 */
 .mcard,.mcard-btn{display:grid;grid-template-columns:minmax(0,1fr);gap:5px;padding:15px 16px}
 .mc-top{display:flex;align-items:center;gap:11px;justify-content:flex-start}
@@ -333,3 +342,75 @@ html[data-splash="skip"] #teamkick-splash{display:none}
 .filter-panel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:12px;border:1px solid #e3e8e5;border-radius:12px;background:#fafbfa}
 .filter-panel label{display:grid;gap:5px;font-size:12.5px;font-weight:650;color:#6f7d76}
 @media(max-width:600px){.filter-panel{grid-template-columns:1fr 1fr}.filter-panel label:last-child{grid-column:1/-1}}
+/* 1.16 매칭 검색 한 줄: 검색칸(팀·구장·주소·지역) + 날짜 선택 + 검색 */
+.one-search{display:grid!important;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:stretch}
+.date-pick{position:relative;display:inline-flex;align-items:center;gap:6px;padding:0 12px;border:1px solid #d7dfda;border-radius:10px;background:#fff;font-size:14px;font-weight:650;color:#4d5d53;white-space:nowrap;cursor:pointer;min-height:44px}
+.date-pick.on{border-color:#148b54;color:#148b54}
+.date-pick input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:0;padding:0}
+@media(max-width:430px){.one-search{grid-template-columns:minmax(0,1fr) auto}.one-search .search-input{grid-column:1/-1}}
+/* 1.16 선수 프로필 */
+.chip-row.wrap{flex-wrap:wrap}
+.pos-picker{display:grid;gap:8px}
+.pos-picker .field-label em{font-style:normal;font-weight:600;color:#148b54}
+.pos-row{display:grid;grid-template-columns:62px minmax(0,1fr);gap:8px;align-items:start}
+.pos-group{font-size:12.5px;font-weight:650;color:#6f7d76;padding-top:9px}
+.pos-chip{display:grid;justify-items:center;gap:0;min-width:58px;padding:6px 8px;border:1px solid #d7dfda;border-radius:10px;background:#fff;font:inherit;cursor:pointer;line-height:1.25}
+.pos-chip b{font-size:13.5px;font-weight:750;color:#172923}
+.pos-chip small{font-size:10.5px;color:#8a968e}
+.pos-chip.on{background:#172923;border-color:#172923}.pos-chip.on b,.pos-chip.on small{color:#fff}
+.insta-input{display:flex;align-items:center;border:1px solid var(--border);border-radius:10px;padding-left:12px;background:#fff}
+.insta-input span{color:#8a968e;font-weight:600}.insta-input input{border:0!important;box-shadow:none!important}
+.spec-line{margin:3px 0 0;font-size:13px;color:#2c3d34;font-weight:600;overflow-wrap:anywhere}.spec-line a{color:#148b54}
+/* 1.17 팀 프로필 — 인스타식 */
+.tp{display:grid;gap:14px}
+.tp-head{display:grid;grid-template-columns:auto minmax(0,1fr);gap:22px;align-items:center}
+.tp-logo .club-crest{width:86px;height:86px;font-size:28px;box-shadow:0 0 0 3px #fff,0 0 0 5px #148b54}
+.tp-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));text-align:center}
+.tp-stats b{display:block;font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}
+.tp-stats span{font-size:13px;color:#4d5d53}
+.tp-bio{display:grid;gap:3px;font-size:14.5px;line-height:1.55}
+.tp-bio strong{font-size:16px}
+.tp-facts{font-size:13px;color:#6f7d76}
+.tp-bio p{margin:2px 0 0;white-space:pre-wrap}
+.tp-recruit{display:flex;align-items:center;gap:6px;color:#148b54;font-size:13.5px}
+.tp-actions{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:8px}
+.tp-actions .btn{justify-content:center;min-height:38px;font-size:14px}
+.tp-upload{display:grid;gap:8px;padding:12px;border:1px dashed #cfd8d2;border-radius:12px}
+.tp-tabs{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #e3e8e5;margin-top:4px}
+.tp-tabs button{display:flex;justify-content:center;align-items:center;gap:6px;padding:11px 0;border:0;border-top:2px solid transparent;margin-top:-1px;background:none;font:inherit;font-size:13.5px;font-weight:650;color:#8a968e;cursor:pointer}
+.tp-tabs button.on{border-top-color:#172923;color:#172923}
+.tp-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;margin-inline:-4px}
+.tp-grid button{padding:0;border:0;background:#eef2ef;aspect-ratio:1/1;cursor:pointer;overflow:hidden}
+.tp-grid img{width:100%;height:100%;object-fit:cover;display:block}
+.tp-empty{display:grid;justify-items:center;gap:6px;padding:34px 0;color:#8a968e;text-align:center}.tp-empty strong{color:#2c3d34}
+.tp-rules{padding:6px 2px}
+.tp-view{position:fixed;inset:0;z-index:80;background:rgba(10,16,12,.86);display:grid;place-items:center;padding:16px}
+.tp-view-inner{display:grid;gap:8px;max-width:min(560px,100%)}
+.tp-view-inner img{width:100%;max-height:74vh;object-fit:contain;border-radius:10px;background:#000}
+.tp-view-bar{display:flex;align-items:center;gap:8px;color:#fff;justify-content:flex-end}.tp-view-bar span{flex:1;font-size:14px}.tp-view-bar .btn{color:#fff}
+.team-link{border:0;background:none;padding:0;font:inherit;color:inherit;cursor:pointer}
+.mc-team{display:flex;align-items:center;gap:11px;flex:1;min-width:0;border:0;background:none;padding:0;font:inherit;color:inherit;cursor:pointer;text-align:left}
+.mc-team strong{font-size:16px}
+/* 1.16 채팅 */
+.chat-rooms{display:grid;gap:2px}
+.chat-room{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 2px;border:0;border-bottom:1px solid #eef1ef;background:none;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.chat-ico{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:#e7f4ec;color:#148b54}.chat-ico.match{background:#eef2fb;color:#2f55b4}
+.chat-room-main{display:grid;gap:1px;min-width:0}.chat-room-main b{font-size:15px}.chat-room-main small{font-size:13px;color:#6f7d76;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-room-side{display:grid;justify-items:end;gap:4px}.chat-room-side small{font-size:11.5px;color:#8a968e}.chat-room-side i{font-style:normal;font-size:11.5px;font-weight:750;color:#fff;background:#e5484d;border-radius:999px;padding:1px 7px;min-width:20px;text-align:center}
+.chat{display:grid;grid-template-rows:auto minmax(0,1fr) auto auto;gap:8px;height:min(70vh,640px)}
+.chat-head{display:grid;gap:1px;padding-bottom:8px;border-bottom:1px solid #e8ece9}.chat-head b{font-size:15.5px}.chat-head small{font-size:12.5px;color:#6f7d76}
+.chat-box{overflow-y:auto;display:grid;align-content:start;gap:6px;padding:4px 2px;overscroll-behavior:contain}
+.chat-empty{display:grid;justify-items:center;gap:6px;padding:40px 12px;color:#8a968e;text-align:center}.chat-empty small{font-size:12px;max-width:34ch}
+.chat-day{justify-self:center;font-size:11.5px;color:#8a968e;background:#f1f4f2;border-radius:999px;padding:2px 10px;margin:8px auto 2px;width:max-content}
+.chat-msg{display:grid;gap:2px;justify-items:start}.chat-msg.mine{justify-items:end}
+.chat-name{font-size:12px;color:#6f7d76;padding-left:4px}
+.chat-line{display:flex;align-items:flex-end;gap:5px;max-width:86%}.chat-msg.mine .chat-line{flex-direction:row-reverse}
+.chat-line small{font-size:10.5px;color:#a3aea7;flex:none}
+.chat-bubble{border:0;font:inherit;font-size:14.5px;line-height:1.5;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere;padding:8px 12px;border-radius:16px 16px 16px 4px;background:#f1f4f2;color:#172923;cursor:pointer}
+.chat-msg.mine .chat-bubble{background:#148b54;color:#fff;border-radius:16px 16px 4px 16px}
+.chat-bubble.gone{background:none;border:1px dashed #d7dfda;color:#8a968e;cursor:default}
+.chat-menu button{display:inline-flex;align-items:center;gap:4px;border:1px solid #e3e8e5;background:#fff;border-radius:999px;padding:3px 10px;font:inherit;font-size:12.5px;color:#4d5d53;cursor:pointer}
+.chat-input{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end;padding-top:8px;border-top:1px solid #e8ece9}
+.chat-input textarea{resize:none;min-height:44px;max-height:120px;border:1px solid var(--border);border-radius:12px;padding:10px 12px;font:inherit;font-size:15px}
+.chat-input .btn{min-height:44px;padding:0 14px}
+.crop-stage.square{border-radius:12px}

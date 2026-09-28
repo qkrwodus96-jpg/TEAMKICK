@@ -108,7 +108,7 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  // 이미 열려 있는 창에는 메시지로 알려 준다. 둘 다 받아 탭을 옮긴다.
  const VIEWS=["home","schedule","matching","records","team","admin"];
  useEffect(()=>{
-  const go=(name?:string|null)=>{if(name&&VIEWS.includes(name))setActualView(name)};
+  const go=(name?:string|null)=>{if(name?.startsWith("chat:")){setActualView("team");setModal({kind:"chat",room:name.slice(5)});return}if(name&&VIEWS.includes(name))setActualView(name)};
   go(new URLSearchParams(window.location.search).get("to"));
   if(window.location.search.includes("to="))window.history.replaceState(null,"","/");
   const onMessage=(e:MessageEvent)=>{

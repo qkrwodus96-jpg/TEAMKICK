@@ -44,6 +44,7 @@ compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {current
 compile('app/api/auth/route.ts','auth-api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword,limit,clientKey,verifyEmail,resendVerification,currentUser,completeSocialSignup,cancelSocialSignup,clearedSignupCookie} from "@/lib/auth";','const completeSocialSignup=async()=>({user:{userId:"u",fullName:"새 사람"},token:"t"});const cancelSocialSignup=async()=>{};const clearedSignupCookie=()=>"";const signUp=async()=>{(globalThis.__teamkickSignups??=[]).push(1);return {user:{userId:"u",fullName:"새 사람"},token:"t",verificationSent:false}};const signIn=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const signOut=async()=>{};const sessionCookie=()=>"";const clearedCookie=()=>"";const requestPasswordReset=async()=>{};const resetPassword=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const limit=async()=>{};const clientKey=()=>"k";const verifyEmail=async()=>{};const resendVerification=async()=>true;const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>!!globalThis.__teamkickSocial;').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>false;').replace('"@/lib/model"','"./model.mjs"'));
 compile('app/api/app/route.ts','api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices,devicesAmong,pushReady} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);const hook=globalThis.__teamkickTestWake;if(hook)return hook(ids);return {sent:ids.length,failed:0,results:[]}};const devicesAmong=async(ids)=>ids.filter(x=>(globalThis.__teamkickTestDevices??[]).includes(x)).length;const pushReady=()=>true;').replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 compile('lib/unlink.ts','unlink.mjs',s=>s.replace('"./social"','"./social.mjs"'));
+compile('lib/chat-server.ts','chat-server.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/close.ts','close.mjs',s=>s.replace('"./store"','"./store.mjs"').replace('"./model"','"./model.mjs"').replace('"./auth"','"./auth.mjs"').replace('"./unlink"','"./unlink.mjs"'));
 globalThis.__teamkickTestEnv={};
 const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp,mvpView,mvpWinners,periodRange,rankRows,nationalRanking,canSeeGame,gameTitle}=await import(path.join(runtime,'model.mjs'));
@@ -68,6 +69,8 @@ const screens=await import(path.join(runtime,'screens-bits.mjs'));
 const api=await import(path.join(runtime,'api.mjs'));
 const unlinkLib=await import(path.join(runtime,'unlink.mjs'));
 const closeLib=await import(path.join(runtime,'close.mjs'));
+const chatServer=await import(path.join(runtime,'chat-server.mjs'));
+const modelLib=await import(path.join(runtime,'model.mjs'));
 const authApi=await import(path.join(runtime,'auth-api.mjs'));
 const NOW=Date.now(),DAY=864e5;
 const owner={id:'owner',name:'운영자',ownerSetup:true},A={id:'a',name:'A 주장'},B={id:'b',name:'B 주장'},C={id:'c',name:'C 주장'},member={id:'player',name:'선수'};
@@ -2139,7 +2142,8 @@ test('가입 전 사람도 팀 찾기에서 로고를 본다(다른 내부 정�
   assert.equal(seen.logo,key,'로고 주소가 있어야 한다');
   assert.equal(seen.applicant,undefined,'신청자는 숨긴다');
   // 회칙(rules)은 가입 전에 읽을 수 있게 일부러 공개한다(2026-09-26, 화면에 안내).
-  assert.deepEqual(Object.keys(seen).sort(),['color','days','description','format','id','level','logo','name','region','rules','status'].filter(k=>k in seen).sort());
+  // 팀 프로필(1.17): 사진·팀원 모집·월 회비·창단·팀원 수·경기 수도 가입 전 사람에게 공개한다(LEGAL 2-13).
+  assert.deepEqual(Object.keys(seen).sort(),['color','days','description','fee','format','founded','gameCount','id','level','logo','memberCount','name','photos','recruitNote','recruiting','region','rules','status'].sort());
   // 우리 팀 주장에게는 전부
   assert.equal(visibleState(s,A.id,a).teams.find(t=>t.id===a).logo,key);
 });
@@ -3394,4 +3398,129 @@ test('초대 코드는 6자리이고, 코드로 팀을 찾으며, 폐기·만료
   // 코드는 주장에게만 보인다
   assert.ok(visibleState(f.s,A.id,f.a).invites.every(x=>x.code));
   assert.equal(visibleState(f.s,member.id).invites.length,0);
+});
+
+// --- 1.16 선수 프로필 · 용병 스펙 ---
+test('선수 프로필: 세부 포지션·주발·키/몸무게·인스타·활동 지역을 검사해 저장하고, 키·몸무게는 용병 신청받은 팀 주장에게만 보인다',()=>{
+  const f=fixture();
+  const m=addPlayer(f.s,f.a);
+  // 팀이 없어도 프로필은 고칠 수 있다
+  command(f.s,C,{type:'setPlayerProfile',main:'cam',sub:'CM',foot:'오른발',height:'178',weight:72,instagram:'@kick.er_1',regions:['서울','경기 남부']});
+  const u=f.s.users.find(x=>x.id===C.id).profile;
+  assert.deepEqual(u,{main:'CAM',sub:'CM',foot:'오른발',height:178,weight:72,instagram:'kick.er_1',regions:['서울','경기 남부']});
+  assert.throws(()=>command(f.s,C,{type:'setPlayerProfile',height:300}),/범위/);
+  assert.throws(()=>command(f.s,C,{type:'setPlayerProfile',instagram:'bad name!'}),/인스타그램/);
+  assert.throws(()=>command(f.s,C,{type:'setPlayerProfile',regions:['서울','인천','대전','부산']}),/3곳/);
+  assert.throws(()=>command(f.s,C,{type:'setPlayerProfile',foot:'머리'}),/주발/);
+  assert.equal(command(f.s,C,{type:'setPlayerProfile',main:'없는자리'})&&f.s.users.find(x=>x.id===C.id).profile.main,'MF','모르는 포지션은 MF');
+  command(f.s,C,{type:'setPlayerProfile',main:'CAM'});
+  // 팀원 프로필 수정: 팀 정보(이름·번호)와 계정 프로필을 함께, 팀 포지션은 주 포지션으로
+  command(f.s,member,{type:'editProfile',teamId:f.a,name:'선수',number:7,position:'ST',profile:{main:'ST',foot:'왼발',height:170,weight:65}});
+  assert.equal(m.position,'ST');assert.equal(f.s.users.find(x=>x.id===member.id).profile.foot,'왼발');
+  // 팀원끼리는 키·몸무게를 못 본다
+  const mate=visibleState(f.s,A.id,f.a).members.find(x=>x.userId===member.id);
+  assert.equal(mate.profile.foot,'왼발');assert.ok(!('height' in mate.profile),'팀원에게 키 안 보임');
+  // 용병 신청: B 팀 경기에 C 가 신청 → B 주장은 키까지, B 운영진은 키 없이, 다른 사람은 스펙 없음
+  const gameId=command(f.s,B,{type:'createGame',teamId:f.b,start:iso(NOW+2*DAY),end:iso(NOW+2*DAY+7200e3),venue:'축구장',address:'서울',external:'외부'}).gameId;
+  command(f.s,B,{type:'openGuests',teamId:f.b,gameId,needed:2});
+  command(f.s,C,{type:'applyGuest',teamId:f.b,gameId,name:'C 용병'});
+  assert.equal(f.s.guests[0].position,'CAM','포지션을 비우면 프로필 주 포지션');
+  const spec=visibleState(f.s,B.id,f.b).guests[0].spec;
+  assert.equal(spec.height,178);assert.equal(spec.main,'CAM');assert.equal(spec.played,0);
+  const mgr={id:'mgr',name:'운영진'};command(f.s,mgr,{type:'joinTeam',teamId:f.b,name:'운영진',position:'MF',number:3});const mm=f.s.members.find(x=>x.teamId===f.b&&x.userId===mgr.id);command(f.s,B,{type:'approveMember',teamId:f.b,memberId:mm.id});
+  command(f.s,B,{type:'setRole',teamId:f.b,memberId:mm.id,role:'manager'});
+  const spec2=visibleState(f.s,mgr.id,f.b).guests[0].spec;
+  assert.equal(spec2.main,'CAM');assert.ok(!('height' in spec2),'운영진은 키·몸무게 없이');
+  assert.equal(visibleState(f.s,A.id,f.a).guests.length,0,'다른 팀은 신청을 못 본다');
+});
+
+// --- 1.17 팀 프로필 ---
+test('팀 프로필: 운영진만 사진을 올리고(자기 팀 폴더만, 30장), 팀원 모집·회비·창단은 주장이 고치며, 가입 전 사람도 사진·모집을 본다',()=>{
+  const f=fixture();const m=addPlayer(f.s,f.a);
+  assert.throws(()=>command(f.s,member,{type:'addTeamPhoto',teamId:f.a,key:'teamphotos/'+f.a+'/x.jpg'}),/권한/,'일반 팀원은 못 올림');
+  assert.throws(()=>command(f.s,A,{type:'addTeamPhoto',teamId:f.a,key:'teamphotos/'+f.b+'/x.jpg'}),/이미지/,'다른 팀 폴더');
+  command(f.s,A,{type:'addTeamPhoto',teamId:f.a,key:'teamphotos/'+f.a+'/1.jpg',caption:'첫 경기'});
+  command(f.s,A,{type:'addTeamPhoto',teamId:f.a,key:'teamphotos/'+f.a+'/2.jpg'});
+  assert.equal(f.s.teams.find(t=>t.id===f.a).photos[0].key,'teamphotos/'+f.a+'/2.jpg','새 사진이 맨 앞');
+  assert.throws(()=>command(f.s,A,{type:'addTeamPhoto',teamId:f.a,key:'teamphotos/'+f.a+'/2.jpg'}),/이미 올린/);
+  for(let i=3;i<=30;i++)command(f.s,A,{type:'addTeamPhoto',teamId:f.a,key:'teamphotos/'+f.a+'/'+i+'.jpg'});
+  assert.throws(()=>command(f.s,A,{type:'addTeamPhoto',teamId:f.a,key:'teamphotos/'+f.a+'/31.jpg'}),/30장/);
+  command(f.s,A,{type:'removeTeamPhoto',teamId:f.a,key:'teamphotos/'+f.a+'/1.jpg'});
+  assert.equal(f.s.teams.find(t=>t.id===f.a).photos.length,29);
+  command(f.s,A,{type:'editTeam',teamId:f.a,name:'팀 0',region:'서울',recruiting:true,recruitNote:'GK 구해요',fee:'30000',founded:'2019'});
+  assert.throws(()=>command(f.s,A,{type:'editTeam',teamId:f.a,name:'팀 0',region:'서울',founded:'19'}),/창단/);
+  assert.throws(()=>command(f.s,member,{type:'editTeam',teamId:f.a,name:'팀 0',region:'서울',recruiting:false}),/권한/,'주장만');
+  // 가입 전 사람(C)이 보는 팀 A
+  const seen=visibleState(f.s,C.id).teams.find(t=>t.id===f.a);
+  assert.equal(seen.recruiting,true);assert.equal(seen.recruitNote,'GK 구해요');assert.equal(seen.fee,30000);assert.equal(seen.founded,'2019');
+  assert.equal(seen.photos.length,29);assert.ok(!('by' in seen.photos[0]),'올린 사람은 안 보냄');
+  assert.equal(seen.memberCount,2);assert.equal(seen.gameCount,0);
+  assert.ok(m);
+});
+
+// --- 1.16 채팅 ---
+test('채팅방: 팀 채팅은 그 팀 활동 팀원만, 경기 대화는 매칭이 걸린 두 팀 주장·운영진만 들어간다',()=>{
+  const f=matchFixture();const m=addPlayer(f.s,f.a);
+  const {chatRoom,chatRooms}=modelLib;
+  assert.ok(chatRoom(f.s,member.id,'team:'+f.a),'팀원은 팀 채팅');
+  assert.equal(chatRoom(f.s,B.id,'team:'+f.a),null,'다른 팀은 못 들어감');
+  const room='match:'+f.gameId+':'+f.b;
+  assert.ok(chatRoom(f.s,A.id,room),'연 팀 주장');assert.ok(chatRoom(f.s,B.id,room),'상대 팀 주장');
+  assert.equal(chatRoom(f.s,member.id,room),null,'일반 팀원은 경기 대화에 못 들어감');
+  assert.equal(chatRoom(f.s,C.id,'match:'+f.gameId+':'+f.c),null,'매칭이 없는 팀');
+  assert.equal(chatRoom(f.s,A.id,'match:'+f.gameId+':'+f.a),null,'자기 팀과는 방이 없다');
+  command(f.s,A,{type:'setRole',teamId:f.a,memberId:m.id,role:'manager'});
+  assert.ok(chatRoom(f.s,member.id,room),'운영진이 되면 들어감');
+  assert.deepEqual(chatRooms(f.s,member.id).map(x=>x.room).sort(),['team:'+f.a,room].sort());
+  // 신청만 한 팀(대기 중)도 방이 열리고, 철회하면 닫힌다
+  const g2=game(f.s,f.a,{listing:true,start:NOW+5*DAY});
+  command(f.s,C,{type:'applyMatch',teamId:f.c,gameId:g2});
+  assert.ok(chatRoom(f.s,C.id,'match:'+g2+':'+f.c));
+  command(f.s,C,{type:'withdrawMatch',teamId:f.c,gameId:g2,requestId:f.s.requests.find(r=>r.gameId===g2&&r.teamId===f.c).id});
+  assert.equal(chatRoom(f.s,C.id,'match:'+g2+':'+f.c),null,'철회하면 닫힘');
+  assert.equal(chatRoom(f.s,A.id,'team:../x'),null,'이상한 방 이름');
+});
+test('채팅 알림: 방 사람에게만, 보낸 사람 빼고, 읽지 않은 같은 방 알림이 10분 안에 있으면 또 만들지 않는다(내용은 싣지 않는다)',()=>{
+  const f=fixture();addPlayer(f.s,f.a);
+  const out=command(f.s,A,{type:'chatPing',room:'team:'+f.a});
+  assert.equal(out.notified,1);
+  const n=f.s.notifications.filter(x=>x.to==='chat:team:'+f.a);
+  assert.equal(n.length,1);assert.equal(n[0].userId,member.id);assert.equal(n[0].teamId,f.a);assert.ok(!/비밀|계좌/.test(n[0].body));
+  assert.equal(command(f.s,A,{type:'chatPing',room:'team:'+f.a},NOW+60e3).notified,0,'10분 안에는 한 번');
+  assert.equal(command(f.s,A,{type:'chatPing',room:'team:'+f.a},NOW+11*60e3).notified,1,'10분 지나면 다시');
+  assert.throws(()=>command(f.s,B,{type:'chatPing',room:'team:'+f.a}),/들어갈 수 없어요/);
+  // 신고는 운영자에게
+  command(f.s,member,{type:'chatReported',room:'team:'+f.a,excerpt:'나쁜 말'});
+  assert.ok(f.s.notifications.some(x=>x.userId==='owner'&&x.title==='채팅 신고'&&x.body.includes('나쁜 말')));
+});
+test('채팅 저장: 보내기·이어 읽기·안 읽은 개수·내 것만 지우기·신고·도배 막기·보관 기간·탈퇴',async()=>{
+  localDatabase();
+  const t0=Date.parse('2026-09-28T12:00:00Z');
+  const a=await chatServer.sendMessage('team:x','u1','철수','안녕',t0);
+  await chatServer.sendMessage('team:x','u2','영희','반가워',t0+1000);
+  await assert.rejects(()=>chatServer.sendMessage('team:x','u1','철수','   ',t0),/보낼 내용/);
+  await assert.rejects(()=>chatServer.sendMessage('team:x','u1','철수','가'.repeat(1001),t0),/1,000자/);
+  const all=await chatServer.listMessages('team:x');assert.deepEqual(all.map(x=>x.body),['안녕','반가워']);
+  assert.deepEqual((await chatServer.listMessages('team:x',a.at)).map(x=>x.body),['반가워'],'이어 읽기');
+  assert.equal((await chatServer.roomSummaries('u1',['team:x']))['team:x'].unread,1,'내가 보낸 것은 빼고');
+  await chatServer.markRead('u1','team:x',all[1].at);
+  assert.equal((await chatServer.roomSummaries('u1',['team:x']))['team:x'].unread,0);
+  await assert.rejects(()=>chatServer.deleteMessage(all[1].id,'u1'),/내가 보낸/);
+  await chatServer.deleteMessage(a.id,'u1');
+  const after=await chatServer.listMessages('team:x');assert.equal(after[0].deleted,1);assert.equal(after[0].body,'');
+  await chatServer.reportMessage(all[1],'u1','욕설',t0);await chatServer.reportMessage(all[1],'u1','욕설',t0);
+  // 도배: 1분에 20개
+  for(let i=0;i<19;i++)await chatServer.sendMessage('team:y','u3','민수','m'+i,t0+i);
+  await chatServer.sendMessage('team:y','u3','민수','마지막',t0+100);
+  await assert.rejects(()=>chatServer.sendMessage('team:y','u3','민수','넘침',t0+200),/너무 빨리/);
+  // 보관 기간: 경기 대화 60일, 팀 채팅 1년
+  await chatServer.sendMessage('match:g:t','u4','경기','계좌',t0);
+  await chatServer.cleanup(t0+61*864e5);
+  assert.equal((await chatServer.listMessages('match:g:t')).length,0,'경기 대화 60일 뒤 삭제');
+  assert.equal((await chatServer.listMessages('team:x')).length,2,'팀 채팅은 남음');
+  await chatServer.cleanup(t0+366*864e5);
+  assert.equal((await chatServer.listMessages('team:x')).length,0,'팀 채팅 1년 뒤 삭제');
+  await chatServer.sendMessage('team:z','gone','떠날 사람','안녕',t0+367*864e5);
+  await chatServer.forgetChat('gone');
+  assert.equal((await chatServer.listMessages('team:z')).length,0,'탈퇴하면 삭제');
 });

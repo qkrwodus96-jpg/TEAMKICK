@@ -252,6 +252,8 @@ export function nationalRanking(s:State,userId:string,now=Date.now(),region=""){
 // 팀 회칙 예시는 앱에서 고르는 칩으로만 쓴다. 저장 길이만 서버에서 막는다.
 export const RULES_MAX=2000;
 
+const CODE_CHARS="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function inviteCode(){const b=new Uint8Array(6);crypto.getRandomValues(b);return Array.from(b,x=>CODE_CHARS[x%CODE_CHARS.length]).join("")}
 export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  const type=textValue(c.type,50),t=String(c.teamId??""),stamp=iso(now);let output:any={};
  if(!s.users.find(u=>u.id===a.id))s.users.push({id:a.id,name:a.name,at:stamp});
@@ -563,7 +565,19 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   row!.notifiedAt=stamp;output={notified:targets.length};
  }
  else if(type==="deleteNotice"){requireTeam(s,t,a.id,"captain");s.notices=s.notices.filter(x=>x.id!==c.noticeId||x.teamId!==t);}
- else if(type==="invite"){requireTeam(s,t,a.id,"captain");const token=crypto.randomUUID()+crypto.randomUUID();s.invites.push({id:token,teamId:t,expires:iso(now+7*24*3600e3),active:true});output={invite:token};}
+ else if(type==="invite"){requireTeam(s,t,a.id,"captain");const token=crypto.randomUUID()+crypto.randomUUID();
+  // 링크가 막힐 때(카톡 안 브라우저·문자) 입으로 불러줄 수 있는 6자리 코드. 헷갈리는 0·O·1·I 는 뺀다.
+  let code="";do{code=inviteCode()}while(s.invites.some(x=>x.code===code&&x.active&&Date.parse(x.expires)>now));
+  s.invites.push({id:token,code,teamId:t,expires:iso(now+7*24*3600e3),active:true});output={invite:token,code};}
+ // 초대 코드로 팀 찾기. 찾으면 초대 링크와 같은 토큰을 돌려주고, 화면은 그 토큰으로 가입 신청 창을 연다.
+ // 코드를 마구 넣어보는 것을 막으려고 한 사람당 1시간에 10번까지만 받는다(틀린 시도도 저장되도록 오류 대신 found:false).
+ else if(type==="inviteCode"){
+  const code=String(c.code??"").toUpperCase().replace(/[^A-Z0-9]/g,"");ensure(code.length===6,"초대 코드 6자리를 넣어주세요.");
+  const u=s.users.find(x=>x.id===a.id)!;const tries=(u.codeTries??[]).filter((x:string)=>now-Date.parse(x)<3600e3);
+  ensure(tries.length<10,"코드를 너무 여러 번 넣었어요. 1시간 뒤에 다시 해주세요.",429);u.codeTries=[...tries,stamp];
+  const inv=s.invites.find(x=>x.code===code&&x.active&&Date.parse(x.expires)>now),team=inv?teamOf(s,inv.teamId):null;
+  output=inv&&team?.status==="active"?{found:true,invite:inv.id,teamId:team.id,teamName:team.name}:{found:false};
+ }
  else if(type==="revokeInvite"){requireTeam(s,t,a.id,"captain");const v=s.invites.find(x=>x.id===c.inviteId&&x.teamId===t);ensure(v,"초대를 찾을 수 없어요.");v!.active=false;}
  else if(type==="closeAccount"){
   const mine=s.members.filter(x=>x.userId===a.id&&x.status==="active");

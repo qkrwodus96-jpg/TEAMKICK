@@ -82,7 +82,7 @@ export function WelcomeGuide({ready,hasTeam,onCreateTeam,onFindTeam}:{ready:bool
 
    {step===3&&<div className="welcome-body">
     {hasTeam?<p className="welcome-ok"><Check size={16}/>홈에서 다음 경기와 참석 투표를 확인하세요.</p>:<div className="welcome-start">
-     <button className="welcome-pick" onClick={()=>{close();onFindTeam()}}><Search size={18}/><span><strong>우리 팀을 찾을게요</strong><small>팀 이름이나 지역으로 찾아 가입을 신청해요</small></span></button>
+     <button className="welcome-pick" onClick={()=>{close();onFindTeam()}}><Search size={18}/><span><strong>우리 팀을 찾을게요</strong><small>초대 코드 · 팀 이름 · 지역으로 찾아 가입을 신청해요</small></span></button>
      <button className="welcome-pick" onClick={()=>{close();onCreateTeam()}}><Plus size={18}/><span><strong>새 팀을 만들게요</strong><small>등록을 신청하면 운영자가 확인해요</small></span></button>
      <div className="welcome-pick static"><Link2 size={18}/><span><strong>초대 링크·QR을 받았어요</strong><small>받은 링크를 다시 열거나 QR을 찍으면 가입 신청 창이 떠요</small></span></div>
     </div>}

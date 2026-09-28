@@ -29,10 +29,11 @@ export const NEWS_SECTIONS=[
 export const NEWS_KEYWORDS=["홍명보","이적","부상","감독","결승","데뷔","복귀","재계약","EPL","K리그","대표팀","국대","아시안게임","월드컵","챔스","벨링엄","홀란","음바페","살라","케인","야말","메시","호날두"];
 export function todayKeywords(titles:string[],limit=5){
  const names=[...new Set([...NEWS_TEAMS.map(t=>t.name),...NEWS_KEYWORDS])];
- return names.map(k=>({k,n:titles.filter(t=>t.includes(k)).length})).filter(x=>x.n>=2).sort((a,b)=>b.n-a.n||a.k.localeCompare(b.k,"ko")).slice(0,limit).map(x=>x.k);
+ const ts=titles.map(canonical);
+ return names.map(k=>({k,n:ts.filter(t=>t.includes(k)).length})).filter(x=>x.n>=2).sort((a,b)=>b.n-a.n||a.k.localeCompare(b.k,"ko")).slice(0,limit).map(x=>x.k);
 }
 // 제목에 나온 팀(있으면)을 찾는다 — 목록 왼쪽 타일 색에 쓴다. 긴 이름부터 본다(예: "레알 마드리드").
-export function teamInTitle(title:string){return [...NEWS_TEAMS].sort((a,b)=>b.name.length-a.name.length).find(t=>t.id!=="kor"&&title.includes(t.name))}
+export function teamInTitle(title:string){const t=canonical(title);return [...NEWS_TEAMS].sort((a,b)=>b.name.length-a.name.length).find(x=>x.id!=="kor"&&t.includes(x.name))}
 const T=(group:string,list:[string,string,string,string,string?][]):NewsTopic[]=>list.map(([id,name,query,bg,fg])=>({id,name,query,group,bg,fg:fg??"#fff"}));
 export const NEWS_TEAMS:NewsTopic[]=[
  ...T("해외 구단",[["mu","맨유","맨유","#DA291C"],["mci","맨시티","맨시티","#6CABDD","#0b2540"],["liv","리버풀","리버풀","#C8102E"],["ars","아스널","아스널","#EF0107"],["che","첼시","첼시","#034694"],["tot","토트넘","토트넘","#132257"],
@@ -50,6 +51,20 @@ export const NEWS_TEAMS:NewsTopic[]=[
   ["ohk","오현규","오현규","#2c3e50"],["bjh","배준호","배준호","#2c3e50"],["ymh","양민혁","양민혁","#2c3e50"],["jgs","조규성","조규성","#2c3e50"],["chw","조현우","조현우","#2c3e50"]]),
 ];
 export const NEWS_TEAMS_MAX=8;
+// 기사 제목에 팀이 다른 이름으로 나올 때(예: "맨체스터 유나이티드") 팀킥 이름(맨유)으로 읽는다.
+// 제목만 본다 — 기사 본문은 받지도 쓰지도 않으므로, 제목에 이름이 없으면 그 팀 태그는 붙지 않는다.
+export const TEAM_ALIASES:Record<string,string[]>={
+ mu:["맨체스터 유나이티드","맨체스터유나이티드","맨유나이티드"],mci:["맨체스터 시티","맨체스터시티"],ars:["아스날"],tot:["토트넘 홋스퍼","토트넘홋스퍼","스퍼스"],
+ new:["뉴캐슬 유나이티드"],avl:["아스톤 빌라","애스턴빌라","아스톤빌라"],whu:["웨스트햄 유나이티드"],bha:["브라이튼"],wol:["울버햄프턴","울브스"],
+ bar:["FC바르셀로나","바르사","바르샤"],atm:["아틀레티코 마드리드","AT마드리드"],fcb:["바이에른 뮌헨","바이에른뮌헨"],bvb:["보루시아 도르트문트"],b04:["바이어 레버쿠젠"],
+ int:["인테르 밀란","인테르"],acm:["AC밀란"],psg:["파리 생제르맹","파리생제르맹"],
+ jb:["전북 현대","전북현대"],ul:["울산 HD","울산HD","울산 현대","울산현대"],ph:["포항 스틸러스","포항스틸러스"],fcs:["FC 서울"],ic:["인천 유나이티드","인천유나이티드"],
+ dj:["대전하나시티즌","대전 하나"],gw:["강원FC","강원 FC"],gj:["광주FC","광주 FC"],jj:["제주 SK","제주SK","제주 유나이티드"],dg:["대구FC","대구 FC"],gc:["김천 상무","김천상무"],
+ sw:["수원 삼성","수원삼성"],bs:["부산 아이파크","부산아이파크"],jn:["전남 드래곤즈"],ay:["FC안양","FC 안양"],sn:["성남FC"],gn:["경남FC"],bc:["부천FC"],
+};
+const ALIAS_LIST=Object.entries(TEAM_ALIASES).flatMap(([id,list])=>{const name=NEWS_TEAMS.find(t=>t.id===id)?.name;return name?list.map(a=>[a,name] as const):[]}).sort((a,b)=>b[0].length-a[0].length);
+// 제목 안의 다른 이름을 팀킥 이름으로 바꾼다. 태그·팀 색·키워드 셀 때만 쓰고, 화면의 제목은 그대로 둔다.
+export function canonical(title:string){let t=title;for(const [a,name] of ALIAS_LIST)if(t.includes(a))t=t.split(a).join(name);return t}
 // 목록에 없는 팀·선수는 이용자가 검색어를 직접 넣는다(id "q:검색어"). 글자·숫자·공백·점·가운뎃점·하이픈만, 2~15자.
 export const CUSTOM_PREFIX="q:";
 export function cleanCustom(v:unknown){const t=String(v??"").replace(/\s+/g," ").trim();return /^[가-힣A-Za-z0-9 .·\-]{2,15}$/.test(t)?t:""}
@@ -81,30 +96,47 @@ export function pressOf(url:string){
 // 원문(언론사) 주소를 우선 쓰고, 없으면 네이버 뉴스 주소. http(s) 가 아니면 버린다.
 // "대표팀", "리버풀", "나폴리"처럼 다른 종목·도시 기사가 섞이는 검색어가 있어 축구 기사만 남긴다.
 const FOOTBALL=/축구|풋살|K리그|EPL|프리미어리그|라리가|분데스리가|세리에|리그1|챔피언스리그|챔스|유로파|월드컵|아시안컵|아시안게임|FIFA|UEFA|AFC|골키퍼|멀티골|결승골|동점골|선제골|득점|어시스트|해트트릭|페널티|이적|감독|킥오프|구단|FC|유나이티드|A매치|국가대표|국대|대표팀/;
+// 제목만 보고도 축구 기사라고 할 수 있는 말. 감독·구단·이적처럼 영화·기업 기사에도 나오는 말은 뺐다.
+const TITLE_STRONG=/축구|풋살|K리그|EPL|프리미어리그|라리가|분데스리가|세리에|리그1|챔피언스리그|챔스|유로파|월드컵|아시안컵|아시안게임|FIFA|UEFA|AFC|골키퍼|멀티골|결승골|동점골|선제골|연속골|득점|어시스트|해트트릭|페널티킥|킥오프|A매치|국가대표|국대|대표팀|이적시장|골망|클린시트|태극전사/;
+// 연예 기사에도 '축구'는 나오므로("해외축구 직관") 연예 말이 섞인 제목은 이것으로 본다.
+const SURE=new RegExp(TITLE_STRONG.source.replace("축구|풋살|",""));
+// 제목에 이것만 있으면 요약도 축구 이야기여야 남긴다(리버풀·나폴리는 도시 이름이기도 하다).
+const TITLE_WEAK=/감독|구단|이적|FC|유나이티드|경기|승리|패배|무승부|시즌|리그|선수|데뷔|복귀|부상|원정|골|\d+\s*[-:대]\s*\d+/;
 const OTHER_SPORT=/야구|KBO|MLB|배구|V리그|농구|KBL|NBA|WKBL|핸드볼|하키|골프|LPGA|KLPGA|PGA|e스포츠|이스포츠|롤드컵|테니스|복싱|UFC|수영|육상|펜싱|양궁|탁구|배드민턴|피겨|쇼트트랙|씨름|당구|볼링/;
 // 예능·가요 기사: "전현무 해외축구 직관" 같은 연예 기사가 '축구'라는 말 때문에 섞였다.
-const ENTERTAIN=/예능|방송|출연|컴백|앨범|아이돌|걸그룹|보이그룹|드라마|배우|가수|뮤직|음원|콘서트|팬미팅|OST|시청률|MC|유튜버|웹툰|열애|결혼|화보|뮤지컬|팬덤|멤버|신곡|무대/;
-// 축구 기사임이 분명한 말(연예 기사에도 '축구'는 나오므로 따로 본다).
-const STRONG=/K리그|EPL|프리미어리그|라리가|분데스리가|세리에|챔피언스리그|챔스|유로파|월드컵|아시안컵|골키퍼|멀티골|결승골|동점골|선제골|득점|어시스트|해트트릭|페널티|이적|감독|킥오프|A매치|국가대표|대표팀|선발|교체|풀타임/;
+const ENTERTAIN=/예능|방송|출연|컴백|앨범|아이돌|걸그룹|보이그룹|드라마|배우|가수|뮤직|음원|콘서트|팬미팅|OST|시청률|MC|유튜버|웹툰|열애|결혼|화보|뮤지컬|팬덤|멤버|신곡|무대|영화|개봉|촬영/;
+// 정치·사회 기사: "이대통령 …" 처럼 요약에 축구가 한 번 나온다고 축구 소식이 되지 않는다.
+const GENERAL=/대통령|국회|정부|장관|총리|검찰|경찰|선거|의원|여당|야당|대선|총선|재판|판결|기소|구속|주가|증시|코스피|부동산|금리|환율|날씨|폭우|태풍|지진|화재|사고|상어/;
+const PLAYERS=()=>[...NEWS_TEAMS.filter(x=>x.group==="대표팀 · 선수"&&x.id!=="kor").map(x=>x.name),...NEWS_TAGS.slice(9)];
+const CLUBS=()=>NEWS_TEAMS.filter(x=>x.group!=="대표팀 · 선수").map(x=>x.name);
 export function isFootball(title:string,desc="",link=""){
- const text=title+" "+desc;
  if(/entertain\.naver\.com/.test(link))return false;
  if(OTHER_SPORT.test(title)&&!/축구|풋살/.test(title))return false;
- if(ENTERTAIN.test(title)&&!STRONG.test(title))return false;
- return FOOTBALL.test(text);
+ const t=canonical(title);
+ if(ENTERTAIN.test(title)&&!SURE.test(t))return false;
+ if(GENERAL.test(title))return false;
+ if(TITLE_STRONG.test(t)||PLAYERS().some(p=>t.includes(p)))return true;
+ // 제목에 팀 이름이나 경기 말만 있으면 요약이 축구 이야기일 때만. 제목에 축구 흔적이 전혀 없으면 뺀다.
+ if(TITLE_WEAK.test(t)||CLUBS().some(c=>t.includes(c)))return FOOTBALL.test(desc);
+ return false;
 }
 // 제목 위에 붙이는 작은 키워드 태그: 팀·선수·대회 이름이 제목에 나오면 나온 순서대로 최대 3개.
 export const NEWS_TAGS=["대표팀","국대","아시안게임","아시안컵","월드컵","올림픽","챔스","유로파","이적시장",
  "벨링엄","홀란","음바페","살라","케인","비니시우스","야말","메시","호날두","네이마르","더브라위너","외데고르","사카","포든","로드리","레반도프스키","래시포드","브루노"];
 // "홍명보호", "모레노호"처럼 감독 이름 + 호 는 대표팀을 부르는 말이다(선호·보호 같은 낱말과 두 글자 이름은 뺀다).
 const HO_STOP=new Set(["선호","보호","기호","구호","애호","번호","신호","간호","옹호","수호","환호","국호","칭호","암호","부호","호호","양호","우호"]);
-function nationalTeamWord(t:string){
+// 다른 나라 대표팀("중국 대표팀", "일본 모리야스호")은 우리 대표팀 태그를 붙이지 않는다.
+const COUNTRY="중국|일본|북한|베트남|태국|인도네시아|말레이시아|싱가포르|필리핀|호주|이란|사우디아라비아|사우디|카타르|우즈베키스탄|우즈벡|요르단|이라크|오만|쿠웨이트|바레인|팔레스타인|키르기스스탄|브라질|아르헨티나|우루과이|파라과이|콜롬비아|칠레|페루|에콰도르|멕시코|미국|캐나다|잉글랜드|프랑스|독일|스페인|포르투갈|이탈리아|네덜란드|벨기에|크로아티아|스위스|튀르키예|터키|폴란드|덴마크|노르웨이|스웨덴|가나|나이지리아|카메룬|세네갈|이집트|모로코|알제리|튀니지|코트디부아르|남아공";
+const FOREIGN_NT=new RegExp("("+COUNTRY+")(?:\\s*(?:축구|여자|남자|U-?\\d+))*\\s*(?:국가대표팀|국가대표|대표팀|[가-힣]{2,4}호)","g");
+export const stripForeignTeams=(t:string)=>t.replace(FOREIGN_NT," ");
+function nationalTeamWord(raw:string){
+ const t=stripForeignTeams(raw);
  if(/국가대표|태극전사|A매치|대표팀/.test(t))return true;
  for(const m of t.matchAll(/(?:^|[\s'"‘“(\[])([가-힣]{2,4}호)(?=[\s,.…'"’”)!?\]]|$)/g))if(!HO_STOP.has(m[1])&&m[1].length>=3)return true;
  return false;
 }
 export function tagsFor(title:string,limit=3){
- const t=title.replace(/챔피언스리그/g,"챔스");
+ const t=stripForeignTeams(canonical(title).replace(/챔피언스리그/g,"챔스"));
  const names=[...NEWS_TEAMS.filter(x=>x.id!=="kor").map(x=>x.name),...NEWS_TAGS];
  const hits=[...new Set(names)].map(n=>({n,i:t.indexOf(n)})).filter(x=>x.i>=0);
  // 긴 이름이 짧은 이름을 품으면(예: "레알 마드리드" ⊃ …) 짧은 쪽은 뺀다.

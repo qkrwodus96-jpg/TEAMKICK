@@ -189,6 +189,38 @@ const TEAM_STATUS:Record<string,string>={pending:"승인 대기 중이에요",ac
 const target=(to?:string,gameId?:string)=>to??(gameId?"schedule":"home");
 function notice(s:State,t:string,title:string,body:string,gameId?:string,to?:string){for(const m of s.members.filter(x=>x.teamId===t&&x.status==="active"))s.notifications.push({id:id(),userId:m.userId,teamId:t,title,body,gameId,to:target(to,gameId),read:false,at:iso()})}
 function userNotice(s:State,u:string,title:string,body:string,t?:string,to?:string){s.notifications.push({id:id(),userId:u,teamId:t,title,body,to:target(to),read:false,at:iso()})}
+
+// 경기 3시간 전 알림(1.16.1). 예약 실행(/api/cron)이 10분마다 부른다.
+// 경기의 팀마다 한 번만 보낸다(side.soonAt 에 보낸 시각을 남긴다). 받는 사람은 그 팀 활동 선수 중
+// "불참"이라고 답하지 않은 사람과 승인된 용병이다. 경기가 3시간 안에 새로 만들어졌으면 다음 실행 때 바로 간다.
+// 이미 시작한 경기는 보내지 않는다(예약 실행이 한동안 멈췄다가 다시 돌아도 지난 경기 알림이 쏟아지지 않게).
+export const SOON_BEFORE=3*3600e3;
+export function gameReminders(s:State,now=Date.now()){
+ const stamp=iso(now);let sides=0;
+ for(const g of s.games){
+  const start=Date.parse(String(g.start));
+  if(g.status!=="scheduled"||!(start>now&&start-now<=SOON_BEFORE))continue;
+  for(const side of s.sides.filter(x=>x.gameId===g.id)){
+   if(side.soonAt)continue;
+   const team=teamOf(s,side.teamId);if(team?.status!=="active")continue;
+   side.soonAt=stamp;sides++;
+   const at=seoulStamp(g.start).replace(/^.*\) /,"");
+   const vs=isIntra(g)?"자체전":"vs "+opponent0(s,g,side.teamId);
+   const detail=[vs,g.venue,side.meeting?"모임 "+side.meeting:""].filter(Boolean).join(" · ");
+   const told=new Set<string>();
+   for(const m of s.members.filter(x=>x.teamId===side.teamId&&x.status==="active"&&currentVote(side,x.id)!=="no")){
+    if(told.has(m.userId))continue;told.add(m.userId);
+    s.notifications.push({id:id(),userId:m.userId,teamId:side.teamId,title:"오늘 "+at+" 경기",body:team.name+" · "+detail+". 늦지 않게 준비해주세요.",gameId:g.id,to:"schedule",read:false,at:stamp});
+   }
+   // 용병은 그 팀 소속이 아니라 팀 없이 보낸다(팀을 달면 용병의 알림함에 보이지 않는다).
+   for(const r of s.guests.filter(x=>x.gameId===g.id&&x.teamId===side.teamId&&x.status==="approved")){
+    if(told.has(r.userId))continue;told.add(r.userId);
+    s.notifications.push({id:id(),userId:r.userId,title:"오늘 "+at+" 용병 경기",body:team.name+" · "+detail+". 늦지 않게 준비해주세요.",to:"matching:guest",read:false,at:stamp});
+   }
+  }
+ }
+ return {sides};
+}
 function checkConflict(s:State,t:string,start:string,end:string,except:string){ensure(!s.games.some(g=>g.id!==except&&g.status!=="cancelled"&&containsTeam(g,t)&&Date.parse(g.start)<Date.parse(end)&&Date.parse(g.end)>Date.parse(start)),"같은 시간에 등록된 경기가 있어요. 기존 일정을 확인해주세요.",409)}
 function dates(start:any,end:any){const a=Date.parse(start),b=Date.parse(end);ensure(Number.isFinite(a)&&Number.isFinite(b)&&b>a&&b-a<=24*3600e3,"경기 시작·종료 시간을 확인해주세요.");return {start:iso(a),end:iso(b)}}
 // 팀 점수가 확정되거나 바뀌었을 때, 그 팀의 선수 기록 합이 점수와 다르면 그 팀만

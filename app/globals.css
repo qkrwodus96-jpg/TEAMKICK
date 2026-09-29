@@ -533,3 +533,8 @@ body{word-break:keep-all;overflow-wrap:break-word}
 .share-canvas canvas{display:block;width:100%;height:auto;aspect-ratio:4/5}
 .share-busy{position:absolute;inset:0;display:grid;place-items:center;color:#fff;background:rgba(0,0,0,.25)}
 .share-actions{gap:8px}.share-actions .btn{flex:1}
+/* 1.18 언어 선택 */
+.lang-grid{display:flex;flex-wrap:wrap;gap:6px}
+.auth-lang{display:flex;justify-content:flex-end;margin-bottom:6px}
+.lang-compact{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#4d5d53;padding:4px 8px;border:1px solid #e3e8e5;border-radius:999px}
+.lang-compact select{border:0;background:none;font:inherit;color:inherit;padding:2px 0}

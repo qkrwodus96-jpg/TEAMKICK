@@ -13,6 +13,7 @@ function compile(file,name,replace=s=>s){
   fs.writeFileSync(path.join(runtime,name),ts.transpileModule(replace(fs.readFileSync(file,'utf8')),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText);
 }
 compile('lib/formations.ts','formations.mjs');
+for(const n of ['d1','d2','d3','d4','d5'])compile('lib/i18n/'+n+'.ts','i18n-'+n+'.mjs');
 compile('lib/model.ts','model.mjs',s=>s.replace('"./news"','"./news.mjs"').replace('"./formations"','"./formations.mjs"'));
 compile('lib/store.ts','store.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/owner-config.ts','owner-config.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;'));
@@ -3718,4 +3719,13 @@ test('1.18 영입 소식: 가입 승인 때 HERE WE GO 공지와 팀원 알림(�
   const D={id:'d',name:'D'};command(s,D,{type:'joinTeam',teamId:a,name:'D',position:'MF',number:5});
   const md=s.members.find(x=>x.userId==='d');command(s,A,{type:'approveMember',teamId:a,memberId:md.id,announce:false});
   assert.ok(!s.notices.some(x=>x.memberId===md.id),'announce:false 면 공지 없음');
+});
+
+test('1.18 다국어 사전: 모든 줄이 한국어+4개 언어, 비어 있는 칸 없음, 주요 화면 글자 포함',async()=>{
+  const lines=[];for(const n of ['d1','d2','d3','d4','d5'])lines.push(...(await import(path.join(runtime,'i18n-'+n+'.mjs'))).default.split('\n').filter(Boolean));
+  const bad=lines.filter(l=>{const p=l.split('\t');return p.length!==5||p.some(x=>!x.trim())});
+  assert.deepEqual(bad,[],'칸이 모자란 줄');
+  const ko=new Set(lines.map(l=>l.split('\t')[0]));
+  for(const must of ['홈','일정','매칭','기록','팀 채팅','모집 중','모집 완료','받은 신청','매칭 수락','거절','라인업','알림 설정','화면 모드','공유하기','팀 성향 분석'])assert.ok(ko.has(must),must+' 번역 없음');
+  assert.ok(lines.length>=1100,'사전 크기 '+lines.length);
 });

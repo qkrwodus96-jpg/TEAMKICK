@@ -44,6 +44,7 @@ compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {current
 compile('app/api/auth/route.ts','auth-api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword,limit,clientKey,verifyEmail,resendVerification,currentUser,completeSocialSignup,cancelSocialSignup,clearedSignupCookie} from "@/lib/auth";','const completeSocialSignup=async()=>({user:{userId:"u",fullName:"새 사람"},token:"t"});const cancelSocialSignup=async()=>{};const clearedSignupCookie=()=>"";const signUp=async()=>{(globalThis.__teamkickSignups??=[]).push(1);return {user:{userId:"u",fullName:"새 사람"},token:"t",verificationSent:false}};const signIn=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const signOut=async()=>{};const sessionCookie=()=>"";const clearedCookie=()=>"";const requestPasswordReset=async()=>{};const resetPassword=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const limit=async()=>{};const clientKey=()=>"k";const verifyEmail=async()=>{};const resendVerification=async()=>true;const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>!!globalThis.__teamkickSocial;').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>false;').replace('"@/lib/model"','"./model.mjs"'));
 compile('app/api/app/route.ts','api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices,devicesAmong,pushReady} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);const hook=globalThis.__teamkickTestWake;if(hook)return hook(ids);return {sent:ids.length,failed:0,results:[]}};const devicesAmong=async(ids)=>ids.filter(x=>(globalThis.__teamkickTestDevices??[]).includes(x)).length;const pushReady=()=>true;').replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady} from "@/lib/places";','const placeSearchReady=()=>true;').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 compile('lib/unlink.ts','unlink.mjs',s=>s.replace('"./social"','"./social.mjs"'));
+compile('lib/store-some.ts','store-some.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/chat-server.ts','chat-server.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/cron.ts','cron.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;'));
 compile('app/api/cron/route.ts','cron-api.mjs',s=>s.replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {wakeDevices} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0,results:[]}};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/cron"','"./cron.mjs"'));
@@ -75,6 +76,7 @@ const chatServer=await import(path.join(runtime,'chat-server.mjs'));
 const modelLib=await import(path.join(runtime,'model.mjs'));
 const authApi=await import(path.join(runtime,'auth-api.mjs'));
 const cronApi=await import(path.join(runtime,'cron-api.mjs'));
+const storeSome=await import(path.join(runtime,'store-some.mjs'));
 const NOW=Date.now(),DAY=864e5;
 const owner={id:'owner',name:'운영자',ownerSetup:true},A={id:'a',name:'A 주장'},B={id:'b',name:'B 주장'},C={id:'c',name:'C 주장'},member={id:'player',name:'선수'};
 function command(s,a,c,when=NOW){return applyCommand(s,a,c,when)}
@@ -117,8 +119,10 @@ function localDatabase(){
 const VIEWS=['home','schedule','matching','records','team','admin'];
 // 목적지는 "화면" 또는 "화면:탭" 이다. 매칭은 탭이 여럿이라 탭까지 적는다.
 const TABS=['guest','received','mine','open','confirmed'];
-const viewPart=to=>String(to||'').split(':')[0];
-const tabPart=to=>String(to||'').split(':')[1]||'';
+// chat:·modal: 은 화면 대신 창을 연다(teamkick.go 와 screens.openNotification 이 처리). 둘 다 MY(team) 위에 뜬다.
+const viewPart=to=>{const v=String(to||'').split(':')[0];return v==='chat'||v==='modal'?'team':v};
+const tabPart0=to=>String(to||'').split(':')[1]||'';
+const tabPart=to=>/^(chat|modal):/.test(String(to||''))?'':tabPart0(to);
 test('모든 알림이 갈 화면을 들고 있고, 화면 이름이 teamId 자리에 섞이지 않는다',()=>{
   const {s,a,b}=fixture();
   const m=addPlayer(s,a);
@@ -147,7 +151,7 @@ test('모든 알림이 갈 화면을 들고 있고, 화면 이름이 teamId 자�
   assert.equal(s.notifications.find(n=>n.title==='새 팀 공지').to,'home');
   assert.equal(s.notifications.find(n=>n.title==='매칭 확정').to,'matching');
   // 용병·매칭 신청은 매칭 안에서도 갈 탭이 다르다. 화면까지만 보내면 묻힌다.
-  assert.equal(s.notifications.find(n=>n.title==='새 매칭 신청').to,'matching:received');
+  assert.match(s.notifications.find(n=>n.title==='새 매칭 신청').to,/^chat:match:/,'주장에게는 경기 대화방(1.17)');
   assert.equal(s.notifications.find(n=>n.title==='용병 모집 시작').to,'matching:guest');
   assert.equal(s.notifications.find(n=>n.title==='새 용병 신청').to,'matching:guest');
   assert.equal(s.notifications.find(n=>n.title==='기록 정정 요청').to,'records');
@@ -1764,14 +1768,14 @@ test('팀 정보 수정에서 경기 형식·활동 요일·실력을 고칠 수
   const f=fixture();
   const before=f.s.teams.find(t=>t.id===f.a);
   assert.equal(before.format,'11인제');
-  assert.equal(before.level,'중급','기본값');
+  assert.equal(before.level,'중','기본값');
 
   command(f.s,A,{type:'editTeam',teamId:f.a,name:'팀킥 FC',region:'경기 남부',description:'소개',
     format:'8인제',days:'토요일 저녁',level:'상급'});
   const after=f.s.teams.find(t=>t.id===f.a);
   assert.equal(after.format,'8인제');
   assert.equal(after.days,'토요일 저녁');
-  assert.equal(after.level,'상급');
+  assert.equal(after.level,'상','예전 이름(상급)으로 보내도 새 단계로');
   assert.equal(after.name,'팀킥 FC','기존 항목도 그대로 저장돼야 한다');
 });
 
@@ -1796,7 +1800,7 @@ test('값을 보내지 않으면 지금 값을 지킨다',()=>{
   const after=f.s.teams.find(t=>t.id===f.a);
   assert.equal(after.name,'새 이름');
   assert.equal(after.format,'11인제','보내지 않은 형식은 그대로');
-  assert.equal(after.level,'중급','보내지 않은 실력은 그대로');
+  assert.equal(after.level,'중','보내지 않은 실력은 그대로');
 });
 
 test('주장만 팀 정보를 고칠 수 있다',()=>{
@@ -1809,12 +1813,12 @@ test('주장만 팀 정보를 고칠 수 있다',()=>{
 });
 
 test('목록을 만들기 전에 저장된 실력 값도 화면에서 다듬어 보여준다',()=>{
-  assert.equal(levelOf('중'),'중급');
-  assert.equal(levelOf('하'),'초급');
-  assert.equal(levelOf('상'),'상급');
-  assert.equal(levelOf('상급'),'상급','이미 맞는 값은 그대로');
-  assert.equal(levelOf(''),'중급','알 수 없으면 기본값');
-  assert.equal(levelOf(undefined),'중급');
+  assert.equal(levelOf('중급'),'중');
+  assert.equal(levelOf('입문'),'최하');
+  assert.equal(levelOf('선수 출신 포함'),'최상');
+  assert.equal(levelOf('상'),'상','이미 맞는 값은 그대로');
+  assert.equal(levelOf(''),'중','알 수 없으면 기본값');
+  assert.equal(levelOf(undefined),'중');
   for(const x of LEVELS)assert.equal(levelOf(x),x);
   assert.ok(FORMATS.includes('11인제'));
 });
@@ -3573,4 +3577,101 @@ test('예약 실행(/api/cron): 비밀값이 맞을 때만, 알림은 한 번만
   const {state}=await repository.load();assert.equal(state.notifications.filter(x=>/^오늘/.test(x.title)).length,2,'DB에 저장된다');
   const again=await (await call('Bearer '+secret)).json();assert.equal(again.reminded,0,'다음 실행에서 다시 보내지 않는다');
   delete globalThis.__teamkickTestEnv.CRON_SECRET;
+});
+
+test('1.17 경기 정보 고치기: 시간·구장이 그대로면 참여 투표를 지우지 않는다(참여 인원 0명 제보)',()=>{
+  const {s,a,b}=fixture(),gameId=game(s,a,{start:NOW+3*DAY});const g=s.games.find(x=>x.id===gameId);
+  command(s,A,{type:'vote',teamId:a,gameId,value:'yes'});
+  const same={type:'changeGame',teamId:a,gameId,start:g.start,end:g.end,venue:g.venue,address:g.address};
+  command(s,A,{...same,cost:50000,opponentCost:25000});
+  assert.equal(Object.keys(sideOf(s,gameId,a).votes).length,1,'구장비만 바꾸면 투표 유지');
+  command(s,A,{...same,start:iso(NOW+4*DAY),end:iso(NOW+4*DAY+7200e3)});
+  assert.deepEqual(sideOf(s,gameId,a).votes,{},'시간이 바뀌면 다시 투표');
+  // 매칭된 경기: 상대가 수락한 제안도 같은 규칙
+  const m=matchFixture(),mg=m.s.games[0];command(m.s,A,{type:'vote',teamId:m.a,gameId:m.gameId,value:'yes'});
+  command(m.s,A,{type:'changeGame',teamId:m.a,gameId:m.gameId,start:mg.start,end:mg.end,venue:mg.venue,address:mg.address,cost:1000});
+  command(m.s,B,{type:'confirmChange',teamId:m.b,gameId:m.gameId,proposalId:mg.change.proposalId});
+  assert.equal(Object.keys(sideOf(m.s,m.gameId,m.a).votes).length,1);
+  assert.ok(m.s.notifications.some(x=>x.title==='경기 정보 변경'));
+});
+
+test('1.17 1:1 문의: 운영자에게 알림이 가고 누르면 문의 창이 열린다',()=>{
+  const {s}=fixture();command(s,member,{type:'askSupport',message:'가입이 안 돼요'});
+  const n=s.notifications.find(x=>x.userId==='owner'&&x.title==='새 1:1 문의');
+  assert.ok(n);assert.equal(n.to,'modal:support');assert.match(n.body,/가입이 안 돼요/);
+  const before=s.notifications.length;command(s,owner,{type:'askSupport',message:'운영자 본인 문의'});
+  assert.equal(s.notifications.length,before,'운영자 본인 문의는 알림 없음');
+});
+
+test('1.17 팀 사진 글: 운영진만 쓰고 300자까지',()=>{
+  const {s,a}=fixture();const key='teamphotos/'+a+'/x.webp';
+  command(s,A,{type:'addTeamPhoto',teamId:a,key});
+  command(s,A,{type:'captionTeamPhoto',teamId:a,key,caption:'첫 우승!'});
+  assert.equal(s.teams.find(x=>x.id===a).photos[0].caption,'첫 우승!');
+  addPlayer(s,a);
+  assert.throws(()=>command(s,member,{type:'captionTeamPhoto',teamId:a,key,caption:'x'}),/권한|운영진|주장/);
+  assert.throws(()=>command(s,A,{type:'captionTeamPhoto',teamId:a,key,caption:'가'.repeat(301)}),/길이/);
+});
+
+test('1.17 매칭 신청은 경기 대화방으로: 주장·운영진 알림은 방으로, 방 안에 신청 카드와 수락 권한, 목록에서 숨기기',()=>{
+  const f=fixture(),mem=addPlayer(f.s,f.a);const gameId=game(f.s,f.a,{listing:true,start:NOW+3*DAY});
+  command(f.s,B,{type:'applyMatch',teamId:f.b,gameId,message:'토요일 괜찮아요?'});
+  const room='match:'+gameId+':'+f.b;
+  const cap=f.s.notifications.find(x=>x.userId==='a'&&x.title==='새 매칭 신청');
+  assert.equal(cap.to,'chat:'+room,'주장은 누르면 대화방');assert.match(cap.body,/토요일 괜찮아요/);
+  const pl=f.s.notifications.find(x=>x.userId==='player'&&x.title==='새 매칭 신청');
+  assert.equal(pl.to,'matching:received','일반 팀원은 매칭 화면(대화방에 못 들어감)');assert.doesNotMatch(pl.body,/토요일/,'신청 메시지는 운영진에게만');
+  const r=modelLib.chatRoom(f.s,'a',room);
+  assert.equal(r.request.message,'토요일 괜찮아요?');assert.equal(r.canDecide,true);assert.equal(r.otherTeamId,f.b);assert.equal(r.homeTeamId,f.a);
+  const rb=modelLib.chatRoom(f.s,'b',room);assert.equal(rb.canDecide,false,'신청한 팀은 수락 못 함');assert.equal(rb.otherTeamId,f.a);
+  const listed=modelLib.chatRooms(f.s,'a').find(x=>x.room===room);assert.equal(listed.request.pending,true);
+  command(f.s,A,{type:'acceptMatch',teamId:f.a,gameId,requestId:r.request.id});
+  assert.equal(modelLib.chatRoom(f.s,'a',room).canDecide,false);assert.ok(modelLib.chatRoom(f.s,'b',room),'확정 뒤에도 방 유지');
+  command(f.s,A,{type:'hideChat',room});
+  assert.ok(modelLib.chatRooms(f.s,'a').find(x=>x.room===room).hiddenAt,'숨긴 시각이 붙는다');
+  assert.throws(()=>command(f.s,member,{type:'hideChat',room}),/들어갈 수 없어요/);
+  command(f.s,A,{type:'chatPing',room});
+  assert.equal(modelLib.chatRooms(f.s,'a').find(x=>x.room===room).hiddenAt,'','내가 다시 보내면 다시 보인다');
+  void mem;
+});
+
+test('1.17 채팅 방 확인은 필요한 줄만 읽어도 전체와 같은 답을 낸다',async()=>{
+  localDatabase();const f=matchFixture();addPlayer(f.s,f.a);await repository.commit(blank(),f.s,0);
+  for(const [user,room] of [['a','team:'+f.a],['player','team:'+f.a],['b','team:'+f.a],['a','match:'+f.gameId+':'+f.b],['b','match:'+f.gameId+':'+f.b],['player','match:'+f.gameId+':'+f.b],['c','match:'+f.gameId+':'+f.c]]){
+    const part=await storeSome.loadRoomState(room);
+    const x=modelLib.chatRoom(part,user,room),y=modelLib.chatRoom(f.s,user,room);
+    assert.equal(!!x,!!y,user+' '+room);if(x)assert.deepEqual(x.members.sort(),y.members.sort());
+  }
+});
+
+test('1.17 알림 종류별 설정: 끈 종류와 밤 시간은 폰으로 보내지 않고 알림함에는 남긴다',()=>{
+  const {s,a}=fixture();addPlayer(s,a);
+  command(s,member,{type:'setNotifyPrefs',off:['notice','nope'],quiet:true});
+  assert.deepEqual(s.users.find(x=>x.id==='player').notify,{off:['notice'],quiet:true},'모르는 종류는 버린다');
+  const note={userId:'player',title:'새 팀 공지'},game={userId:'player',title:'새 경기 일정'},reply={userId:'player',title:'문의에 답변이 등록되었어요'};
+  const noon=Date.parse('2026-09-29T03:00:00Z'),night=Date.parse('2026-09-29T14:00:00Z'); // 한국 12시 / 23시
+  assert.deepEqual(modelLib.pushTargets(s,[note],noon),[],'끈 종류');
+  assert.deepEqual(modelLib.pushTargets(s,[game],noon),['player']);
+  assert.deepEqual(modelLib.pushTargets(s,[game],night),[],'밤에는 보내지 않음');
+  assert.equal(modelLib.notifyKind(reply),'','문의 답변은 종류 없음(늘 보냄)');
+  assert.equal(modelLib.notifyKind({title:'오늘 19:00 경기'}),'soon');
+  assert.equal(modelLib.notifyKind({title:'팀 채팅'}),'chat');
+  assert.deepEqual(visibleState(s,'player').myNotify,{off:['notice'],quiet:true});
+});
+
+test('1.17 용병 모집: 포지션별 인원의 합이 모집 인원, 참가비·최소 출전 보장, 남은 포지션',()=>{
+  const {s,a,gameId}=guestFixture();
+  command(s,A,{type:'openGuests',teamId:a,gameId,positions:{FW:1,DF:2,XX:3},fee:10000,minPlay:'2쿼터 이상'});
+  const z=sideOf(s,gameId,a);assert.equal(z.guestNeeded,3);assert.deepEqual(z.guestPositions,{FW:1,DF:2});
+  assert.throws(()=>command(s,A,{type:'openGuests',teamId:a,gameId,needed:2,minPlay:'아무거나'}),/최소 출전 보장/);
+  const gid=command(s,C,{type:'applyGuest',teamId:a,gameId,name:'C',position:'CB',number:4}).guestId;
+  command(s,A,{type:'approveGuest',teamId:a,gameId,guestId:gid});
+  const l=visibleState(s,'b').guestListings.find(x=>x.gameId===gameId);
+  assert.equal(l.fee,10000);assert.equal(l.minPlay,'2쿼터 이상');assert.deepEqual(l.positionsLeft,{FW:1,DF:1},'CB 는 DF 자리를 채운다');
+});
+
+test('1.17 다크 모드 CSS 가 globals.css 와 맞다(글로벌 CSS 를 고치면 scripts/dark-css.mjs 를 다시 돌린다)',async()=>{
+  const {execFileSync}=await import('node:child_process');
+  const out=execFileSync(process.execPath,['scripts/dark-css.mjs','--check'],{encoding:'utf8'});
+  assert.match(out,/dark\.css ok/);
 });

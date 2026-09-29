@@ -1,5 +1,5 @@
 import {load,commit} from "@/lib/store";
-import {gameReminders,iso} from "@/lib/model";
+import {gameReminders,iso,pushTargets} from "@/lib/model";
 import {ensureSchema} from "@/lib/schema";
 import {wakeDevices} from "@/lib/push";
 import {cronAuthorized,cronReady} from "@/lib/cron";
@@ -21,7 +21,7 @@ async function run(req:Request){
    try{await commit(state,after,version)}
    catch(e){if(String(e).includes("revision_matches")||String(e).includes("CHECK constraint")){if(attempt<3)continue}throw e}
    const had=new Set(state.notifications.map(x=>x.id));
-   const woken=[...new Set(after.notifications.filter(x=>!had.has(x.id)).map(x=>String(x.userId)))];
+   const woken=pushTargets(after,after.notifications.filter(x=>!had.has(x.id)),now);
    const d=woken.length?await wakeDevices(woken).catch(e=>{console.error("TeamKick cron push",e);return null}):null;
    return json({ok:true,at:iso(now),reminded:sides,people:woken.length,sent:d?.sent??0,failed:d?.failed??0});
   }

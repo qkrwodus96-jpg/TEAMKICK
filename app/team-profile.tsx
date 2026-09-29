@@ -3,7 +3,7 @@
 // 모집 중 표시, 버튼 한 줄, 아래는 3칸 사진 격자. 팀 찾기 → 이 화면 → 가입 신청으로 이어진다.
 // 로고·사진은 팀이 올린 것만 쓴다(팀킥이 다른 곳 사진을 가져오지 않는다).
 import {useState,type ReactNode} from "react";
-import {Grid3x3,BookOpen,Camera,X,Trash2,Megaphone} from "lucide-react";
+import {Grid3x3,BookOpen,Camera,X,Trash2,Megaphone,PenLine} from "lucide-react";
 import {toast} from "sonner";
 import {Crest,imageUrl} from "./teamkick";
 import {levelChip,type Row} from "@/lib/model";
@@ -15,10 +15,16 @@ export function TeamProfile({v,team,demo,busy,run,onJoin,onEdit,uploader}:Props)
  const [tab,setTab]=useState<"photos"|"rules">("photos");
  const [open,setOpen]=useState<Row|null>(null);
  const [uploading,setUploading]=useState(false);
+ const [caption,setCaption]=useState<string|null>(null);
  const mine=(v.mine??[]).find((m:Row)=>m.teamId===team.id);
  const member=mine?.status==="active",pending=mine?.status==="pending";
  const manager=member&&["captain","manager"].includes(mine?.role),captain=member&&mine?.role==="captain";
  const photos:Row[]=team.photos??[];
+ async function saveCaption(p:Row){
+  if(demo){toast("샘플에서는 글을 저장할 수 없어요.");return}
+  await run({type:"captionTeamPhoto",teamId:team.id,key:p.key,caption:caption??""});
+  setOpen({...p,caption:caption??""});setCaption(null);
+ }
  async function remove(p:Row){
   if(demo){toast("샘플에서는 사진을 지울 수 없어요.");return}
   await run({type:"removeTeamPhoto",teamId:team.id,key:p.key});
@@ -55,10 +61,12 @@ export function TeamProfile({v,team,demo,busy,run,onJoin,onEdit,uploader}:Props)
   {tab==="photos"&&(photos.length?<div className="tp-grid">{photos.map(p=><button type="button" key={p.id??p.key} onClick={()=>setOpen(p)} aria-label={p.caption||"팀 사진"}><img src={imageUrl(p.key)} alt={p.caption||team.name+" 사진"} loading="lazy"/></button>)}</div>
    :<div className="tp-empty"><Camera size={30}/><strong>아직 사진이 없어요</strong><span>{manager?"경기 사진이나 단체 사진을 올려보세요.":"팀이 사진을 올리면 여기에 보여요."}</span></div>)}
   {tab==="rules"&&<div className="tp-rules">{team.rules?<p className="rules-text">{team.rules}</p>:<p className="small muted">아직 회칙이 없어요.</p>}</div>}
-  {open&&<div className="tp-view" role="dialog" aria-label="사진 보기" onClick={()=>setOpen(null)}>
+  {open&&<div className="tp-view" role="dialog" aria-label="사진 보기" onClick={()=>{setOpen(null);setCaption(null)}}>
    <div className="tp-view-inner" onClick={e=>e.stopPropagation()}>
     <img src={imageUrl(open.key)} alt={open.caption||team.name+" 사진"}/>
-    <div className="tp-view-bar">{open.caption&&<span>{open.caption}</span>}{manager&&<button type="button" className="btn btn-ghost" disabled={busy} onClick={()=>remove(open)}><Trash2 size={16}/>사진 빼기</button>}<button type="button" className="btn btn-ghost" onClick={()=>setOpen(null)} aria-label="닫기"><X size={18}/></button></div>
+    {caption===null?<div className="tp-view-caption">{open.caption?<p><b>{team.name}</b> {open.caption}</p>:manager?<p className="muted">아직 글이 없어요.</p>:null}</div>
+     :<div className="tp-view-caption edit"><textarea autoFocus maxLength={300} rows={3} value={caption} onChange={e=>setCaption(e.target.value)} placeholder="이 사진에 대한 글을 적어주세요. (300자)"/><div className="row"><button type="button" className="btn btn-green" disabled={busy} onClick={()=>saveCaption(open)}>저장</button><button type="button" className="btn btn-ghost" onClick={()=>setCaption(null)}>취소</button></div></div>}
+    <div className="tp-view-bar">{manager&&caption===null&&<button type="button" className="btn btn-ghost" onClick={()=>setCaption(open.caption??"")}><PenLine size={16}/>{open.caption?"글 고치기":"글 쓰기"}</button>}{manager&&<button type="button" className="btn btn-ghost" disabled={busy} onClick={()=>remove(open)}><Trash2 size={16}/>사진 빼기</button>}<button type="button" className="btn btn-ghost" onClick={()=>{setOpen(null);setCaption(null)}} aria-label="닫기"><X size={18}/></button></div>
    </div>
   </div>}
  </div>;

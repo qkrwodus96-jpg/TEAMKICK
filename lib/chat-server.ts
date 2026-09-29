@@ -50,15 +50,22 @@ export async function markRead(accountId:string,room:string,at:string){
   .bind(accountId+"|"+room,accountId,room,at).run();
 }
 
-// 방마다 안 읽은 개수(내가 보낸 것 제외, 99까지)와 마지막 메시지.
+// 방마다 안 읽은 개수(내가 보낸 것 제외, 99까지)와 마지막 메시지. 1.17: 방마다 세 번씩 차례로 묻던 것을 한 번에 묶는다.
 export async function roomSummaries(accountId:string,rooms:string[]){
- const out:Record<string,{unread:number;last:{name:string;body:string;at:string}|null}>={};
- for(const room of rooms.slice(0,40)){
-  const read=await db().prepare(`SELECT at FROM chat_reads WHERE id=?`).bind(accountId+"|"+room).first<{at:string}>();
-  const unread=await db().prepare(`SELECT COUNT(*) AS n FROM (SELECT 1 FROM chat_messages WHERE room=? AND at>? AND account_id<>? AND deleted=0 LIMIT 99)`).bind(room,read?.at??"",accountId).first<{n:number}>();
-  const last=await db().prepare(`SELECT name,body,at,deleted FROM chat_messages WHERE room=? ORDER BY at DESC LIMIT 1`).bind(room).first<{name:string;body:string;at:string;deleted:number}>();
-  out[room]={unread:unread?.n??0,last:last?{name:last.name,body:last.deleted?"삭제된 메시지":last.body.slice(0,60),at:last.at}:null};
+ const out:Record<string,{unread:number;last:{name:string;body:string;at:string}|null;readAt:string}>={};
+ const list=rooms.slice(0,40);if(!list.length)return out;
+ const d=db();const qs:D1PreparedStatement[]=[];
+ for(const room of list){
+  qs.push(d.prepare(`SELECT (SELECT at FROM chat_reads WHERE id=?) AS read_at,
+   (SELECT COUNT(*) FROM (SELECT 1 FROM chat_messages WHERE room=? AND at>COALESCE((SELECT at FROM chat_reads WHERE id=?),'') AND account_id<>? AND deleted=0 LIMIT 99)) AS unread`).bind(accountId+"|"+room,room,accountId+"|"+room,accountId));
+  qs.push(d.prepare(`SELECT name,body,at,deleted FROM chat_messages WHERE room=? ORDER BY at DESC LIMIT 1`).bind(room));
  }
+ const res=await d.batch(qs);
+ list.forEach((room,i)=>{
+  const a=(res[i*2].results?.[0]??{}) as {read_at?:string|null;unread?:number};
+  const last=(res[i*2+1].results?.[0]??null) as {name:string;body:string;at:string;deleted:number}|null;
+  out[room]={unread:Number(a.unread??0),readAt:String(a.read_at??""),last:last?{name:last.name,body:last.deleted?"삭제된 메시지":last.body.slice(0,60),at:last.at}:null};
+ });
  return out;
 }
 

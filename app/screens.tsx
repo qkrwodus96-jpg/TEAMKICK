@@ -8,11 +8,12 @@ import {Table,TableHeader,TableHead,TableBody,TableRow,TableCell} from "@/compon
 import {toast} from "sonner";
 import {Upload,Plus,Search,MapPin,CalendarDays,Clock,Users,ShieldCheck,Copy,ExternalLink,Settings,Check,CheckCircle2,X,ArrowLeft,LogOut,Download,LoaderCircle,Goal,Handshake,Bell,Navigation,Megaphone,MessageCircle} from "lucide-react";
 import {Picker,Crest,imageUrl,Empty,GameBadge,GuestBadge,PlayerPhoto,Vote,koreanDate,time,localDay,inputTime,fromInput,opponent,scoreText,IntraVersus,started,backNo,backNoOr,NoticeList} from "./teamkick";
-import {currentVote,guestStatusOf,REGIONS,LEVELS,DAYS,levelOf,levelChip,formatLabel,isIntra,POSITION_GROUPS,FEET,positionName,SQUAD_NAMES,RULES_MAX,type Row} from "@/lib/model";
+import {currentVote,guestStatusOf,REGIONS,LEVELS,DAYS,levelOf,levelChip,formatLabel,isIntra,POSITION_GROUPS,FEET,positionName,SQUAD_NAMES,RULES_MAX,GUEST_POS,MIN_PLAY,type Row} from "@/lib/model";
 import {Stepper,SquadBoard,MvpPanel,RulesPanel,RULE_TEMPLATES,InviteShare} from "./team-play";
 import {openWelcome} from "./welcome";
 import {TeamProfile} from "./team-profile";
 import {ChatRooms,ChatRoom} from "./chat";
+import {ThemePicker,NotifyPrefs} from "./prefs";
 import {WeatherLine,CalendarButtons} from "./weather";
 import {kakaoRoute,naverSearch} from "@/lib/maps";
 import {TERMS,PRIVACY} from "@/lib/legal";
@@ -418,13 +419,20 @@ function PositionPicker({label,value,onChange,allowEmpty=false}:{label:string;va
 const WD="일월화수목금토";
 function whenLine(start:string){const d=new Date(Date.parse(start)+9*3600e3),h=d.getUTCHours(),m=d.getUTCMinutes();
  return `${d.getUTCMonth()+1}. ${d.getUTCDate()}. (${WD[d.getUTCDay()]}) · ${h<12?"오전":"오후"} ${h%12||12}:${String(m).padStart(2,"0")}`}
-function MatchCard({team,title,price,start,chips,venue,address,badge,action,onOpen,onTeam}:{team?:Row;title:ReactNode;price?:string;start:string;chips:string[];venue?:string;address?:string;badge?:ReactNode;action?:ReactNode;onOpen?:()=>void;onTeam?:()=>void}){
+function MatchCard({team,title,price,start,chips,venue,address,badge,action,onOpen,onTeam,extra}:{team?:Row;title:ReactNode;price?:string;start:string;chips:string[];venue?:string;address?:string;badge?:ReactNode;action?:ReactNode;onOpen?:()=>void;onTeam?:()=>void;extra?:ReactNode}){
  const body=<>
   <div className="mc-top">{onTeam?<button type="button" className="mc-team" onClick={onTeam} aria-label="팀 프로필 보기"><Crest name={typeof title==="string"?title:team?.name} color={team?.color} logo={team?.logo}/><strong>{title}</strong></button>:<><Crest name={typeof title==="string"?title:team?.name} color={team?.color} logo={team?.logo}/><strong>{title}</strong></>}{price&&<span className={"mc-price"+(price==="무료"?" free":"")}>{price}</span>}</div>
   <div className="mc-when"><b>{whenLine(start)}</b>{chips.filter(Boolean).map(c=><span key={c} className="mc-chip">{c}</span>)}{badge}</div>
-  {venue&&<span className="mc-venue">{venue}</span>}{address&&<span className="mc-addr">{address}</span>}</>;
+  {venue&&<span className="mc-venue">{venue}</span>}{address&&<span className="mc-addr">{address}</span>}{extra}</>;
  if(onOpen)return <button type="button" className="mcard mcard-btn" onClick={onOpen}>{body}</button>;
  return <article className="mcard">{body}{action&&<div className="mc-act">{action}</div>}</article>;
+}
+// 용병 모집 안내(1.17): 참가비 · 최소 출전 보장 · 포지션별 남은 자리.
+const guestFeeText=(fee?:number)=>Number(fee)>0?"참가비 "+(Number(fee)%10000===0?Number(fee)/10000+"만원":Number(fee).toLocaleString()+"원"):"참가비 없음";
+const posLine=(z:Row)=>{const want=z.positions as Record<string,number>|null;if(!want)return null;const left=(z.positionsLeft??want) as Record<string,number>;
+ return <div className="pos-line">{GUEST_POS.filter((k:string)=>want[k]).map((k:string)=><span key={k} className={"pos-pill pos-"+k+(left[k]?"":" full")}>{k} {left[k]??0}<small>/{want[k]}</small></span>)}</div>};
+function GuestTerms({z}:{z:Row}){
+ return <div className="guest-terms"><span>{guestFeeText(z.fee)}</span>{z.minPlay&&<span>최소 출전 {z.minPlay}</span>}{posLine(z)}</div>;
 }
 // 모집 글 비용은 **상대팀이 내는 구장비**로 보여준다(전체 구장비가 아니라). 예전 글처럼 값이 없으면 협의.
 const opponentPrice=(g:Row)=>g.opponentCost!=null?(Number(g.opponentCost)>0?"상대팀 구장비 "+Number(g.opponentCost).toLocaleString()+"원":"상대팀 구장비 무료"):Number(g.cost)>0?"상대팀 구장비 협의":"무료";
@@ -465,36 +473,64 @@ export function Matching(p:any){
  const teamGuests=(v.guests??[]).filter((x:Row)=>["pending","approved"].includes(x.status));
  const guestLabel:Record<string,string>={pending:"승인 대기",approved:"용병 확정",rejected:"거절됨",withdrawn:"철회됨",closed:"모집 마감",cancelled:"취소됨"};
  const status:any={pending:"수락 대기",accepted:"매칭 확정",rejected:"거절됨",withdrawn:"철회됨",closed:"모집 종료",changed:"조건 변경 · 재신청 필요"};
- return <><Tabs value={tab} onValueChange={setTab}><TabsList className="mb-5 tab-scroll"><TabsTrigger value="open">모집 중</TabsTrigger><TabsTrigger value="confirmed">확정 매칭</TabsTrigger><TabsTrigger value="mine">우리 팀 매칭 내역</TabsTrigger>{captain&&<TabsTrigger value="received">받은 신청 {received.filter((r:Row)=>r.status==="pending").length||""}</TabsTrigger>}<TabsTrigger value="guest">용병 {teamGuests.filter((x:Row)=>x.status==="pending").length||""}</TabsTrigger></TabsList></Tabs>
+ const pendingIn=received.filter((r:Row)=>r.status==="pending").length,guestIn=manager?teamGuests.filter((x:Row)=>x.status==="pending").length:0;
+ const gameOf=(id:string)=>[...v.games,...v.listings,...(v.matchedListings??[])].find((g:Row)=>g.id===id);
+ const teamById=(id?:string)=>v.teams.find((t:Row)=>t.id===id);
+ const chatRoomOf=(r:Row)=>"match:"+r.gameId+":"+r.teamId;
+ return <><Tabs value={tab} onValueChange={setTab}><TabsList className="mb-5 tab-scroll"><TabsTrigger value="open">모집 중</TabsTrigger><TabsTrigger value="confirmed">모집 완료</TabsTrigger>{captain&&<TabsTrigger value="received">받은 신청{pendingIn>0&&<i className="red-dot" aria-label={"새 신청 "+pendingIn+"건"}>{pendingIn}</i>}</TabsTrigger>}<TabsTrigger value="mine">우리 팀 매칭 내역</TabsTrigger><TabsTrigger value="guest">용병{guestIn>0&&<i className="red-dot" aria-label={"용병 신청 "+guestIn+"건"}>{guestIn}</i>}</TabsTrigger></TabsList></Tabs>
  {tab==="open"&&<>{searchBar}<div className="mcard-list">{listings.map((g:Row)=>{const t=v.teams.find((t:Row)=>t.id===g.home),sent=mine.find((r:Row)=>r.gameId===g.id&&r.status==="pending");return <MatchCard key={g.id} team={t} onTeam={t?()=>setModal({kind:"teamProfile",teamId:t.id}):undefined} title={t?.name} price={opponentPrice(g)} start={g.start} chips={[formatLabel(g.format),t?levelChip(t.level):"",g.secured?"":"구장 협의 중"]} venue={g.venue} address={g.address} action={g.home===v.teamId?<button className="btn" onClick={()=>setModal({kind:"game",id:g.id})}>모집글 관리</button>:<button disabled={busy||!captain||!!sent} className="btn btn-green" onClick={()=>setModal({kind:"applyMatch",game:g})}>{sent?"신청 완료":captain?"매칭 신청":"주장만 신청 가능"}</button>}/>})}</div>{!listings.length&&<section className="panel"><Empty title={filtered?"조건에 맞는 모집글이 없어요":"모집 중인 경기가 없어요"} description={filtered
   ? "위 조건을 지우면 모든 모집글을 볼 수 있어요."
   : v.listings.length?"":"경기를 만들 때 \u0027상대팀을 모집할게요\u0027 를 체크해야 이 목록에 올라와요. 이미 만든 경기는 일정에서 열어 모집을 열 수 있어요."}/>
   {filtered&&<button type="button" className="btn" style={{marginTop:14}} onClick={resetFilters}>조건 지우기</button>}</section>}</>}
- {(tab==="mine"||tab==="received")&&<section className="panel">{(tab==="mine"?mine:received).length?(tab==="mine"?mine:received).map((r:Row)=>{const g=[...v.games,...v.listings].find((g:Row)=>g.id===r.gameId);return <div className="notice" key={r.id}><div className="row between"><strong>{tab==="mine"?v.teams.find((t:Row)=>t.id===g?.home)?.name??"상대팀 경기":v.teams.find((t:Row)=>t.id===r.teamId)?.name}</strong><span className="badge">{status[r.status]??r.status}</span></div><p className="data-note">{g?koreanDate(g.start)+" · "+g.venue:"신청한 경기"}{r.message&&" · "+r.message}</p><p className="data-note">신청 {localDay(r.at)} {time(r.at)}{r.decidedAt?" · "+(r.status==="accepted"?"확정":r.status==="rejected"?"거절":r.status==="withdrawn"?"철회":"마감")+" "+localDay(r.decidedAt)+" "+time(r.decidedAt):""}</p>{["pending","accepted"].includes(r.status)&&manager&&<div className="action-strip"><button className="btn" onClick={()=>setModal({kind:"chat",room:"match:"+r.gameId+":"+(tab==="received"?r.teamId:v.teamId)})}><MessageCircle size={16}/>대화</button></div>}{r.status==="pending"&&captain&&<div className="action-strip">{tab==="received"?<><button className="btn btn-green" disabled={busy} onClick={()=>run({type:"acceptMatch",teamId:v.teamId,gameId:r.gameId,requestId:r.id})}>매칭 수락</button><button className="btn" disabled={busy} onClick={()=>run({type:"rejectMatch",teamId:v.teamId,gameId:r.gameId,requestId:r.id})}>거절</button></>:<button className="btn" disabled={busy} onClick={()=>run({type:"withdrawMatch",teamId:v.teamId,gameId:r.gameId,requestId:r.id})}>신청 철회</button>}</div>}</div>}):<Empty title={tab==="mine"?"신청한 매칭이 없어요":"받은 신청이 없어요"}/>}</section>}
+ {(tab==="mine"||tab==="received")&&(()=>{
+  // 1.17: 모집 중과 같은 상자 카드. 받은 신청은 [매칭 수락]·[대화]·[거절] 순서(사장님 요청), 로고도 보인다.
+  const list=(tab==="mine"?mine:received).slice().sort((x:Row,y:Row)=>(x.status==="pending"?0:1)-(y.status==="pending"?0:1)||String(y.at).localeCompare(String(x.at)));
+  if(!list.length)return <section className="panel"><Empty title={tab==="mine"?"신청한 매칭이 없어요":"받은 신청이 없어요"} description={tab==="mine"?"모집 중 탭에서 상대팀 모집글에 신청해 보세요.":"우리 팀 모집글에 신청이 오면 여기와 채팅에 떠요."}/></section>;
+  return <div className="mcard-list">{list.map((r:Row)=>{
+   const g=gameOf(r.gameId),t=teamById(tab==="mine"?g?.home:r.teamId);
+   const open=["pending","accepted","changed"].includes(r.status);
+   const talk=open&&manager?<button className="btn" onClick={()=>setModal({kind:"chat",room:chatRoomOf(r)})}><MessageCircle size={16}/>대화</button>:null;
+   const action=tab==="received"
+    ?(r.status==="pending"&&captain?<><button className="btn btn-green" disabled={busy} onClick={()=>run({type:"acceptMatch",teamId:v.teamId,gameId:r.gameId,requestId:r.id})}>매칭 수락</button>{talk}<button className="btn" disabled={busy} onClick={()=>run({type:"rejectMatch",teamId:v.teamId,gameId:r.gameId,requestId:r.id})}>거절</button></>:talk)
+    :<>{talk}{r.status==="pending"&&captain&&<button className="btn" disabled={busy} onClick={()=>run({type:"withdrawMatch",teamId:v.teamId,gameId:r.gameId,requestId:r.id})}>신청 철회</button>}</>;
+   return <MatchCard key={r.id} team={t} onTeam={t?()=>setModal({kind:"teamProfile",teamId:t.id}):undefined} title={t?.name??(tab==="mine"?"상대팀 경기":"신청 팀")}
+    price={g&&tab==="mine"?opponentPrice(g):undefined} start={g?.start??r.at} chips={[g?formatLabel(g.format):"",t?levelChip(t.level):""]}
+    badge={<span className={"badge "+(r.status==="accepted"?"badge-green":r.status==="pending"?"badge-orange":"")}>{status[r.status]??r.status}</span>}
+    venue={g?.venue} address={g?.address}
+    extra={<>{r.message&&<p className="mc-msg">“{r.message}”</p>}<span className="mc-addr">신청 {localDay(r.at)} {time(r.at)}{r.decidedAt?" · "+(r.status==="accepted"?"확정":r.status==="rejected"?"거절":r.status==="withdrawn"?"철회":"마감")+" "+localDay(r.decidedAt)+" "+time(r.decidedAt):""}</span></>}
+    action={action}/>})}</div>;
+ })()}
  {tab==="guest"&&<>{searchBar}
- <div className="mcard-list">{guestListings.map((z:Row)=><MatchCard key={z.id} team={v.teams.find((t:Row)=>t.id===z.teamId)} title={z.teamName} start={z.start} chips={[formatLabel(z.format),"용병 "+z.approved+"/"+z.needed]} venue={z.venue} address={z.address} action={z.teamId===v.teamId?<button className="btn" onClick={()=>setModal({kind:"game",id:z.gameId})}>모집 관리</button>:<button className="btn btn-green" disabled={busy||!!z.applied} onClick={()=>setModal({kind:"applyGuest",listing:z})}>{z.applied==="approved"?"용병 확정":z.applied?"신청 완료":"용병 신청"}</button>}/>)}</div>
+ <div className="mcard-list">{guestListings.map((z:Row)=><MatchCard key={z.id} team={v.teams.find((t:Row)=>t.id===z.teamId)} title={z.teamName} start={z.start} chips={[formatLabel(z.format),"용병 "+z.approved+"/"+z.needed,guestFeeText(z.fee),z.minPlay?"최소 "+z.minPlay:""]} extra={posLine(z)} venue={z.venue} address={z.address} action={z.teamId===v.teamId?<button className="btn" onClick={()=>setModal({kind:"game",id:z.gameId})}>모집 관리</button>:<button className="btn btn-green" disabled={busy||!!z.applied} onClick={()=>setModal({kind:"applyGuest",listing:z})}>{z.applied==="approved"?"용병 확정":z.applied?"신청 완료":"용병 신청"}</button>}/>)}</div>
  {!guestListings.length&&<section className="panel"><Empty title={filtered?"조건에 맞는 용병 자리가 없어요":"모집 중인 용병 자리가 없어요"} description={filtered?"위 조건을 지우면 모든 모집을 볼 수 있어요.":"다른 팀이 용병을 모집하면 여기에 표시돼요."}/>{filtered&&<button type="button" className="btn" style={{marginTop:14}} onClick={resetFilters}>조건 지우기</button>}</section>}
  {!!(v.myGuests??[]).length&&<section className="panel" style={{marginTop:18}}><h2 className="view-heading">내 용병 신청</h2>{v.myGuests.map((r:Row)=><div className="notice" key={r.id}><div className="row between"><strong>{r.teamName}</strong><span className={"badge "+(r.status==="approved"?"badge-green":r.status==="pending"?"badge-orange":"")}>{guestLabel[r.status]??r.status}</span></div><p className="data-note">{r.start?koreanDate(r.start)+" · "+r.venue:"경기 정보를 확인할 수 없어요"}</p>{r.status==="pending"&&<div className="action-strip"><button className="btn" disabled={busy} onClick={()=>run({type:"withdrawGuest",teamId:r.teamId,gameId:r.gameId,guestId:r.id})}>신청 철회</button></div>}</div>)}</section>}
  {manager&&!!teamGuests.length&&<section className="panel" style={{marginTop:18}}><h2 className="view-heading">우리 팀 용병 신청</h2>{teamGuests.map((x:Row)=>{const gm=v.games.find((y:Row)=>y.id===x.gameId);return <div className="attendance-item" key={x.id}><div><strong>{x.name}</strong><SpecLine spec={x.spec}/><p className="data-note">{x.position} · {backNoOr(x.number)}{gm?" · "+koreanDate(gm.start)+" "+gm.venue:""}{x.message?" · "+x.message:""}</p></div><div className="row">{x.status==="pending"?<><button className="btn btn-green" disabled={busy} onClick={()=>run({type:"approveGuest",teamId:v.teamId,gameId:x.gameId,guestId:x.id})}>승인</button><button className="btn" disabled={busy} onClick={()=>run({type:"rejectGuest",teamId:v.teamId,gameId:x.gameId,guestId:x.id})}>거절</button></>:<><span className="badge badge-green">용병 확정</span><button className="btn" disabled={busy} onClick={()=>run({type:"cancelGuest",teamId:v.teamId,gameId:x.gameId,guestId:x.id})}>취소</button></>}</div></div>})}</section>}
  </>}
  {tab==="confirmed"&&(()=>{
-  // 모집 중 탭과 같은 카드 모양으로 맞춘다. 예전에는 일정 화면용 줄 컴포넌트를
-  // 그대로 가져다 써서 같은 화면 안에서 생김새가 따로 놀았다.
-  // 다가오는 경기를 먼저(가까운 순), 지난 경기는 그 뒤에 최근 순으로 둔다.
-  // 예전에는 오래된 경기부터 나와서 맨 위가 늘 옛날 경기였다.
-  const done=v.games.filter((g:Row)=>g.away&&g.status!=="cancelled")
+  // 1.17 모집 완료: 모집글로 매칭이 확정된 다가오는 경기("FCOZ VS FC CW · 매칭 확정"). 나머지 내용은 모집 중 카드와 같다.
+  // 그 아래에 우리 팀의 확정 경기(지난 경기 포함, 결과 점수)를 이어서 둔다.
+  const hayM=(g:Row)=>[g.region,g.venue,g.address,teamById(g.home)?.name,teamById(g.away)?.name].filter(Boolean).join(" ");
+  const pub=(v.matchedListings??[]).filter((g:Row)=>(!date||localDay(g.start)===date)&&(!term||hayM(g).includes(term))).sort(byDate);
+  const ours=v.games.filter((g:Row)=>g.away&&g.status!=="cancelled"&&!pub.some((x:Row)=>x.id===g.id))
    .sort((a:Row,b:Row)=>{
     const now=Date.now(),fa=Date.parse(a.start)>=now,fb=Date.parse(b.start)>=now;
     if(fa!==fb)return fa?-1:1;
     return fa?String(a.start).localeCompare(String(b.start)):String(b.start).localeCompare(String(a.start));
    });
-  if(!done.length)return <section className="panel"><Empty title="확정된 매칭이 없어요" description="모집글에 신청하거나 받은 신청을 수락하면 여기에서 확인할 수 있어요."/></section>;
-  return <div className="mcard-list">{done.map((g:Row)=>{
-   const us=v.teams.find((t:Row)=>t.id===v.teamId)?.name??"우리 팀",them=opponent(v,g)||"상대팀 미정";
-   const score=g.result?.status==="confirmed"?(g.home===v.teamId?g.result.a+" : "+g.result.b:g.result.b+" : "+g.result.a):"";
-   return <MatchCard key={g.id} team={v.teams.find((t:Row)=>t.id===(g.home===v.teamId?g.away:g.home))} title={<>{us} <span className="vs">vs</span> {them}</>} price={score?"최종 "+score:undefined} start={g.start} chips={[formatLabel(g.format)]} badge={<GameBadge g={g}/>} venue={g.venue||"구장 미정"} address={g.address} onOpen={()=>setModal({kind:"game",id:g.id})}/>})}</div>;
+  const vsTitle=(g:Row)=><>{teamById(g.home)?.name??"홈"} <span className="vs">VS</span> {teamById(g.away)?.name??opponent(v,g)??"상대팀"}</>;
+  return <>{searchBar}
+   {pub.length?<div className="mcard-list">{pub.map((g:Row)=>{const mineG=containsTeamId(g,v.teamId);
+    return <MatchCard key={g.id} team={teamById(g.home)} title={vsTitle(g)} price={opponentPrice(g)} start={g.start} chips={[formatLabel(g.format),teamById(g.home)?levelChip(teamById(g.home).level):""]}
+     badge={<span className="badge badge-green">매칭 확정</span>} venue={g.venue||"구장 미정"} address={g.address} onOpen={mineG?()=>setModal({kind:"game",id:g.id}):undefined}/>})}</div>
+    :<section className="panel"><Empty title={filtered?"조건에 맞는 확정 매칭이 없어요":"아직 모집 완료된 경기가 없어요"} description="모집글에 매칭이 확정되면 여기로 옮겨져요."/></section>}
+   {!!ours.length&&<><h2 className="view-heading" style={{marginTop:22}}>우리 팀 확정 경기</h2><div className="mcard-list">{ours.map((g:Row)=>{
+    const us=v.teams.find((t:Row)=>t.id===v.teamId)?.name??"우리 팀",them=opponent(v,g)||"상대팀 미정";
+    const score=g.result?.status==="confirmed"?(g.home===v.teamId?g.result.a+" : "+g.result.b:g.result.b+" : "+g.result.a):"";
+    return <MatchCard key={g.id} team={v.teams.find((t:Row)=>t.id===(g.home===v.teamId?g.away:g.home))} title={<>{us} <span className="vs">VS</span> {them}</>} price={score?"최종 "+score:undefined} start={g.start} chips={[formatLabel(g.format)]} badge={<GameBadge g={g}/>} venue={g.venue||"구장 미정"} address={g.address} onOpen={()=>setModal({kind:"game",id:g.id})}/>})}</div></>}
+  </>;
  })()}</>
 }
+const containsTeamId=(g:Row,t?:string)=>!!t&&(g.home===t||g.away===t);
 // 팀 이름의 일부나 지역만 쳐도 찾히게 한다. "oz" 로 "FCOZ" 를 찾는 식이라
 // 대소문자를 가리지 않는다. 이름을 정확히 몰라도 로고와 지역으로 알아볼 수 있어야 한다.
 export const teamMatches=(t:Row,q:string)=>{
@@ -534,6 +570,8 @@ export function MyHub({v,busy,setModal}:{v:Row;busy:boolean;setModal:(m:{kind:st
  const t=v.myTotals??{teams:0,played:0,attend:0,eligible:0,rate:null,goals:0,assists:0,points:0};
  const me=v.members?.find((m:Row)=>m.userId===v.user?.id&&m.status==="active");
  const open=(v.inquiries??[]).filter((x:Row)=>x.mine&&x.status==="open").length;
+ // 운영자는 다른 사람이 보낸 답변 대기 문의 수를 빨간 점으로 본다.
+ const waiting=v.isOwner?(v.inquiries??[]).filter((x:Row)=>!x.mine&&x.status==="open").length:0;
  return <>
   <section className="panel">
    <div className="panel-title"><h2>내 전체 기록</h2><span className="small muted">{t.teams}개 팀 합산</span></div>
@@ -561,8 +599,8 @@ export function MyHub({v,busy,setModal}:{v:Row;busy:boolean;setModal:(m:{kind:st
    <NotifyToggle/>
    <div className="notice">
     <div className="row between">
-     <div><p><strong>1:1 문의</strong>{open>0&&<span className="badge badge-orange" style={{marginLeft:8}}>답변 대기 {open}</span>}</p><span>운영자에게 직접 물어봐요.</span></div>
-     <button className="btn" onClick={()=>setModal({kind:"support"})}>문의 내역</button>
+     <div><p><strong>1:1 문의</strong>{open>0&&<span className="badge badge-orange" style={{marginLeft:8}}>답변 대기 {open}</span>}</p><span>{v.isOwner?(waiting?"답해야 할 문의가 "+waiting+"건 있어요.":"새 문의가 오면 알림과 빨간 점으로 알려요."):"운영자에게 직접 물어봐요."}</span></div>
+     <button className="btn dot-host" onClick={()=>setModal({kind:"support"})}>문의 내역{waiting>0&&<i className="red-dot" aria-label={"새 문의 "+waiting+"건"}>{waiting>9?"9+":waiting}</i>}</button>
     </div>
    </div>
    <div className="notice">
@@ -601,7 +639,7 @@ export function AppDialogs(p:any){
   if(modal.kind==="records"){const values=Object.fromEntries((z.roster??[]).filter((m:Row)=>z.attendance[m.id]).map((m:Row)=>[m.id,z.records[m.id]??{goals:0,assists:0}]));const score=game.home===v.teamId?game.result?.a:game.result?.b;f={values,ownGoals:z.ownGoals??0,unknownGoals:z.unknownGoals??Math.max(0,(score??0)-Object.values(values).reduce((sum:number,x:any)=>sum+x.goals,0))};}
   if(modal.kind==="result")f={own:game?.home===v.teamId?game.result?.a:game?.result?.b,opponent:game?.home===v.teamId?game.result?.b:game?.result?.a};
   if(modal.kind==="editMember")f={...modal.member};if(modal.kind==="profile"){const p=v.myProfile??{};f={...(modal.member??{}),position:modal.member?.position??p.main??"MF",sub:p.sub??"",foot:p.foot??"",height:p.height??"",weight:p.weight??"",instagram:p.instagram??"",regions:p.regions??[]}}if(modal.kind==="joinTeam")f={name:v.user?.name==="팀원"?"":v.user?.name,position:v.myProfile?.main??"MF",number:0,readRules:false};if(modal.kind==="rules")f={rules:team?.rules??"",notify:true};
-  if(modal.kind==="openGuests")f={needed:z?.guestNeeded||2};if(modal.kind==="applyGuest")f={name:v.user?.name==="팀원"?"":v.user?.name,position:v.myProfile?.main??"MF",number:0,message:""};if(modal.kind==="editTeam")f={...team};if(modal.kind==="sideSettings")f={...z,deadline:inputTime(z.deadline)};if(modal.kind==="createTeam")f={region:"",format:"11인제",days:"일요일 오전",level:"중급"};setForm(f);
+  if(modal.kind==="openGuests")f={needed:z?.guestNeeded||2,positions:z?.guestPositions??{},fee:z?.guestFee??0,minPlay:z?.guestMinPlay??""};if(modal.kind==="applyGuest")f={name:v.user?.name==="팀원"?"":v.user?.name,position:v.myProfile?.main??"MF",number:0,message:""};if(modal.kind==="editTeam")f={...team,level:levelOf(team?.level)};if(modal.kind==="sideSettings")f={...z,deadline:inputTime(z.deadline)};if(modal.kind==="createTeam")f={region:"",format:"11인제",days:"일요일 오전",level:"중"};setForm(f);
  },[modal]);
  function field(k:string,value:any){setForm((f:any)=>({...f,[k]:value}))}
  // 시작을 정하면 끝을 2시간 뒤로 맞춰 준다. 대부분의 경기가 두 시간이라
@@ -655,6 +693,8 @@ export function AppDialogs(p:any){
  function openNotification(n:Row){
   // 채팅 알림은 그 방을 바로 연다("chat:team:…", "chat:match:…:…").
   if(String(n.to??"").startsWith("chat:")){setView("team");setModal({kind:"chat",room:String(n.to).slice(5)});return}
+  // 창 하나를 바로 여는 알림("modal:support" — 새 1:1 문의).
+  if(String(n.to??"").startsWith("modal:")){setView("team");setModal({kind:String(n.to).slice(6)});return}
   const {view,tab}=targetOf(n);
   setView(view);
   // 매칭처럼 탭이 여럿인 화면은 어느 탭인지까지 알려 준다.
@@ -675,14 +715,14 @@ export function AppDialogs(p:any){
  function copy(value:string){navigator.clipboard.writeText(value).then(()=>toast.success("복사했어요.")).catch(()=>toast.error("복사할 수 없어요. 내용을 직접 선택해 복사해주세요."))}
  const label=(name:string,key:string,type="text",required=true)=><label>{name}<input type={type} required={required} value={form[key]??""} onChange={e=>field(key,type==="number"?e.target.value===""?"":Number(e.target.value):e.target.value)} min={type==="number"?0:undefined}/></label>;
  const submit=(name="저장하기")=><button type="submit" className="btn btn-green" disabled={busy}>{busy&&<LoaderCircle className="loader" size={16}/>} {name}</button>;
- const closed=()=>setModal(null),titles:any={teamProfile:"팀 프로필",chat:"채팅",setOpponent:"외부 상대팀 입력",findTeam:"가입할 팀 찾기",createGame:"새 경기 만들기",createTeam:"팀 등록 신청",joinTeam:"팀 가입 신청",profile:"내 선수 정보",editMember:"선수 정보 수정",editTeam:"팀 정보 수정",attendance:"실제 출석 확인",records:"골 · 어시스트 기록",matchRecord:isIntra(v.games?.find((x:Row)=>x.id===modal?.gameId))?"자체전 기록 입력":"경기 기록 입력",result:"점수만 입력",changeGame:"경기 일정 변경",sideSettings:"팀 안내 · 투표 마감 수정",notice:"팀 공지 작성",invite:"팀원 초대",openGuests:"용병 모집",applyGuest:"용병 신청",applyMatch:"팀 매칭 신청",notifications:"알림",settings:"내 계정과 설정",setup:"운영자 초기 설정",reason:modal?.title,confirmAnon:"이름 가리기",support:"1:1 문의",announcements:"공지사항",writeAnnouncement:"공지 올리기",member:"팀원 관리",player:"선수 기록",noticeDetail:modal?.notice?.title,correct:"기록 정정 요청",rules:"팀 회칙"};
+ const closed=()=>setModal(null),titles:any={notifySettings:"알림 설정",teamProfile:"팀 프로필",chat:"채팅",setOpponent:"외부 상대팀 입력",findTeam:"가입할 팀 찾기",createGame:"새 경기 만들기",createTeam:"팀 등록 신청",joinTeam:"팀 가입 신청",profile:"내 선수 정보",editMember:"선수 정보 수정",editTeam:"팀 정보 수정",attendance:"실제 출석 확인",records:"골 · 어시스트 기록",matchRecord:isIntra(v.games?.find((x:Row)=>x.id===modal?.gameId))?"자체전 기록 입력":"경기 기록 입력",result:"점수만 입력",changeGame:"경기 일정 변경",sideSettings:"팀 안내 · 투표 마감 수정",notice:"팀 공지 작성",invite:"팀원 초대",openGuests:"용병 모집",applyGuest:"용병 신청",applyMatch:"팀 매칭 신청",notifications:"알림",settings:"내 계정과 설정",setup:"운영자 초기 설정",reason:modal?.title,confirmAnon:"이름 가리기",support:"1:1 문의",announcements:"공지사항",writeAnnouncement:"공지 올리기",member:"팀원 관리",player:"선수 기록",noticeDetail:modal?.notice?.title,correct:"기록 정정 요청",rules:"팀 회칙"};
  // 모달마다 부제가 하나뿐이라 알림함·공지·문의에도 "우리 팀의 정보를 확인하고
  // 관리하세요."가 그대로 붙어 있었다. 팀 정보와 상관없는 창만 제 설명을 갖는다.
  const subtitles:Record<string,string>={notifications:"읽지 않은 소식부터 최근 순으로 보여드려요.",matchRecord:"선수 기록을 먼저 넣으면 우리 팀 점수가 자동으로 더해져요.",result:"선수 기록 없이 점수만 남길 때 쓰세요.",
   noticeDetail:"팀원 모두에게 보이는 공지예요.",notice:"팀원 모두에게 보이는 공지를 올려요.",
   announcements:"팀킥 운영자가 올린 공지사항이에요.",writeAnnouncement:"모든 이용자에게 보이는 공지를 올려요.",
   support:"운영자에게 직접 문의하고 답변을 확인해요.",settings:"내 계정 정보와 알림·탈퇴를 관리해요.",
-  findTeam:"가입하고 싶은 팀을 찾아 신청해요.",teamProfile:"사진·소개·회칙을 보고 가입을 신청해요.",chat:"이 방 사람에게만 보여요. 신고는 말풍선을 눌러요.",createTeam:"운영자 승인을 받으면 팀 공간이 열려요.",
+  findTeam:"가입하고 싶은 팀을 찾아 신청해요.",notifySettings:"종류별로 폰 알림을 켜고 꺼요.",teamProfile:"사진·소개·회칙을 보고 가입을 신청해요.",chat:"이 방 사람에게만 보여요. 신고는 말풍선을 눌러요.",createTeam:"운영자 승인을 받으면 팀 공간이 열려요.",
   invite:"QR 이나 링크를 받은 사람이 우리 팀에 가입을 신청할 수 있어요.",rules:"회비·출석·매너 같은 팀 약속을 적어두세요.",
   applyGuest:"이 경기에 용병으로 함께 뛰길 신청해요.",openGuests:"이 경기에 필요한 용병 인원을 모집해요."};
 
@@ -727,8 +767,16 @@ export function AppDialogs(p:any){
   <label className="row"><Checkbox checked={!!form.recruiting} onCheckedChange={x=>field("recruiting",x===true)}/>팀원 모집 중 (팀 찾기·팀 프로필에 표시)</label>
   {form.recruiting&&label("모집 한마디 (선택)","recruitNote","text",false)}
  </>}{submit(modal.kind==="createTeam"?"운영자에게 등록 신청":"팀 정보 저장")}</form>}
- {modal?.kind==="openGuests"&&<form className="form-grid" onSubmit={e=>{e.preventDefault();save({type:"openGuests",teamId:v.teamId,gameId:modal.gameId,needed:Number(form.needed)})}}>{label("모집 인원","needed","number")}<p className="data-note">승인 인원이 모집 인원에 도달하면 서버에서 자동으로 마감돼요. 승인 대기자는 인원에 포함되지 않아요.</p>{submit("용병 모집 시작")}</form>}
- {modal?.kind==="applyGuest"&&<form className="form-grid" onSubmit={e=>{e.preventDefault();save({type:"applyGuest",teamId:modal.listing.teamId,gameId:modal.listing.gameId,name:form.name,position:form.position,number:form.number,message:form.message})}}><strong>{modal.listing.teamName}</strong><p className="data-note">{koreanDate(modal.listing.start)} {time(modal.listing.start)} · {modal.listing.venue}</p><p className="data-note">용병에게는 경기 정보만 공개되고 팀 내부 정보는 보이지 않아요.</p>{label("이름","name")}<div className="two-col fields">{label("등번호","number","number")}</div><PositionPicker label="포지션" value={form.position??"MF"} onChange={(x:string)=>field("position",x)}/><p className="data-note">내 선수 프로필(포지션·주발·활동 지역·팀킥 기록)이 이 팀 운영진에게 보이고, 키·몸무게는 주장에게만 보여요. <button type="button" className="text-link" onClick={()=>setModal({kind:"profile"})}>프로필 고치기</button></p>{label("남길 말","message","text",false)}{submit("용병 신청")}</form>}
+ {modal?.kind==="openGuests"&&(()=>{const pos=form.positions??{};const sum=GUEST_POS.reduce((n:number,k:string)=>n+Number(pos[k]||0),0);
+  const step=(k:string,d:number)=>field("positions",{...pos,[k]:Math.max(0,Math.min(11,Number(pos[k]||0)+d))});
+  return <form className="form-grid" onSubmit={e=>{e.preventDefault();save({type:"openGuests",teamId:v.teamId,gameId:modal.gameId,needed:sum||Number(form.needed),positions:pos,fee:Number(form.fee||0),minPlay:form.minPlay??""})}}>
+   <div className="pref-block"><strong>포지션별 모집 인원</strong><div className="pos-steppers">{GUEST_POS.map((k:string)=><div key={k} className={"pos-step pos-"+k}><b>{k}</b><button type="button" onClick={()=>step(k,-1)} aria-label={k+" 한 명 빼기"}>−</button><span>{Number(pos[k]||0)}</span><button type="button" onClick={()=>step(k,1)} aria-label={k+" 한 명 더"}>+</button></div>)}</div>
+   <small className="muted">{sum?"모두 "+sum+"명을 모집해요.":"포지션을 정하지 않으면 아래 인원만큼 포지션 상관없이 모집해요."}</small></div>
+   {!sum&&label("모집 인원","needed","number")}
+   <label>참가비(1인)<input type="number" min={0} max={200000} step={1000} value={form.fee??0} onChange={e=>field("fee",e.target.value)}/></label>
+   <div className="pref-block"><strong>최소 출전 보장</strong><div className="chip-row">{MIN_PLAY.map((x:string)=><button key={x||"none"} type="button" className={"chip-btn"+((form.minPlay??"")===x?" on":"")} onClick={()=>field("minPlay",x)}>{x||"안내 안 함"}</button>)}</div></div>
+   <p className="data-note">승인 인원이 모집 인원에 도달하면 서버에서 자동으로 마감돼요. 승인 대기자는 인원에 포함되지 않아요. 참가비는 경기 당일 용병이 직접 내는 금액으로 안내만 해요(팀킥에서 결제하지 않아요).</p>{submit("용병 모집 시작")}</form>})()}
+ {modal?.kind==="applyGuest"&&<form className="form-grid" onSubmit={e=>{e.preventDefault();save({type:"applyGuest",teamId:modal.listing.teamId,gameId:modal.listing.gameId,name:form.name,position:form.position,number:form.number,message:form.message})}}><strong>{modal.listing.teamName}</strong><p className="data-note">{koreanDate(modal.listing.start)} {time(modal.listing.start)} · {modal.listing.venue}</p><GuestTerms z={modal.listing}/><p className="data-note">용병에게는 경기 정보만 공개되고 팀 내부 정보는 보이지 않아요.</p>{label("이름","name")}<div className="two-col fields">{label("등번호","number","number")}</div><PositionPicker label="포지션" value={form.position??"MF"} onChange={(x:string)=>field("position",x)}/><p className="data-note">내 선수 프로필(포지션·주발·활동 지역·팀킥 기록)이 이 팀 운영진에게 보이고, 키·몸무게는 주장에게만 보여요. <button type="button" className="text-link" onClick={()=>setModal({kind:"profile"})}>프로필 고치기</button></p>{label("남길 말","message","text",false)}{submit("용병 신청")}</form>}
  {(modal?.kind==="profile"||modal?.kind==="editMember")&&!demo&&modal.member&&<div style={{marginBottom:18}}><ImageField title="선수 사진" ready={v.storageReady!==false} current={modal.member.photo} kind="memberPhoto" teamId={v.teamId} memberId={modal.member.id} disabled={busy} onSaved={(key:string)=>action({type:"setMemberPhoto",teamId:v.teamId,memberId:modal.member.id,key}).then(()=>setModal(null))}/></div>}
  {(modal?.kind==="joinTeam"||modal?.kind==="profile"||modal?.kind==="editMember")&&<form className="form-grid" onSubmit={e=>{e.preventDefault();
   const profile={main:form.position,sub:form.sub??"",foot:form.foot??"",height:form.height??"",weight:form.weight??"",instagram:form.instagram??"",regions:form.regions??[]};
@@ -845,10 +893,10 @@ export function AppDialogs(p:any){
  </form>}
  {modal?.kind==="reason"&&<form className="form-grid" onSubmit={e=>{e.preventDefault();setConfirm({title:modal.title+"을 진행할까요?",command:{type:modal.command,teamId:modal.teamId,gameId:modal.gameId,reason:form.reason}})}}><label>사유<textarea required value={form.reason??""} onChange={e=>field("reason",e.target.value)}/></label><button className="btn btn-danger" type="submit">확인</button></form>}
  {modal?.kind==="member"&&<><strong>{modal.member.name}</strong><p className="data-note">{modal.member.position} · {backNoOr(modal.member.number)}</p><div className="gap-grid"><button className="btn" onClick={()=>setModal({kind:"editMember",member:modal.member})}>선수 정보 수정</button><button className="btn" disabled={busy} onClick={()=>save({type:"setRole",teamId:v.teamId,memberId:modal.member.id,role:modal.member.role==="manager"?"member":"manager"})}>{modal.member.role==="manager"?"운영진 권한 해제":"일정·기록 운영진 지정"}</button><button className="btn" onClick={()=>setConfirm({title:"이 선수에게 주장을 인계할까요?",command:{type:"transferCaptain",teamId:v.teamId,memberId:modal.member.id}})}>주장 인계 요청</button><button className="btn btn-danger" onClick={()=>setConfirm({title:"이 팀원을 내보낼까요?",command:{type:"removeMember",teamId:v.teamId,memberId:modal.member.id}})}>팀원 내보내기</button></div></>}
- {modal?.kind==="chat"&&<ChatRoom room={modal.room} viewTeam={v.teamId} demo={demo}/>}
+ {modal?.kind==="chat"&&<ChatRoom room={modal.room} viewTeam={v.teamId} demo={demo} run={(c:Record<string,unknown>)=>action(c)} onProfile={(teamId:string)=>setModal({kind:"teamProfile",teamId,back:{kind:"chat",room:modal.room}})}/>}
  {modal?.kind==="teamProfile"&&(()=>{const t=v.teams.find((x:Row)=>x.id===modal.teamId);if(!t)return <Empty title="팀을 찾을 수 없어요"/>;
-  return <TeamProfile v={v} team={t} demo={demo} busy={busy} run={action} onJoin={(x:Row)=>setModal({kind:"joinTeam",team:x})} onEdit={()=>setModal({kind:"editTeam"})}
-   uploader={(close)=>demo?<p className="data-note">샘플에서는 사진을 올릴 수 없어요.</p>:<ImageField title="팀 사진 (정사각형으로 잘라요)" ready={v.storageReady!==false} kind="teamPhoto" teamId={t.id} disabled={busy} onSaved={(key:string)=>action({type:"addTeamPhoto",teamId:t.id,key}).then(close)}/>}/>})()}
+  return <>{modal.back&&<button type="button" className="text-link back-link" onClick={()=>setModal(modal.back)}>← 대화로 돌아가기</button>}<TeamProfile v={v} team={t} demo={demo} busy={busy} run={action} onJoin={(x:Row)=>setModal({kind:"joinTeam",team:x})} onEdit={()=>setModal({kind:"editTeam"})}
+   uploader={(close)=>demo?<p className="data-note">샘플에서는 사진을 올릴 수 없어요.</p>:<ImageField title="팀 사진 (정사각형으로 잘라요)" ready={v.storageReady!==false} kind="teamPhoto" teamId={t.id} disabled={busy} onSaved={(key:string)=>action({type:"addTeamPhoto",teamId:t.id,key}).then(close)}/>}/></>})()}
  {modal?.kind==="findTeam"&&(()=>{
   // 팀 이름의 일부만 쳐도 찾히게 한다. "oz" 로 "FCOZ" 를 찾는 식이다.
   // 이름을 정확히 몰라도 로고와 지역을 보고 내 팀을 알아볼 수 있어야 한다.
@@ -891,7 +939,8 @@ export function AppDialogs(p:any){
  {modal?.kind==="player"&&<><div className="team-header"><PlayerPhoto name={modal.player.name} photo={modal.player.photo}/><div><h2>{modal.player.name}</h2><p>{backNoOr(modal.player.number)} · {modal.player.position}</p></div></div><div className="stats-grid" style={{gridTemplateColumns:"repeat(3,1fr)"}}>{["goals","assists","attend"].map((k,i)=><div className="stat-card" key={k}><span className="stat-label">{["골","어시스트","출석"][i]}</span><div className="stat-value">{modal.player[k]}</div></div>)}</div><p className="data-note">위 숫자는 선택한 기간의 기록입니다. 아래는 전체 경기 이력입니다.</p>{v.sides.filter((s:Row)=>s.records[modal.player.id]||s.attendance[modal.player.id]).map((s:Row)=>{const g=v.games.find((g:Row)=>g.id===s.gameId);return g?<div className="notice" key={s.id}><p>{koreanDate(g.start)} · {opponent(v,g)}</p><span>{s.attendance[modal.player.id]?"출석":"불참"} · {s.records[modal.player.id]?.goals??0}골 · {s.records[modal.player.id]?.assists??0}어시스트</span></div>:null})}</>}
  {modal?.kind==="correct"&&<form className="form-grid" onSubmit={e=>{e.preventDefault();save({type:"correctRequest",teamId:v.teamId,gameId:modal.gameId,message:form.message})}}><label>정정할 내용<textarea required value={form.message??""} onChange={e=>field("message",e.target.value)}/></label>{submit("기록 담당자에게 요청")}</form>}
  {modal?.kind==="setup"&&<form className="form-grid" onSubmit={e=>{e.preventDefault();save({type:"setupOwner",code:form.code})}}>{label("운영자 초기 설정 코드","code","password")}<p className="data-note">첫 로그인 순서로 권한을 부여하지 않습니다. 코드는 최초 운영자 등록에 한 번 사용합니다.</p>{submit("서비스 운영자로 등록")}</form>}
- {modal?.kind==="settings"&&<div className="gap-grid"><div className="row"><span className="avatar">{v.user?.name?.slice(-2)||"MY"}</span><strong>{demo?"샘플 팀 공간":v.user?.name||"로그인이 필요해요"}</strong></div>{demo?<button className="btn btn-green" onClick={()=>{p.setDemo(false);setModal(null);p.setView("team")}}>실제 우리 팀 공간으로</button>:<button className="btn" onClick={()=>{p.setDemo(true);setModal(null);p.setView("home")}}>샘플 팀 둘러보기</button>}{v.isOwner&&<button className="btn" onClick={()=>{p.setView("admin");setModal(null)}}><ShieldCheck/>서비스 관리</button>}{p.real?.setupNeeded&&p.real?.user&&<button className="btn" onClick={()=>{p.setDemo(false);setModal({kind:"setup"})}}>운영자 초기 설정</button>}{!demo&&p.real?.user&&<button className="btn" onClick={()=>{setModal(null);openWelcome()}}>팀킥 사용법 다시 보기</button>}{install?<button className="btn" onClick={async()=>{await install.prompt();setInstall(null)}}><Download/>홈 화면에 설치</button>:<p className="data-note">휴대폰 브라우저의 공유·메뉴에서 ‘홈 화면에 추가’를 선택해 앱처럼 열 수 있어요.</p>}{!demo&&v.role&&v.role!=="captain"&&<button className="btn btn-danger" onClick={()=>setConfirm({title:"현재 팀에서 탈퇴할까요?",command:{type:"leaveTeam",teamId:v.teamId}})}>팀 탈퇴</button>}{!demo&&p.real?.user&&<button className="btn btn-danger" onClick={()=>setConfirm(SOCIAL_LABEL[p.real.user.provider]
+ {modal?.kind==="notifySettings"&&<NotifyPrefs v={v} demo={demo} busy={busy} run={action} done={()=>setModal({kind:"settings"})}/>}
+ {modal?.kind==="settings"&&<div className="gap-grid"><div className="row"><span className="avatar">{v.user?.name?.slice(-2)||"MY"}</span><strong>{demo?"샘플 팀 공간":v.user?.name||"로그인이 필요해요"}</strong></div><ThemePicker/>{!demo&&p.real?.user&&<button className="btn" onClick={()=>setModal({kind:"notifySettings"})}><Bell size={16}/>알림 종류별 설정</button>}{demo?<button className="btn btn-green" onClick={()=>{p.setDemo(false);setModal(null);p.setView("team")}}>실제 우리 팀 공간으로</button>:<button className="btn" onClick={()=>{p.setDemo(true);setModal(null);p.setView("home")}}>샘플 팀 둘러보기</button>}{v.isOwner&&<button className="btn" onClick={()=>{p.setView("admin");setModal(null)}}><ShieldCheck/>서비스 관리</button>}{p.real?.setupNeeded&&p.real?.user&&<button className="btn" onClick={()=>{p.setDemo(false);setModal({kind:"setup"})}}>운영자 초기 설정</button>}{!demo&&p.real?.user&&<button className="btn" onClick={()=>{setModal(null);openWelcome()}}>팀킥 사용법 다시 보기</button>}{install?<button className="btn" onClick={async()=>{await install.prompt();setInstall(null)}}><Download/>홈 화면에 설치</button>:<p className="data-note">휴대폰 브라우저의 공유·메뉴에서 ‘홈 화면에 추가’를 선택해 앱처럼 열 수 있어요.</p>}{!demo&&v.role&&v.role!=="captain"&&<button className="btn btn-danger" onClick={()=>setConfirm({title:"현재 팀에서 탈퇴할까요?",command:{type:"leaveTeam",teamId:v.teamId}})}>팀 탈퇴</button>}{!demo&&p.real?.user&&<button className="btn btn-danger" onClick={()=>setConfirm(SOCIAL_LABEL[p.real.user.provider]
  // 카카오·구글·네이버로 가입한 계정은 그쪽에 한 번 더 로그인해서 연결까지 끊는다(lib/close.ts).
  ?{title:"정말 탈퇴할까요? 계정과 로그인 정보가 삭제되고 되돌릴 수 없어요.",description:SOCIAL_LABEL[p.real.user.provider]+" 로그인 화면을 한 번 거친 뒤 탈퇴되고, "+SOCIAL_LABEL[p.real.user.provider]+" 연결도 함께 끊어요."+CAPTAIN_NOTE,act:()=>closeWithProvider(p.real.user.provider)}
  :{title:"정말 탈퇴할까요? 계정과 로그인 정보가 삭제되고 되돌릴 수 없어요.",description:"팀 활동 기록은 팀에 남고, 계정 정보는 지워져요."+CAPTAIN_NOTE,command:{type:"closeAccount"},reload:true})}>회원 탈퇴</button>}{p.real?.user?<button className="btn" disabled={busy} onClick={async()=>{await fetch("/api/auth",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"logout"})});window.location.reload()}}><LogOut/>로그아웃</button>:<button className="btn btn-green" onClick={()=>{p.setDemo(false);setModal(null)}}>로그인 · 회원가입</button>}<p className="data-note">팀킥 · 초기 팀 운영 버전<br/>앱 안 알림과 휴대폰 알림을 지원합니다. 휴대폰 알림은 MY → 기기 알림에서 켜요.</p></div>}

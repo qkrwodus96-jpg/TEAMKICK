@@ -1,5 +1,6 @@
 import type {Metadata,Viewport} from "next";
 import "./globals.css";
+import "./dark.css";
 import {SPLASH_MS,SPLASH_ID,SPLASH_KEY,SplashMark,LOGO} from "./splash";
 
 export const metadata:Metadata={title:"팀킥 · 우리 팀의 모든 경기",description:"일정부터 참여 투표, 팀 매칭과 선수 기록까지.",manifest:"/manifest.webmanifest",icons:{icon:"/app-icon-192.png",shortcut:"/app-icon-192.png",apple:"/app-icon-180.png"}};
@@ -29,6 +30,9 @@ setTimeout(function(){watch.disconnect()},${SPLASH_MS});}catch(e){}};
 setTimeout(go,${SPLASH_MS});
 document.addEventListener("click",go,{once:true});document.addEventListener("keydown",go,{once:true})})()`;
 
+// 화면 모드(1.17). 칠하기 전에 정해야 밝은 화면이 번쩍이지 않는다. 시스템 모드면 기기 설정이 바뀔 때도 따라간다.
+const THEME=`(function(){try{var m=localStorage.getItem("teamkick_theme");var q=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)");var set=function(){var d=m==="dark"||(m!=="light"&&q&&q.matches);document.documentElement.setAttribute("data-theme",d?"dark":"light")};set();if(q&&q.addEventListener)q.addEventListener("change",function(){m=localStorage.getItem("teamkick_theme");set()})}catch(e){}})()`;
+
 export default function Layout({children}:{children:React.ReactNode}){
  // 위 SPLASH 스크립트가 React 보다 먼저 <html> 에 data-splash 를 붙인다. 서버가 보낸
  // HTML 에는 그 표시가 없으므로 React 가 hydration 불일치로 본다("이미 본 사람"의
@@ -42,6 +46,7 @@ export default function Layout({children}:{children:React.ReactNode}){
    {/* 글꼴: Pretendard(OFL-1.1, public/fonts/pretendard/OFL.txt). 글자 범위별로 나뉜 파일이라 화면에 쓰인 글자 묶음만 받는다. */}
    {/* eslint-disable-next-line @next/next/no-css-tags -- public 폴더의 정적 글꼴 CSS(글자 범위별 @font-face 92개)라 번들에 넣지 않는다 */}
    <link rel="stylesheet" href="/fonts/pretendard/pretendard.css"/>
+   <script dangerouslySetInnerHTML={{__html:THEME}}/>
    <script dangerouslySetInnerHTML={{__html:CATCH}}/>
    <script dangerouslySetInnerHTML={{__html:SPLASH}}/>
    {/* 자바스크립트가 막혀 있으면 첫 화면을 치울 방법이 없다. 아예 보여주지 않는다. */}

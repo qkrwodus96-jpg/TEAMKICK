@@ -3707,3 +3707,15 @@ test('1.18 생일: 프로필 저장·팀원에게는 월·일만, 아침 9시 �
   assert.equal(modelLib.birthdayNotices(s,nine+3600e3).people,0,'한 해 한 번');
   assert.equal(modelLib.notifyKind({title:'오늘은 선수님 생일이에요'}),'birthday');
 });
+
+test('1.18 영입 소식: 가입 승인 때 HERE WE GO 공지와 팀원 알림(끌 수 있음)',()=>{
+  const {s,a}=fixture();const m=addPlayer(s,a);
+  const n=s.notices.find(x=>x.kind==='transfer'&&x.memberId===m.id);
+  assert.ok(n);assert.match(n.title,/^HERE WE GO! 선수 합류$/);
+  assert.ok(s.notifications.some(x=>x.userId==='a'&&/^영입 소식/.test(x.title)));
+  assert.ok(!s.notifications.some(x=>x.userId==='player'&&/^영입 소식/.test(x.title)),'본인에게는 안 감');
+  assert.equal(modelLib.notifyKind({title:'영입 소식 · 선수 합류'}),'team');
+  const D={id:'d',name:'D'};command(s,D,{type:'joinTeam',teamId:a,name:'D',position:'MF',number:5});
+  const md=s.members.find(x=>x.userId==='d');command(s,A,{type:'approveMember',teamId:a,memberId:md.id,announce:false});
+  assert.ok(!s.notices.some(x=>x.memberId===md.id),'announce:false 면 공지 없음');
+});

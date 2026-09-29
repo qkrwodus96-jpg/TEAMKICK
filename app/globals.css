@@ -510,3 +510,26 @@ body{word-break:keep-all;overflow-wrap:break-word}
 .lu-counts span{font-size:13px;padding:4px 9px;border-radius:8px;background:#f1f4f2}.lu-counts span.guest{background:#fff1e6}
 .notice.bday{display:flex;align-items:center;gap:10px;background:#fff6e8;border-color:#f5d9a8;color:#7a4b00;cursor:default}
 .notice.bday p{margin:0;font-weight:600}.notice.bday svg{flex:none;color:#d4731c}
+/* 1.18 MY 팀 메뉴(스쿼디 팀 메인 참고) · 팀 성향 분석 */
+.team-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+@media(min-width:768px){.team-tiles{grid-template-columns:repeat(5,minmax(0,1fr))}}
+.team-tile{position:relative;display:grid;justify-items:center;gap:6px;padding:14px 6px 12px;border:1px solid #e3e8e5;border-radius:14px;background:#fff;font:inherit;font-size:13px;font-weight:650;color:#2c3d34;cursor:pointer}
+.team-tile svg{color:#148b54}
+.team-tile.on{border-color:#148b54;background:#f1faf4}
+.team-tile .red-dot{position:absolute;top:8px;right:8px;margin:0}
+.ts{display:grid;gap:14px}
+.ts-tags{display:flex;flex-wrap:wrap;gap:6px}.ts-tags span{font-size:13px;font-weight:700;padding:5px 10px;border-radius:999px;background:#e7f4ec;color:#107443}
+.ts-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.ts-grid>div{display:grid;gap:2px;padding:12px 14px;border:1px solid #e3e8e5;border-radius:12px}
+.ts-grid small{font-size:12px;color:#6f7d76}.ts-grid b{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums}.ts-grid span{font-size:12.5px;color:#6f7d76}
+.ts-row{display:grid;grid-template-columns:92px 1fr;gap:10px;align-items:start;padding-top:10px;border-top:1px solid #eef1ef}
+.ts-row p{margin:0}.ts-row small{color:#6f7d76}
+.ts-form{display:flex;gap:6px}.ts-form i{font-style:normal;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-weight:800;font-size:13px;color:#fff}
+.ts-form i.w{background:#148b54}.ts-form i.d{background:#9aa6a0}.ts-form i.l{background:#d9534a}
+/* 1.18 공유 이미지 */
+.share-studio{display:grid;gap:12px}
+.share-styles{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}.share-styles::-webkit-scrollbar{display:none}
+.share-canvas{position:relative;border-radius:14px;overflow:hidden;box-shadow:0 8px 28px -12px rgba(0,0,0,.4);background:#111}
+.share-canvas canvas{display:block;width:100%;height:auto;aspect-ratio:4/5}
+.share-busy{position:absolute;inset:0;display:grid;place-items:center;color:#fff;background:rgba(0,0,0,.25)}
+.share-actions{gap:8px}.share-actions .btn{flex:1}

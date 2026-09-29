@@ -390,7 +390,13 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  else if(["approveMember","rejectMember","removeMember","setRole","editMember","transferCaptain","acceptCaptain"].includes(type)){
   if(type!=="acceptCaptain")requireTeam(s,t,a.id,"captain");
   const m=s.members.find(x=>x.id===c.memberId&&x.teamId===t);ensure(m,"팀원을 찾을 수 없어요.",404);
-  if(type==="approveMember"){ensure(m!.status==="pending","이미 처리된 신청이에요.",409);m!.status="active";m!.periods.push({start:stamp});}
+  if(type==="approveMember"){ensure(m!.status==="pending","이미 처리된 신청이에요.",409);m!.status="active";m!.periods.push({start:stamp});
+   // 1.18 영입 소식: 가입을 승인하면 팀 공지에 "HERE WE GO!" 소식을 올리고 팀원에게 알린다(주장이 끄면 안 올린다).
+   // 공지를 열면 영입 카드(공유 이미지)를 만들 수 있다.
+   if(c.announce!==false){const team=teamOf(s,t)!;
+    s.notices.push({id:id(),teamId:t,kind:"transfer",memberId:m!.id,title:"HERE WE GO! "+m!.name+" 합류",body:m!.name+" 선수가 "+team.name+"에 합류했어요."+(m!.position?" 포지션 "+m!.position:"")+(m!.number?" · 등번호 "+m!.number+"번":"")+"\n다 같이 환영해 주세요!",pinned:false,at:stamp,notifiedAt:stamp});
+    for(const x of s.members.filter(y=>y.teamId===t&&y.status==="active"&&y.id!==m!.id))s.notifications.push({id:id(),userId:x.userId,teamId:t,title:"영입 소식 · "+m!.name+" 합류",body:team.name+"에 새 식구가 왔어요. 환영해 주세요!",to:"team",read:false,at:stamp});}
+  }
   if(type==="rejectMember"){ensure(m!.status==="pending","대기 중인 신청이 아니에요.");m!.status="rejected";}
   if(type==="removeMember"){ensure(m!.role!=="captain","주장 인계 후 탈퇴할 수 있어요.");m!.status="removed";if(m!.periods.at(-1))m!.periods.at(-1).end=stamp;}
   if(type==="setRole"){ensure(m!.status==="active"&&m!.role!=="captain","이 팀원의 역할은 변경할 수 없어요.");ensure(["member","manager"].includes(c.role),"역할을 확인해주세요.");m!.role=c.role;}

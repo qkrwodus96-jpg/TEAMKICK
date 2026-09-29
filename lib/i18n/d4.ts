@@ -1,5 +1,5 @@
 // 화면 글자 사전 4/4
-export default `최근 경기 결과	Recent results	最近の試合結果	最近比赛结果	Kết quả gần đây
+const DICT=`최근 경기 결과	Recent results	最近の試合結果	最近比赛结果	Kết quả gần đây
 최근 운영 이력	Recent activity	最近の運営履歴	最近操作记录	Hoạt động gần đây
 최근 흐름	Recent form	最近の流れ	近期状态	Phong độ gần đây
 최상	Elite	最上	顶尖	Rất khá
@@ -255,3 +255,4 @@ export default `최근 경기 결과	Recent results	最近の試合結果	最近
 MY	MY	MY	我的	MY
 기록 담당자	Record keeper	記録担当者	记录员	Người ghi chép
 `;
+export default DICT;

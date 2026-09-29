@@ -1,6 +1,6 @@
 // 화면 글자 사전 1/4 (1.18). 한 줄: 한국어\tEnglish\t日本語\t中文\tTiếng Việt — 탭으로 나눈다.
 // 한국어 원문과 글자가 똑같을 때만 바꾼다. 사용자가 쓴 글(팀 이름·공지·채팅)은 원문이 사전에 없으니 그대로 남는다.
-export default `(필수)	(required)	(必須)	(必填)	(bắt buộc)
+const DICT=`(필수)	(required)	(必須)	(必填)	(bắt buộc)
 (필수) 만 14세 이상입니다.	(Required) I am 14 or older.	(必須) 14歳以上です。	(必填) 我已年满14岁。	(Bắt buộc) Tôi từ 14 tuổi trở lên.
 . 늦지 않게 준비해주세요.	. Please don't be late.	。遅れないよう準備してください。	。请不要迟到。	. Đừng đến muộn nhé.
 / 실패	/ failed	/ 失敗	/ 失败	/ thất bại
@@ -348,3 +348,4 @@ TEAMKICK · 함께 뛰고, 함께 기록하다.	TEAMKICK · Play together, recor
 명단 이미지	Squad image	メンバー画像	阵容图片	Ảnh đội hình
 명에게 보냈어요.	people notified.	名に送りました。	人已收到。	người đã nhận.
 `;
+export default DICT;

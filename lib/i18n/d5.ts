@@ -1,5 +1,5 @@
 // 화면 글자 사전 5/5 — 문장 보충(알림 진단·백업·운영 안내)
-export default `다른 팀원이 공지를 올리거나 경기를 만들 때 옵니다. 혼자 확인하실 때는 위 단추를 눌러주세요.	These arrive when another member posts a notice or creates a match. To test on your own, tap the button above.	他のメンバーがお知らせや試合を登録すると届きます。一人で確認するときは上のボタンを押してください。	其他队员发布公告或创建比赛时会收到。自己测试请点击上方按钮。	Sẽ đến khi thành viên khác đăng thông báo hoặc tạo trận. Tự kiểm tra thì bấm nút phía trên.
+const DICT=`다른 팀원이 공지를 올리거나 경기를 만들 때 옵니다. 혼자 확인하실 때는 위 단추를 눌러주세요.	These arrive when another member posts a notice or creates a match. To test on your own, tap the button above.	他のメンバーがお知らせや試合を登録すると届きます。一人で確認するときは上のボタンを押してください。	其他队员发布公告或创建比赛时会收到。自己测试请点击上方按钮。	Sẽ đến khi thành viên khác đăng thông báo hoặc tạo trận. Tự kiểm tra thì bấm nút phía trên.
 다른 팀원이 공지를 올린 뒤 이 화면을 열면, 그 알림이 어디까지 왔는지 보여요.	After another member posts a notice, open this screen to see how far the alert got.	他のメンバーがお知らせを投稿した後にこの画面を開くと、通知がどこまで届いたか分かります。	其他队员发布公告后打开此页面，可查看通知送达到哪一步。	Sau khi thành viên khác đăng thông báo, mở màn hình này để xem thông báo đã đến đâu.
 다른 팀원이 없는 팀의 주장이라면 그 팀은 해산되고, 앞으로 잡힌 경기는 취소돼요.	If you're captain of a team with no other members, the team is disbanded and upcoming matches are cancelled.	他にメンバーのいないチームの主将なら、そのチームは解散し今後の試合は中止されます。	若你是没有其他队员的球队队长，该队将解散，之后的比赛会取消。	Nếu bạn là đội trưởng đội không còn ai, đội sẽ giải tán và các trận sắp tới bị hủy.
 보내는 중이에요 · 푸시 서버가 늦으면 20초쯤 걸릴 수 있어요.	Sending · may take about 20 seconds if the push server is slow.	送信中です・プッシュサーバーが遅いと20秒ほどかかることがあります。	发送中・推送服务器较慢时可能需要约20秒。	Đang gửi · có thể mất khoảng 20 giây nếu máy chủ chậm.
@@ -36,3 +36,4 @@ export default `다른 팀원이 공지를 올리거나 경기를 만들 때 옵
 개 팀 합산	teams combined	チーム合算	支球队合计	đội gộp lại
 팀킥 v	TeamKick v	TeamKick v	TeamKick v	TeamKick v
 `;
+export default DICT;

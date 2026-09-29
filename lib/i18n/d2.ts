@@ -1,5 +1,5 @@
 // 화면 글자 사전 2/4
-export default `명에게 알림을 보냈어요.	people notified.	名に通知を送りました。	人已收到通知。	người đã được thông báo.
+const DICT=`명에게 알림을 보냈어요.	people notified.	名に通知を送りました。	人已收到通知。	người đã được thông báo.
 명을 모집해요.	players wanted.	名を募集します。	人招募中。	người đang cần.
 몇 팀으로 나눌까요?	How many squads?	何チームに分けますか?	分成几队?	Chia mấy đội?
 모두	All	すべて	全部	Tất cả
@@ -332,3 +332,4 @@ export default `명에게 알림을 보냈어요.	people notified.	名に通知�
 업데이트와 서비스 소식을 확인해요.	Updates and service news.	アップデートとサービスのお知らせ。	查看更新与平台消息。	Cập nhật và tin dịch vụ.
 없음	None	なし	无	Không có
 `;
+export default DICT;

@@ -1,5 +1,5 @@
 // 화면 글자 사전 3/4
-export default `에어코리아 대기오염정보 활용신청(공공데이터포털)이 필요해요.	AirKorea data access needs to be requested (data.go.kr).	AirKorea大気汚染情報の利用申請(公共データポータル)が必要です。	需要申请AirKorea空气污染数据(公共数据门户)。	Cần đăng ký dữ liệu AirKorea (data.go.kr).
+const DICT=`에어코리아 대기오염정보 활용신청(공공데이터포털)이 필요해요.	AirKorea data access needs to be requested (data.go.kr).	AirKorea大気汚染情報の利用申請(公共データポータル)が必要です。	需要申请AirKorea空气污染数据(公共数据门户)。	Cần đăng ký dữ liệu AirKorea (data.go.kr).
 에어코리아 서버가 늦게 응답해서 이번엔 빠졌어요.	AirKorea responded too slowly, so it's missing this time.	AirKoreaの応答が遅く、今回は表示できませんでした。	AirKorea响应过慢，本次未显示。	AirKorea phản hồi chậm nên lần này không có.
 역할	Role	役割	角色	Vai trò
 역할을 확인해주세요.	Please check the role.	役割を確認してください。	请确认角色。	Hãy kiểm tra vai trò.
@@ -360,3 +360,4 @@ export default `에어코리아 대기오염정보 활용신청(공공데이터�
 초대받은 사람은 로그인한 뒤 주장의 가입 승인을 받아야 해요. 링크·QR·코드는 7일 동안 쓸 수 있어요.	Invitees log in and need the captain's approval. Links, QR and codes last 7 days.	招待された人はログイン後に主将の承認が必要です。リンク・QR・コードは7日間有効です。	受邀者登录后需队长批准。链接、二维码和代码7天内有效。	Người được mời đăng nhập và cần đội trưởng duyệt. Liên kết, QR, mã dùng được 7 ngày.
 초미세	PM2.5	PM2.5	PM2.5	PM2.5
 `;
+export default DICT;

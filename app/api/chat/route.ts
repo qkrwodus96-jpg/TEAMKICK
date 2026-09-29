@@ -1,6 +1,7 @@
 import {currentUser} from "@/lib/auth";
 import {load} from "@/lib/store";
-import {AppError,chatRoom,chatRooms,ensure} from "@/lib/model";
+import {loadRoomState} from "@/lib/store-some";
+import {AppError,chatRoom,chatRooms,ensure,type State} from "@/lib/model";
 import {ensureSchema} from "@/lib/schema";
 import {listMessages,sendMessage,deleteMessage,findMessage,reportMessage,markRead,roomSummaries} from "@/lib/chat-server";
 export const dynamic="force-dynamic";
@@ -9,11 +10,17 @@ const failed=(e:unknown)=>{
  if(!(e instanceof AppError))console.error("TeamKick chat",e);
  return json({error:e instanceof AppError?e.message:"채팅을 불러오지 못했어요. 잠시 뒤 다시 시도해주세요."},e instanceof AppError?e.status:503);
 };
-// 방에 들어갈 수 있는지는 매번 지금 상태(state)로 다시 본다. 팀에서 나가거나 역할이 바뀌면 바로 막힌다.
+// 방에 들어갈 수 있는지는 매번 지금 상태로 다시 본다. 팀에서 나가거나 역할이 바뀌면 바로 막힌다.
+// 1.17: 전체 상태 대신 그 방에 필요한 줄(팀·팀원·경기·신청)만 읽는다 — 4초마다 전체를 읽던 것이 느린 원인이었다.
+// 줄만 읽어서 못 들어가면(오래된 줄의 scope 가 다른 경우 등) 전체를 한 번 더 읽어 확인한다.
 async function room(userId:string,name:string){
- const {state}=await load();const r=chatRoom(state,userId,name);ensure(r,"이 채팅방에 들어갈 수 없어요.",403);
+ let state:State=await loadRoomState(name);let r=chatRoom(state,userId,name);
+ if(!r){state=(await load()).state;r=chatRoom(state,userId,name)}
+ ensure(r,"이 채팅방에 들어갈 수 없어요.",403);
  return {state,r:r!};
 }
+const info=(r:NonNullable<ReturnType<typeof chatRoom>>)=>({room:r.room,kind:r.kind,title:r.title,sub:r.sub,
+ ...("request" in r?{request:r.request,otherTeamId:r.otherTeamId,homeTeamId:r.homeTeamId,canDecide:r.canDecide,gameId:r.gameId}:{})});
 
 // GET ?room=…&after=… → 그 방 메시지 / room 없으면 내 방 목록(안 읽은 개수·마지막 메시지)
 export async function GET(req:Request){
@@ -24,12 +31,26 @@ export async function GET(req:Request){
   if(!name){
    const {state}=await load();const rooms=chatRooms(state,user.userId);
    const sums=await roomSummaries(user.userId,rooms.map(x=>x.room));
-   return json({rooms:rooms.map(x=>({...x,...sums[x.room]}))});
+   const list=rooms.map(x=>{
+    const sm=sums[x.room]??{unread:0,last:null,readAt:""};let {unread,last}=sm;
+    // 매칭 신청 메시지는 채팅 글이 아니라 신청에 들어 있다. 대화가 아직 없으면 그것을 마지막 글로 보여주고,
+    // 모집 팀 주장이 아직 안 읽었으면 1 로 센다(1.17: "신청 메시지가 채팅함으로").
+    if(x.request&&(!last||String(x.request.at)>last.at)){
+     last={name:x.request.teamName,body:x.request.message||"매칭을 신청했어요.",at:String(x.request.at)};
+     if(x.request.pending&&String(x.request.at)>sm.readAt)unread+=1;
+    }
+    return {room:x.room,kind:x.kind,title:x.title,sub:x.sub,unread,last,pending:!!x.request?.pending,hiddenAt:x.hiddenAt};
+   })
+   // 지운 방은 그 뒤 새 글이 없으면 보이지 않는다.
+   .filter(x=>!x.hiddenAt||(x.last&&x.last.at>x.hiddenAt))
+   .sort((a,b)=>String(b.last?.at??"").localeCompare(String(a.last?.at??"")));
+   return json({rooms:list.map(x=>({room:x.room,kind:x.kind,title:x.title,sub:x.sub,unread:x.unread,last:x.last,pending:x.pending}))});
   }
   const {r}=await room(user.userId,name);
   const rows=await listMessages(r.room,url.searchParams.get("after")??"");
-  if(rows.length)await markRead(user.userId,r.room,rows[rows.length-1].at);
-  return json({room:{room:r.room,kind:r.kind,title:r.title,sub:r.sub},
+  const readTo=[rows.at(-1)?.at??"","request" in r&&r.request?String(r.request.at):""].sort().at(-1)!;
+  if(readTo)await markRead(user.userId,r.room,readTo);
+  return json({room:info(r),
    messages:rows.map(x=>({id:x.id,name:x.name,body:x.deleted?"":x.body,deleted:!!x.deleted,at:x.at,mine:x.account_id===user.userId}))});
  }catch(e){return failed(e)}
 }

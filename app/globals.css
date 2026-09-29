@@ -311,17 +311,6 @@ html[data-splash="skip"] #teamkick-splash{display:none}
 .invite-code small{grid-column:1/-1;font-size:12.5px;color:#6f7d76}
 .info-wx{padding:12px 2px;border-bottom:1px solid #e8ece9}.info-wx:empty{display:none}
 
-/* 1.16 다음 경기 카드(스쿼디 참고) — 카드 정가운데에 하프라인과 가운데 원, 양쪽 끝에 페널티 박스.
-   선은 카드 크기가 바뀌어도 가운데를 지키도록 그림 하나로 늘리지 않고 조각마다 제자리에 둔다. */
-.next-match{position:relative;isolation:isolate;background:linear-gradient(140deg,#0e7648 0%,#0b5d39 48%,#07442a 100%)}
-.next-match::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:
- radial-gradient(circle at 50% 50%,rgba(255,255,255,.24) 0 2.4px,transparent 3px),
- radial-gradient(circle at 50% 50%,transparent 0 69px,rgba(255,255,255,.17) 69.5px 71px,transparent 71.5px),
- linear-gradient(rgba(255,255,255,.17),rgba(255,255,255,.17)) 50% 0/1.5px 100% no-repeat,
- url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2274%22%20height%3D%22168%22%20viewBox%3D%220%200%2074%20168%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.17%22%20stroke-width%3D%221.5%22%3E%3Cpath%20d%3D%22M0%2024H56V144H0%22/%3E%3Cpath%20d%3D%22M0%2058H24V110H0%22/%3E%3Cpath%20d%3D%22M56%2064A26%2026%200%200%201%2056%20104%22/%3E%3C/g%3E%3Ccircle%20cx%3D%2238%22%20cy%3D%2284%22%20r%3D%222.2%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.22%22/%3E%3C/svg%3E") left center/74px 168px no-repeat,
- url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2274%22%20height%3D%22168%22%20viewBox%3D%220%200%2074%20168%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.17%22%20stroke-width%3D%221.5%22%3E%3Cpath%20d%3D%22M74%2024H18V144H74%22/%3E%3Cpath%20d%3D%22M74%2058H50V110H74%22/%3E%3Cpath%20d%3D%22M18%2064A26%2026%200%200%200%2018%20104%22/%3E%3C/g%3E%3Ccircle%20cx%3D%2236%22%20cy%3D%2284%22%20r%3D%222.2%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.22%22/%3E%3C/svg%3E") right center/74px 168px no-repeat,
- linear-gradient(rgba(255,255,255,.17),rgba(255,255,255,.17)) 0 0/100% 0 no-repeat}
-.next-match .match-arrow{z-index:2}
 /* 1.15.1 매칭 카드(스쿼디 참고) — 날짜 상자 없이 한 줄 */
 .mcard,.mcard-btn{display:grid;grid-template-columns:minmax(0,1fr);gap:5px;padding:15px 16px}
 .mc-top{display:flex;align-items:center;gap:11px;justify-content:flex-start}
@@ -414,3 +403,138 @@ html[data-splash="skip"] #teamkick-splash{display:none}
 .chat-input textarea{resize:none;min-height:44px;max-height:120px;border:1px solid var(--border);border-radius:12px;padding:10px 12px;font:inherit;font-size:15px}
 .chat-input .btn{min-height:44px;padding:0 14px}
 .crop-stage.square{border-radius:12px}
+
+/* 1.17 빨간 숫자 점 — 1:1 문의(운영자), 받은 신청, 채팅 안 읽음 */
+.dot-host{position:relative}
+.red-dot{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;margin-left:6px;border-radius:9px;background:#e5483a;color:#fff;font-style:normal;font-size:11px;font-weight:800;line-height:1;letter-spacing:0;font-variant-numeric:tabular-nums;vertical-align:1px}
+/* 1.17 한국어 낱말이 중간에서 끊기지 않게("일요일 오\n전" 제보). 너무 긴 한 덩어리는 칸 안에서 접는다. */
+body{word-break:keep-all;overflow-wrap:break-word}
+.picker button,.chip,.mc-chip,.badge{white-space:nowrap}
+/* 1.17 팀 사진 글(인스타처럼 사진 아래) */
+.tp-view-inner{max-height:calc(100dvh - 32px);overflow:auto}
+.tp-view-inner img{max-height:62vh}
+.tp-view-caption{color:#eef3ef;font-size:14px;line-height:1.55;white-space:pre-wrap}
+.tp-view-caption p{margin:0}.tp-view-caption b{margin-right:4px}.tp-view-caption .muted{color:#a9b8ae}
+.tp-view-caption.edit{display:grid;gap:8px}
+.tp-view-caption textarea{width:100%;border-radius:10px;border:1px solid #3c4a41;background:#121a15;color:#fff;padding:10px 12px;font:inherit;resize:vertical}
+
+/* 1.17 채팅: 밀어서 삭제 · 더보기 · 신청 카드 */
+.chat-swipe{position:relative;overflow:hidden;border-bottom:1px solid #eef1ef}
+.chat-swipe .chat-room{position:relative;z-index:1;background:var(--card,#fff);border-bottom:0;touch-action:pan-y;user-select:none;cursor:pointer;padding-inline:4px}
+.chat-del{position:absolute;inset:0 0 0 auto;width:84px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:0;background:#e5483a;color:#fff;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+.chat-tag{font-style:normal;font-size:11px;font-weight:750;color:#c2410c;background:#fff1e6;border-radius:6px;padding:1px 6px;margin-left:6px;vertical-align:1px}
+.chat-more{display:flex;align-items:center;justify-content:center;gap:4px;border:0;background:none;padding:10px;font:inherit;font-size:13.5px;font-weight:650;color:#4d5d53;cursor:pointer}
+.chat-hint{margin:2px 0 0;font-size:11.5px;color:#9aa69f;text-align:center}
+.chat-ask{display:grid;gap:6px;padding:12px 14px;margin-top:8px;border:1px solid #f1c9c4;background:#fdf3f2;border-radius:12px}
+.chat-ask p{margin:0}.chat-ask small{color:#6f7d76}
+.skeleton-row{cursor:default}.skeleton-row .chat-ico{background:#eef1ef}.skeleton-row b.sk{height:14px;width:60%}.skeleton-row small.sk{height:11px;width:80%;margin-top:6px}
+.chat-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.chat-head>div{display:grid;gap:1px;min-width:0}
+.btn-small{min-height:32px!important;padding:0 10px!important;font-size:13px!important;gap:4px}
+.chat-request{display:grid;gap:6px;padding:12px 14px;margin:6px 0 4px;border:1px solid #d9e8df;background:#f4faf6;border-radius:14px}
+.chat-request p{margin:0;white-space:pre-wrap;font-size:14.5px}.chat-request small{font-size:12px;color:#6f7d76}
+.chat-decide{display:grid;gap:8px;padding-top:8px;margin-top:2px;border-top:1px dashed #cfe0d6}.chat-decide>span{font-weight:700}
+.chat-decide .row{gap:8px}.chat-decide .btn{flex:1}
+.chat-ok{color:#148b54!important;font-weight:650}
+.chat-msg.sending{opacity:.6}
+.back-link{justify-self:start;margin-bottom:6px}
+/* 1.17 매칭: 받은 신청·우리 팀 매칭 내역 상자 카드 */
+.mc-msg{margin:6px 0 0;padding:8px 10px;background:#f4f7f5;border-radius:10px;font-size:13.5px;color:#34443b;white-space:pre-wrap}
+.mc-act{display:flex;flex-wrap:wrap;gap:8px}
+.mc-act .btn{flex:1 1 auto;min-width:88px}
+[role="tab"] .red-dot{margin-left:5px}
+.bottom-nav .nav-dot{position:absolute;top:4px;left:calc(50% + 6px);margin:0;min-width:16px;height:16px;font-size:10px;padding:0 4px}
+/* 1.17 설정: 화면 모드 · 알림 종류별 */
+.pref-block{display:grid;gap:8px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:4px;border-radius:12px;background:#f0f3f1}
+.seg button{display:flex;align-items:center;justify-content:center;gap:5px;min-height:38px;border:0;border-radius:9px;background:none;font:inherit;font-size:13.5px;font-weight:650;color:#4d5d53;cursor:pointer}
+.seg button.on{background:#fff;color:#12814d;box-shadow:0 1px 3px rgba(20,40,30,.14)}
+.pref-list{display:grid;border:1px solid #e3e8e5;border-radius:12px;overflow:hidden}
+.pref-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-bottom:1px solid #eef1ef;font-size:14.5px;cursor:pointer}
+.pref-list .pref-row:last-child{border-bottom:0}
+.pref-row>span{display:grid;gap:1px}.pref-row small{font-size:12px;color:#8a968e}
+.pref-row.quiet{border:1px solid #e3e8e5;border-radius:12px}.pref-row.quiet>span{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px}.pref-row.quiet small{flex-basis:100%}
+.switch{appearance:none;-webkit-appearance:none;flex:none;width:44px;height:26px;border-radius:13px;background:#cfd8d2;position:relative;cursor:pointer;transition:background .15s;margin:0}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .15s}
+.switch:checked{background:#148b54}.switch:checked::after{transform:translateX(18px)}
+.switch:focus-visible{outline:2px solid #148b54;outline-offset:2px}
+/* 1.17 용병 모집: 포지션별 인원 · 참가비 · 최소 출전 보장 */
+.pos-steppers{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.pos-step{display:grid;grid-template-columns:28px 1fr 28px;grid-template-rows:auto auto;align-items:center;justify-items:center;gap:4px;padding:8px 6px;border:1px solid #e3e8e5;border-radius:12px}
+.pos-step b{grid-column:1/-1;font-size:13px;letter-spacing:.02em}
+.pos-step button{width:28px;height:28px;border-radius:8px;border:1px solid #d7dfda;background:#fff;font:inherit;font-size:16px;font-weight:700;cursor:pointer;color:#2c3d34}
+.pos-step span{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums}
+.pos-step.pos-FW b,.pos-pill.pos-FW{color:#c2410c}.pos-step.pos-MF b,.pos-pill.pos-MF{color:#12814d}.pos-step.pos-DF b,.pos-pill.pos-DF{color:#2f55b4}.pos-step.pos-GK b,.pos-pill.pos-GK{color:#8a5a00}
+.chip-btn{border:1px solid #d7dfda;background:#fff;border-radius:999px;padding:6px 12px;font:inherit;font-size:13.5px;font-weight:600;color:#3d5144;cursor:pointer;white-space:nowrap}
+.chip-btn.on{background:#172923;border-color:#172923;color:#fff}
+.pos-line{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.pos-pill{font-size:12.5px;font-weight:750;padding:3px 8px;border-radius:7px;background:#f4f7f5;font-variant-numeric:tabular-nums}
+.pos-pill small{font-weight:500;color:#8a968e;margin-left:1px}
+.pos-pill.full{opacity:.45;text-decoration:line-through}
+.guest-terms{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:10px 12px;border-radius:10px;background:#f4f7f5;font-size:13.5px;font-weight:600}
+.guest-terms .pos-line{margin-top:0}
+/* 1.18 생일 칸 */
+.birth-row{display:grid;grid-template-columns:1fr 1fr 1.6fr;gap:8px}
+.birth-row select{min-height:44px;border:1px solid var(--input);border-radius:10px;padding:0 10px;background:var(--card);color:inherit;font:inherit;font-size:15px}
+/* 1.18 라인업 — 쿼터별 포메이션 */
+.lu{display:grid;gap:12px}
+.lu-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.lu-q{display:flex;gap:6px;flex-wrap:wrap}
+.lu-q button{min-width:44px;height:36px;border-radius:10px;border:1px solid #d7dfda;background:#fff;font:inherit;font-weight:750;color:#4d5d53;cursor:pointer;position:relative}
+.lu-q button.on{background:#172923;border-color:#172923;color:#fff}
+.lu-q button.has::after{content:"";position:absolute;top:4px;right:4px;width:5px;height:5px;border-radius:50%;background:#1f9d62}
+.lu-q button.dirty::after{background:#e8940f}
+.lu-qn{display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:650;color:#4d5d53}
+.lu-qn select{height:34px;border-radius:9px;border:1px solid #d7dfda;padding:0 8px;font:inherit;background:#fff;color:inherit}
+.lu-forms{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}.lu-forms::-webkit-scrollbar{display:none}
+.lu-form-name{margin:0;font-weight:750}
+.lu-pitch{position:relative;width:100%;max-width:440px;margin:0 auto;aspect-ratio:2/3;border-radius:16px;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+.lu-pitch-svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.lu-slot{position:absolute;transform:translate(-50%,-50%);display:grid;justify-items:center;gap:1px;border:0;background:none;padding:0;cursor:pointer;width:64px;font:inherit}
+.lu-slot:disabled{cursor:default}
+.lu-shirt{width:38px;height:36px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
+.lu-shirt path{fill:#fff;stroke:#0d3b24}.lu-shirt text{font-size:13px;font-weight:800;fill:#0d3b24;font-family:inherit}
+.lu-shirt.FW path{fill:#ffe4d3;stroke:#b4531c}.lu-shirt.FW text{fill:#b4531c}
+.lu-shirt.DF path{fill:#dfe8ff;stroke:#2f55b4}.lu-shirt.DF text{fill:#2f55b4}
+.lu-shirt.GK path{fill:#fff3b8;stroke:#8a6a00}.lu-shirt.GK text{fill:#8a6a00}
+.lu-shirt.vacant path{fill:rgba(255,255,255,.18);stroke:rgba(255,255,255,.75);stroke-dasharray:3 2}.lu-shirt.vacant text{fill:#fff;font-size:16px}
+.lu-slot.picking .lu-shirt{transform:scale(1.12)}
+.lu-name{max-width:64px;padding:1px 6px;border-radius:6px;background:rgba(6,30,18,.62);color:#fff;font-size:11.5px;font-weight:700;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lu-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.lu-actions>span{flex:1}
+.lu-sheet{display:grid;gap:10px;padding:14px;border:1px solid #d7dfda;border-radius:14px;background:#fff;box-shadow:0 10px 30px -12px rgba(20,40,30,.35)}
+.lu-people{display:grid;gap:4px;max-height:260px;overflow-y:auto}
+.lu-person{display:grid;grid-template-columns:34px 1fr;grid-template-rows:auto auto;column-gap:10px;align-items:center;text-align:left;padding:8px 10px;border:0;border-radius:10px;background:#f4f7f5;font:inherit;cursor:pointer}
+.lu-person b{grid-row:1/3;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:#172923;color:#fff;font-size:14px;font-variant-numeric:tabular-nums}
+.lu-person span{font-weight:700}.lu-person small{font-size:12px;color:#6f7d76}
+.lu-person.used{opacity:.55}
+.lu-counts{display:grid;gap:6px}.lu-counts>div{display:flex;flex-wrap:wrap;gap:6px}
+.lu-counts span{font-size:13px;padding:4px 9px;border-radius:8px;background:#f1f4f2}.lu-counts span.guest{background:#fff1e6}
+.notice.bday{display:flex;align-items:center;gap:10px;background:#fff6e8;border-color:#f5d9a8;color:#7a4b00;cursor:default}
+.notice.bday p{margin:0;font-weight:600}.notice.bday svg{flex:none;color:#d4731c}
+/* 1.18 MY 팀 메뉴(스쿼디 팀 메인 참고) · 팀 성향 분석 */
+.team-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+@media(min-width:768px){.team-tiles{grid-template-columns:repeat(5,minmax(0,1fr))}}
+.team-tile{position:relative;display:grid;justify-items:center;gap:6px;padding:14px 6px 12px;border:1px solid #e3e8e5;border-radius:14px;background:#fff;font:inherit;font-size:13px;font-weight:650;color:#2c3d34;cursor:pointer}
+.team-tile svg{color:#148b54}
+.team-tile.on{border-color:#148b54;background:#f1faf4}
+.team-tile .red-dot{position:absolute;top:8px;right:8px;margin:0}
+.ts{display:grid;gap:14px}
+.ts-tags{display:flex;flex-wrap:wrap;gap:6px}.ts-tags span{font-size:13px;font-weight:700;padding:5px 10px;border-radius:999px;background:#e7f4ec;color:#107443}
+.ts-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.ts-grid>div{display:grid;gap:2px;padding:12px 14px;border:1px solid #e3e8e5;border-radius:12px}
+.ts-grid small{font-size:12px;color:#6f7d76}.ts-grid b{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums}.ts-grid span{font-size:12.5px;color:#6f7d76}
+.ts-row{display:grid;grid-template-columns:92px 1fr;gap:10px;align-items:start;padding-top:10px;border-top:1px solid #eef1ef}
+.ts-row p{margin:0}.ts-row small{color:#6f7d76}
+.ts-form{display:flex;gap:6px}.ts-form i{font-style:normal;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-weight:800;font-size:13px;color:#fff}
+.ts-form i.w{background:#148b54}.ts-form i.d{background:#9aa6a0}.ts-form i.l{background:#d9534a}
+/* 1.18 공유 이미지 */
+.share-studio{display:grid;gap:12px}
+.share-styles{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}.share-styles::-webkit-scrollbar{display:none}
+.share-canvas{position:relative;border-radius:14px;overflow:hidden;box-shadow:0 8px 28px -12px rgba(0,0,0,.4);background:#111}
+.share-canvas canvas{display:block;width:100%;height:auto;aspect-ratio:4/5}
+.share-busy{position:absolute;inset:0;display:grid;place-items:center;color:#fff;background:rgba(0,0,0,.25)}
+.share-actions{gap:8px}.share-actions .btn{flex:1}
+/* 1.18 언어 선택 */
+.lang-grid{display:flex;flex-wrap:wrap;gap:6px}
+.auth-lang{display:flex;justify-content:flex-end;margin-bottom:6px}
+.lang-compact{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#4d5d53;padding:4px 8px;border:1px solid #e3e8e5;border-radius:999px}
+.lang-compact select{border:0;background:none;font:inherit;color:inherit;padding:2px 0}

@@ -3,7 +3,7 @@ import {storageReady} from "@/lib/images";
 import {placeSearchReady} from "@/lib/places";
 import {mailReady} from "@/lib/mail";
 import {load,commit} from "@/lib/store";
-import {applyCommand,visibleState,AppError,iso,id,prune,setupIncomplete,SETUP_MESSAGE} from "@/lib/model";
+import {applyCommand,visibleState,AppError,iso,prune,setupIncomplete,SETUP_MESSAGE,pushTargets} from "@/lib/model";
 import {checkOwnerCode} from "@/lib/owner-config";
 import {ensureSchema} from "@/lib/schema";
 import {kakaoReady} from "@/lib/kakao";
@@ -47,7 +47,8 @@ export async function POST(req:Request){
     // 저장이 끝난 뒤에만 기기를 깨운다. 실패해도 저장을 되돌리지 않는다.
     // 이번 저장으로 새로 생긴 알림을 받은 사람만 대상이다.
     const had=new Set(state.notifications.map(x=>x.id));
-    const woken=[...new Set(after.notifications.filter(x=>!had.has(x.id)&&x.userId!==user.userId).map(x=>String(x.userId)))];
+    // 1.17: 알림 설정에서 끈 종류·밤 시간은 폰으로 보내지 않는다(알림함에는 남는다).
+    const woken=pushTargets(after,after.notifications.filter(x=>!had.has(x.id)&&x.userId!==user.userId));
     // 실제 알림도 시험 발송과 **똑같이 끝까지 기다린다.** 1.9.3~1.9.6 은 응답을 먼저 돌려주고
     // 나머지를 실행기(waitUntil)에 맡겼는데, 운영 호스트에서 그게 지켜지는지 확인할 방법이
     // 없었고 실제 알림만 안 왔다. 시험 발송은 끝까지 기다려서 늘 됐다. 저장이 조금 늦더라도

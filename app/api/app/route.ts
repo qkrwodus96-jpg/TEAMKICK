@@ -3,7 +3,7 @@ import {storageReady} from "@/lib/images";
 import {placeSearchReady} from "@/lib/places";
 import {mailReady} from "@/lib/mail";
 import {load,commit} from "@/lib/store";
-import {applyCommand,visibleState,AppError,iso,id,prune,setupIncomplete,SETUP_MESSAGE,pushTargets} from "@/lib/model";
+import {applyCommand,visibleState,AppError,iso,prune,setupIncomplete,SETUP_MESSAGE,pushTargets} from "@/lib/model";
 import {checkOwnerCode} from "@/lib/owner-config";
 import {ensureSchema} from "@/lib/schema";
 import {kakaoReady} from "@/lib/kakao";

@@ -24,19 +24,19 @@ async function ping(room:string,viewTeam:string){
 
 // 한 줄: 왼쪽으로 밀면 [삭제]가 드러난다. 조금만 밀면 제자리로 돌아온다.
 function RoomRow({r,onOpen,onHide}:{r:RoomInfo;onOpen:()=>void;onHide:()=>void}){
- const [dx,setDx]=useState(0),[open,setOpen]=useState(false);
+ const [dx,setDx]=useState(0),[open,setOpen]=useState(false),[drag,setDrag]=useState(false);
  const start=useRef<{x:number;y:number;base:number;moved:boolean}|null>(null);
  const W=84;
- function down(e:RPointerEvent<HTMLDivElement>){start.current={x:e.clientX,y:e.clientY,base:open?-W:0,moved:false}}
+ function down(e:RPointerEvent<HTMLDivElement>){start.current={x:e.clientX,y:e.clientY,base:open?-W:0,moved:false};setDrag(true)}
  function move(e:RPointerEvent<HTMLDivElement>){const s=start.current;if(!s)return;const x=e.clientX-s.x,y=e.clientY-s.y;
   if(!s.moved&&Math.abs(x)<8)return;if(!s.moved&&Math.abs(y)>Math.abs(x)){start.current=null;return}
   s.moved=true;setDx(Math.max(-W-24,Math.min(0,s.base+x)))}
- function up(){const s=start.current;start.current=null;if(!s)return;if(!s.moved){if(open){setOpen(false);setDx(0)}else onOpen();return}
+ function up(){const s=start.current;start.current=null;setDrag(false);if(!s)return;if(!s.moved){if(open){setOpen(false);setDx(0)}else onOpen();return}
   const o=dx<-W/2;setOpen(o);setDx(o?-W:0)}
  return <div className="chat-swipe">
   <button type="button" className="chat-del" onClick={onHide} tabIndex={open?0:-1}><Trash2 size={16}/>삭제</button>
-  <div className="chat-room" role="button" tabIndex={0} style={{transform:"translateX("+dx+"px)",transition:start.current?"none":"transform .18s ease"}}
-   onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={()=>{start.current=null;setDx(open?-W:0)}}
+  <div className="chat-room" role="button" tabIndex={0} style={{transform:"translateX("+dx+"px)",transition:drag?"none":"transform .18s ease"}}
+   onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={()=>{start.current=null;setDrag(false);setDx(open?-W:0)}}
    onKeyDown={e=>{if(e.key==="Enter")onOpen();if(e.key==="Delete")onHide()}}>
    <span className={"chat-ico "+r.kind}>{r.kind==="match"?<Handshake size={18}/>:<MessageCircle size={18}/>}</span>
    <span className="chat-room-main"><b>{r.title}{r.pending&&<em className="chat-tag">신청</em>}</b><small>{r.last?(r.last.name.split(" · ")[0]+": "+r.last.body):r.sub}</small></span>

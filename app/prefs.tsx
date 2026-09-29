@@ -1,15 +1,15 @@
 "use client";
 // 설정(1.17): 화면 모드(시스템·밝게·어둡게)와 알림 종류별 설정.
 // 알림 설정은 계정에 저장되고(어느 기기에서나 같다), 끈 종류는 폰 알림만 막는다 — 앱 알림함에는 그대로 쌓인다.
-import {useEffect,useState} from "react";
+import {useState} from "react";
 import {Moon,Sun,MonitorSmartphone,BellOff} from "lucide-react";
 import {toast} from "sonner";
 import {NOTIFY_KINDS,type Row} from "@/lib/model";
 import {themeMode,setThemeMode,type ThemeMode} from "./theme";
 
 export function ThemePicker(){
- const [mode,setMode]=useState<ThemeMode>("system");
- useEffect(()=>{setMode(themeMode())},[]);
+ // 설정 창은 브라우저에서만 열리므로 처음 값을 바로 읽는다.
+ const [mode,setMode]=useState<ThemeMode>(()=>typeof window==="undefined"?"system":themeMode());
  const pick=(m:ThemeMode)=>{setMode(m);setThemeMode(m)};
  const opts:[ThemeMode,string,typeof Sun][]=[["system","기기 설정",MonitorSmartphone],["light","밝게",Sun],["dark","어둡게",Moon]];
  return <div className="pref-block"><strong>화면 모드</strong>

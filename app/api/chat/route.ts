@@ -44,7 +44,7 @@ export async function GET(req:Request){
    // 지운 방은 그 뒤 새 글이 없으면 보이지 않는다.
    .filter(x=>!x.hiddenAt||(x.last&&x.last.at>x.hiddenAt))
    .sort((a,b)=>String(b.last?.at??"").localeCompare(String(a.last?.at??"")));
-   return json({rooms:list.map(({hiddenAt:_h,...x})=>x)});
+   return json({rooms:list.map(x=>({room:x.room,kind:x.kind,title:x.title,sub:x.sub,unread:x.unread,last:x.last,pending:x.pending}))});
   }
   const {r}=await room(user.userId,name);
   const rows=await listMessages(r.room,url.searchParams.get("after")??"");

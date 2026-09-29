@@ -12,7 +12,8 @@ fs.mkdirSync(runtime,{recursive:true});
 function compile(file,name,replace=s=>s){
   fs.writeFileSync(path.join(runtime,name),ts.transpileModule(replace(fs.readFileSync(file,'utf8')),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText);
 }
-compile('lib/model.ts','model.mjs',s=>s.replace('"./news"','"./news.mjs"'));
+compile('lib/formations.ts','formations.mjs');
+compile('lib/model.ts','model.mjs',s=>s.replace('"./news"','"./news.mjs"').replace('"./formations"','"./formations.mjs"'));
 compile('lib/store.ts','store.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/owner-config.ts','owner-config.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;'));
 compile('lib/legal.ts','legal.mjs');
@@ -3414,7 +3415,7 @@ test('선수 프로필: 세부 포지션·주발·키/몸무게·인스타·활�
   // 팀이 없어도 프로필은 고칠 수 있다
   command(f.s,C,{type:'setPlayerProfile',main:'cam',sub:'CM',foot:'오른발',height:'178',weight:72,instagram:'@kick.er_1',regions:['서울','경기 남부']});
   const u=f.s.users.find(x=>x.id===C.id).profile;
-  assert.deepEqual(u,{main:'CAM',sub:'CM',foot:'오른발',height:178,weight:72,instagram:'kick.er_1',regions:['서울','경기 남부']});
+  assert.deepEqual(u,{main:'CAM',sub:'CM',foot:'오른발',height:178,weight:72,instagram:'kick.er_1',regions:['서울','경기 남부'],birthYear:null,birthMonth:null,birthDay:null,number:null});
   assert.throws(()=>command(f.s,C,{type:'setPlayerProfile',height:300}),/범위/);
   assert.throws(()=>command(f.s,C,{type:'setPlayerProfile',instagram:'bad name!'}),/인스타그램/);
   assert.throws(()=>command(f.s,C,{type:'setPlayerProfile',regions:['서울','인천','대전','부산']}),/3곳/);
@@ -3572,7 +3573,7 @@ test('예약 실행(/api/cron): 비밀값이 맞을 때만, 알림은 한 번만
   globalThis.__teamkickTestWoken=[];
   const first=await call('Bearer '+secret);assert.equal(first.status,200);
   const body=await first.json();assert.equal(body.reminded,1);assert.equal(body.people,2);
-  assert.deepEqual(Object.keys(body).sort(),['at','failed','ok','people','reminded','sent'],'누구에게 보냈는지는 담지 않는다');
+  assert.deepEqual(Object.keys(body).sort(),['at','birthdays','failed','ok','people','reminded','sent'],'누구에게 보냈는지는 담지 않는다');
   assert.deepEqual([...globalThis.__teamkickTestWoken].sort(),['a','player'],'저장 뒤 기기를 깨운다');
   const {state}=await repository.load();assert.equal(state.notifications.filter(x=>/^오늘/.test(x.title)).length,2,'DB에 저장된다');
   const again=await (await call('Bearer '+secret)).json();assert.equal(again.reminded,0,'다음 실행에서 다시 보내지 않는다');
@@ -3674,4 +3675,35 @@ test('1.17 다크 모드 CSS 가 globals.css 와 맞다(글로벌 CSS 를 고치
   const {execFileSync}=await import('node:child_process');
   const out=execFileSync(process.execPath,['scripts/dark-css.mjs','--check'],{encoding:'utf8'});
   assert.match(out,/dark\.css ok/);
+});
+
+test('1.18 라인업: 쿼터 수·포메이션·자리, 우리 팀 선수·확정 용병·이름만, 한 쿼터 중복 금지, 운영진만',()=>{
+  const {s,a,gameId}=guestFixture();const m=addPlayer(s,a);
+  const gid=command(s,C,{type:'applyGuest',teamId:a,gameId,name:'C 용병',position:'ST',number:9}).guestId;
+  command(s,A,{type:'approveGuest',teamId:a,gameId,guestId:gid});
+  command(s,A,{type:'setQuarters',teamId:a,gameId,quarters:3});
+  command(s,A,{type:'setLineup',teamId:a,gameId,quarter:2,formation:'4-3-3',slots:{ST:{guestId:gid},CM:{memberId:m.id},GK:{name:'박재연',number:1},XX:{name:'무시'}}});
+  const z=sideOf(s,gameId,a);assert.equal(z.quarters,3);assert.equal(z.lineups[0],null);
+  assert.deepEqual(Object.keys(z.lineups[1].slots).sort(),['CM','GK','ST'],'없는 자리는 버린다');
+  assert.equal(z.lineups[1].slots.ST.name,'C 용병');assert.equal(z.lineups[1].slots.CM.name,'선수');
+  assert.throws(()=>command(s,A,{type:'setLineup',teamId:a,gameId,quarter:1,formation:'4-3-3',slots:{ST:{memberId:m.id},CM:{memberId:m.id}}}),/두 번/);
+  assert.throws(()=>command(s,A,{type:'setLineup',teamId:a,gameId,quarter:4,formation:'4-3-3',slots:{}}),/숫자 범위/,'쿼터 수 밖');
+  assert.throws(()=>command(s,A,{type:'setLineup',teamId:a,gameId,quarter:1,formation:'2-2-2',slots:{}}),/포메이션/);
+  assert.throws(()=>command(s,member,{type:'setLineup',teamId:a,gameId,quarter:1,formation:'4-4-2',slots:{}}),/권한|운영진|주장/);
+  command(s,A,{type:'setQuarters',teamId:a,gameId,quarters:1});assert.equal(sideOf(s,gameId,a).lineups.length,1,'줄이면 뒤 쿼터는 지운다');
+});
+
+test('1.18 생일: 프로필 저장·팀원에게는 월·일만, 아침 9시 이후 한 해 한 번 알림',()=>{
+  const {s,a}=fixture();addPlayer(s,a);
+  const nine=Date.parse('2026-10-05T01:00:00Z'); // 한국 10월 5일 10시
+  command(s,member,{type:'setPlayerProfile',birthYear:1996,birthMonth:10,birthDay:5,number:7});
+  assert.throws(()=>command(s,member,{type:'setPlayerProfile',birthMonth:2,birthDay:31}),/없는 날짜/);
+  const view=visibleState(s,'a').members.find(x=>x.userId==='player').profile;
+  assert.equal(view.birthday,'10월 5일');assert.equal(view.birthYear,undefined,'태어난 해는 팀원에게 안 보임');assert.equal(view.number,7);
+  assert.equal(modelLib.birthdayNotices(s,Date.parse('2026-10-04T20:00:00Z')).people,0,'한국 새벽 5시는 아직');
+  assert.equal(modelLib.birthdayNotices(s,nine).people,1);
+  assert.ok(s.notifications.some(x=>x.userId==='a'&&x.title==='오늘은 선수님 생일이에요'));
+  assert.ok(!s.notifications.some(x=>x.userId==='player'&&/생일/.test(x.title)),'본인에게는 안 감');
+  assert.equal(modelLib.birthdayNotices(s,nine+3600e3).people,0,'한 해 한 번');
+  assert.equal(modelLib.notifyKind({title:'오늘은 선수님 생일이에요'}),'birthday');
 });

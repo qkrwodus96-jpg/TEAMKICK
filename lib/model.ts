@@ -1,4 +1,5 @@
 import {cleanNewsTeams,NEWS_TEAMS_MAX} from "./news";
+import {FORMATIONS} from "./formations";
 export type Row={id:string;[key:string]:any};
 export type State={users:Row[];teams:Row[];members:Row[];games:Row[];sides:Row[];requests:Row[];guests:Row[];notices:Row[];notifications:Row[];invites:Row[];audit:Row[];receipts:Row[];settings:Row[];inquiries:Row[];announcements:Row[]};
 export const collections=["users","teams","members","games","sides","requests","guests","notices","notifications","invites","audit","receipts","settings","inquiries","announcements"] as const;
@@ -146,13 +147,24 @@ export function cleanProfile(c:Row,old:Partial<Row>={}){
  ensure(new Set(regions).size<=3,"활동 지역은 3곳까지 고를 수 있어요.");
  const main=cleanPosition(c.main??old.main??"MF"),sub=c.sub===""?"":cleanPosition(c.sub??old.sub??"","");
  const foot=String(c.foot??old.foot??"");ensure(!foot||FEET.includes(foot),"주발을 확인해주세요.");
- return {main,sub:sub===main?"":sub,foot,height:c.height!==undefined?num(c.height,120,220):old.height??null,weight:c.weight!==undefined?num(c.weight,30,150):old.weight??null,instagram:insta,regions:[...new Set(regions)]};
+ // 1.18: 생일(월·일, 태어난 해는 골라도 되고 안 골라도 된다)과 좋아하는 등번호. 생일은 팀원에게 "오늘 생일" 알림에만 쓴다.
+ const bd=(key:string,min:number,max:number,label:string)=>{const v=c[key]!==undefined?c[key]:old[key];if(v===""||v==null)return null;const n=Number(v);ensure(Number.isInteger(n)&&n>=min&&n<=max,label+"을 확인해주세요.");return n};
+ const nowYear=new Date().getUTCFullYear();
+ const birthYear=bd("birthYear",1940,nowYear-8,"태어난 해"),birthMonth=bd("birthMonth",1,12,"생일 달"),birthDay0=bd("birthDay",1,31,"생일 날짜");
+ ensure(!birthDay0||!!birthMonth,"생일 달을 골라주세요.");
+ if(birthMonth&&birthDay0)ensure(birthDay0<=new Date(Date.UTC(2024,birthMonth,0)).getUTCDate(),"그 달에는 없는 날짜예요.");
+ const birthDay=birthMonth&&birthDay0?birthDay0:null;
+ const number=bd("number",0,99,"등번호");
+ return {main,sub:sub===main?"":sub,foot,height:c.height!==undefined?num(c.height,120,220):old.height??null,weight:c.weight!==undefined?num(c.weight,30,150):old.weight??null,instagram:insta,regions:[...new Set(regions)],
+  birthYear,birthMonth:birthDay?birthMonth:null,birthDay,number};
 }
 // 팀원·용병 신청을 볼 때 쓰는 모양. body=true 는 키·몸무게까지(용병 신청을 받은 팀의 주장만).
 export function profileView(s:State,userId:string,body=false){
  const p=s.users.find(u=>u.id===userId)?.profile;if(!p)return null;
- const out:Partial<Row>={main:p.main??"",sub:p.sub??"",foot:p.foot??"",instagram:p.instagram??"",regions:p.regions??[]};
- if(body){out.height=p.height??null;out.weight=p.weight??null}
+ const out:Partial<Row>={main:p.main??"",sub:p.sub??"",foot:p.foot??"",instagram:p.instagram??"",regions:p.regions??[],number:p.number??null,
+  // 생일은 월·일만(나이·태어난 해는 팀원에게 보이지 않는다). 팀원 생일 축하용.
+  birthday:p.birthMonth&&p.birthDay?p.birthMonth+"월 "+p.birthDay+"일":""};
+ if(body){out.height=p.height??null;out.weight=p.weight??null;out.age=p.birthYear?new Date().getUTCFullYear()-p.birthYear:null}
  return out;
 }
 export const REGIONS=["서울","경기 남부","경기 북부","인천","강원","대전","세종","충북","충남","광주","전북","전남","대구","경북","부산","울산","경남","제주"];
@@ -208,6 +220,23 @@ function userNotice(s:State,u:string,title:string,body:string,t?:string,to?:stri
 // 경기의 팀마다 한 번만 보낸다(side.soonAt 에 보낸 시각을 남긴다). 받는 사람은 그 팀 활동 선수 중
 // "불참"이라고 답하지 않은 사람과 승인된 용병이다. 경기가 3시간 안에 새로 만들어졌으면 다음 실행 때 바로 간다.
 // 이미 시작한 경기는 보내지 않는다(예약 실행이 한동안 멈췄다가 다시 돌아도 지난 경기 알림이 쏟아지지 않게).
+// 팀원 생일(1.18). 한국 날짜로 오늘이 생일인 팀원이 있으면 같은 팀 다른 팀원에게 한 번 알린다(아침 9시 이후 첫 예약 실행).
+// 태어난 해·나이는 알리지 않는다. 한 사람에게 한 해 한 번만(users[].birthdayAt = 그해 연도).
+export const kstDate=(now:number)=>{const d=new Date(now+9*3600e3);return {y:d.getUTCFullYear(),m:d.getUTCMonth()+1,d:d.getUTCDate(),h:d.getUTCHours()}};
+export function birthdayToday(p:Row|undefined,now=Date.now()){const k=kstDate(now);return !!p&&p.birthMonth===k.m&&p.birthDay===k.d}
+export function birthdayNotices(s:State,now=Date.now()){
+ const k=kstDate(now);if(k.h<9)return {people:0};const stamp=iso(now);let people=0;
+ for(const u of s.users){
+  if(!birthdayToday(u.profile,now)||u.birthdayAt===k.y)continue;
+  u.birthdayAt=k.y;people++;
+  for(const m of s.members.filter(x=>x.userId===u.id&&x.status==="active")){
+   const team=teamOf(s,m.teamId);if(team?.status!=="active")continue;
+   for(const o of s.members.filter(x=>x.teamId===m.teamId&&x.status==="active"&&x.userId!==u.id))
+    s.notifications.push({id:id(),userId:o.userId,teamId:m.teamId,title:"오늘은 "+m.name+"님 생일이에요",body:team.name+" · 함께 축하해 주세요!",to:"team",read:false,at:stamp});
+  }
+ }
+ return {people};
+}
 export const SOON_BEFORE=3*3600e3;
 export function gameReminders(s:State,now=Date.now()){
  const stamp=iso(now);let sides=0;
@@ -446,6 +475,31 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
      notice(s,t,"매칭 확정",teamOf(s,r!.teamId)!.name+"와 경기가 확정되었어요.",g!.id,"matching");notice(s,r!.teamId,"매칭 확정",teamOf(s,t)!.name+"와 경기가 확정되었어요.",g!.id,"matching");
     }
    }
+  }
+ }
+ // 라인업(1.18): 쿼터 수와 쿼터별 포메이션·자리. 운영진이 정하고 팀원은 본다.
+ // 자리에는 팀원(memberId)·승인된 용병(guestId)·이름만(팀킥에 없는 사람) 넣을 수 있다. 한 쿼터에 같은 사람이 두 자리에 설 수 없다.
+ else if(type==="setQuarters"||type==="setLineup"){
+  const g=s.games.find(x=>x.id===c.gameId);ensure(g&&containsTeam(g,t),"팀 경기를 찾을 수 없어요.",404);requireTeam(s,t,a.id,"manager");
+  ensure(g!.status!=="cancelled","취소된 경기예요.",409);const side=sideOf(s,g!.id,t);ensure(side,"경기 팀 정보를 찾을 수 없어요.",404);
+  if(type==="setQuarters"){const q=integer(c.quarters,1,6);side!.quarters=q;side!.lineups=(side!.lineups??[]).slice(0,q);}
+  else{
+   const quarters=side!.quarters??4,qi=integer(c.quarter,1,quarters)-1;
+   const formation=String(c.formation??"");ensure(FORMATIONS[formation],"포메이션을 목록에서 골라주세요.");
+   const keys=new Set(FORMATIONS[formation].map(x=>x.k));const raw=(c.slots&&typeof c.slots==="object"?c.slots:{}) as Record<string,Row>;
+   const slots:Record<string,Record<string,unknown>>={};const used=new Set<string>();
+   for(const [k,val] of Object.entries(raw)){
+    if(!keys.has(k)||!val||typeof val!=="object")continue;
+    let who:Record<string,unknown>|null=null;
+    if(val.memberId){const m=s.members.find(x=>x.id===val.memberId&&x.teamId===t);ensure(m,"우리 팀 선수만 넣을 수 있어요.");who={memberId:m!.id,name:m!.name,number:m!.number??null};}
+    else if(val.guestId){const r=s.guests.find(x=>x.id===val.guestId&&x.gameId===g!.id&&x.teamId===t&&x.status==="approved");ensure(r,"이 경기에 확정된 용병만 넣을 수 있어요.");who={guestId:r!.id,name:r!.name,number:r!.number??null};}
+    else if(val.name){who={name:textValue(val.name,20),number:val.number===""||val.number==null?null:integer(val.number,0,99)};}
+    if(!who)continue;
+    const id0=who.memberId?"m:"+who.memberId:who.guestId?"g:"+who.guestId:"n:"+who.name;ensure(!used.has(id0),who.name+" 선수가 한 쿼터에 두 번 들어갔어요.");used.add(id0);
+    slots[k]=who;
+   }
+   const list=[...(side!.lineups??[])];while(list.length<quarters)list.push(null);
+   list[qi]={formation,slots,at:stamp,by:a.id};side!.lineups=list;
   }
  }
  else if(["vote","attendance","records","matchRecord","completeGame","cancelGame","result","confirmResult","changeGame","confirmChange","sideSettings","remindVote","openListing","closeListing","setOpponent","squads","mvpVote","closeMvp","remindMvp"].includes(type)){
@@ -823,6 +877,8 @@ export function visibleState(s:State,userId:string,selected?:string){
  guests:tid?s.guests.filter(x=>x.teamId===tid).map(x=>["captain","manager"].includes(team?.role)?{...x,spec:guestSpec(s,x.userId,team?.role==="captain")}:x):[],
  myProfile:s.users.find(x=>x.id===userId)?.profile??null,chatRooms:chatRooms(s,userId),
  myNotify:s.users.find(x=>x.id===userId)?.notify??{off:[],quiet:false},
+ // 오늘 생일인 우리 팀 팀원(이름만). 공지 위에 축하 카드로 보여준다.
+ birthdaysToday:tid?s.members.filter(m=>m.teamId===tid&&m.status==="active"&&birthdayToday(s.users.find(u=>u.id===m.userId)?.profile)).map(m=>m.name):[],
  myGuests:myGuestRows.map(x=>{const gm=guestGame(x.gameId);return {...x,teamName:teamOf(s,x.teamId)?.name??"",start:gm?.start??"",venue:gm?.venue??"",gameStatus:gm?.status??""}}),
  guestListings:s.sides.filter(z=>{const gm=guestGame(z.gameId);return guestStatusOf(z)==="open"&&!!gm&&gm.status==="scheduled"&&Date.parse(gm.start)>Date.now()&&teamOf(s,z.teamId)?.status==="active"}).map(z=>{const gm=guestGame(z.gameId)!;return {id:z.id,gameId:gm.id,teamId:z.teamId,teamName:teamOf(s,z.teamId)?.name??"",start:gm.start,end:gm.end,venue:gm.venue,address:gm.address,region:gm.region,format:gm.format,cost:gm.cost,secured:gm.secured,needed:z.guestNeeded??0,approved:approvedGuests(s,gm.id,z.teamId),fee:z.guestFee??0,minPlay:z.guestMinPlay??"",positions:z.guestPositions??null,positionsLeft:guestPositionsLeft(s,z),applied:myGuestRows.find(x=>x.gameId===gm.id&&x.teamId===z.teamId&&["pending","approved"].includes(x.status))?.status??""}}),
  invites:s.invites.filter(x=>x.teamId===tid&&team?.role==="captain"),audit:owner?s.audit.slice(-100).reverse():[]};

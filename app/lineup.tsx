@@ -34,7 +34,7 @@ function Shirt({who,group,empty}:{who?:Who;group:string;empty:boolean}){
 
 export function Lineup({g,side,v,canEdit,busy,run,demo}:{g:Row;side:Row;v:Row;canEdit:boolean;busy:boolean;run:(c:Record<string,unknown>)=>Promise<unknown>;demo:boolean}){
  const quarters:number=side?.quarters??4;
- const saved:(Q|null)[]=side?.lineups??[];
+ const saved:(Q|null)[]=useMemo(()=>side?.lineups??[],[side?.lineups]);
  const [qi,setQi]=useState(0);
  const [draft,setDraft]=useState<Record<number,Q>>({});
  const [pick,setPick]=useState<string|null>(null),[term,setTerm]=useState("");

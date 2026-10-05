@@ -45,8 +45,12 @@ function RoomRow({r,onOpen,onHide}:{r:RoomInfo;onOpen:()=>void;onHide:()=>void})
  </div>;
 }
 
+// 1.19: 한 번 본 방 목록·메시지는 이 화면이 열려 있는 동안 기억해 둔다. 다시 열면 기다리지 않고 바로 보여주고,
+// 뒤에서 새 글만 받아 붙인다(사장님 요청 — "채팅 누르면 여전히 로딩"). 기기에 저장하지는 않는다(메모리만).
+let listMemo:RoomInfo[]|null=null;
+const roomMemo=new Map<string,{info:RoomInfo|null;msgs:Msg[];last:string}>();
 export function ChatRooms({demo,onOpen}:{demo:boolean;onOpen:(room:string)=>void}){
- const [rooms,setRooms]=useState<RoomInfo[]|null>(null),[err,setErr]=useState(""),[all,setAll]=useState(false),[ask,setAsk]=useState<RoomInfo|null>(null);
+ const [rooms,setRoomsRaw]=useState<RoomInfo[]|null>(()=>listMemo),setRooms=(x:RoomInfo[]|null|((y:RoomInfo[]|null)=>RoomInfo[]|null))=>setRoomsRaw(prev=>{const n=typeof x==="function"?x(prev):x;listMemo=n;return n}),[err,setErr]=useState(""),[all,setAll]=useState(false),[ask,setAsk]=useState<RoomInfo|null>(null);
  useEffect(()=>{if(demo)return;let live=true;
   fetch("/api/chat",{cache:"no-store"}).then(async r=>{const b=await r.json().catch(()=>({})) as Resp;if(!r.ok)throw new Error(b.error||"채팅을 불러오지 못했어요.");if(live)setRooms(b.rooms??[])}).catch(e=>{if(live)setErr(e.message)});
   return()=>{live=false}},[demo]);
@@ -71,10 +75,11 @@ export function ChatRooms({demo,onOpen}:{demo:boolean;onOpen:(room:string)=>void
 
 type Run=(c:Record<string,unknown>)=>Promise<unknown>;
 export function ChatRoom({room,viewTeam,demo,run,onProfile}:{room:string;viewTeam:string;demo:boolean;run?:Run;onProfile?:(teamId:string)=>void}){
- const [info,setInfo]=useState<RoomInfo|null>(null),[msgs,setMsgs]=useState<Msg[]>([]),[err,setErr]=useState(""),[text,setText]=useState(""),[menu,setMenu]=useState(""),[deciding,setDeciding]=useState("");
+ const memo=roomMemo.get(room);
+ const [info,setInfo]=useState<RoomInfo|null>(memo?.info??null),[msgs,setMsgs]=useState<Msg[]>(memo?.msgs??[]),[err,setErr]=useState(""),[text,setText]=useState(""),[menu,setMenu]=useState(""),[deciding,setDeciding]=useState("");
  const last=useRef(""),box=useRef<HTMLDivElement>(null),pullRef=useRef<()=>Promise<void>>(async()=>{});
  useEffect(()=>{
-  if(demo)return;let live=true,busy=false;last.current="";
+  if(demo)return;let live=true,busy=false;last.current=roomMemo.get(room)?.last??"";
   const pull=async()=>{
    if(document.visibilityState==="hidden"||busy)return;busy=true;
    try{
@@ -90,6 +95,7 @@ export function ChatRoom({room,viewTeam,demo,run,onProfile}:{room:string;viewTea
   const vis=()=>{if(document.visibilityState==="visible")pull()};document.addEventListener("visibilitychange",vis);
   return()=>{live=false;clearInterval(timer);document.removeEventListener("visibilitychange",vis)};
  },[room,demo]);
+ useEffect(()=>{if(!demo)roomMemo.set(room,{info,msgs:msgs.filter(x=>!x.sending),last:last.current})},[room,demo,info,msgs]);
  useEffect(()=>{const el=box.current;if(el)el.scrollTop=el.scrollHeight},[msgs.length,info?.request?.status]);
  async function send(){
   const body=text.trim();if(!body)return;
@@ -126,7 +132,7 @@ export function ChatRoom({room,viewTeam,demo,run,onProfile}:{room:string;viewTea
  return <div className="chat">
   <div className="chat-head">
    <div><b>{info?.title??"채팅"}</b>{info?.sub&&<small>{info.sub}</small>}</div>
-   {info?.kind==="match"&&info.otherTeamId&&onProfile&&<button type="button" className="btn btn-small" onClick={()=>onProfile(info.otherTeamId!)}><Shield size={15}/>상대 프로필</button>}
+   {(info?.kind==="match"||info?.kind==="guest")&&info.otherTeamId&&onProfile&&<button type="button" className="btn btn-small" onClick={()=>onProfile(info.otherTeamId!)}><Shield size={15}/>{info.kind==="guest"?"팀 프로필":"상대 프로필"}</button>}
   </div>
   <div className="chat-box" ref={box}>
    {q&&<div className="chat-request">

@@ -24,8 +24,10 @@ export function inAppBrowser():InApp{
  if(/NAVER\(inapp|Instagram|FBAN|FBAV|Line\//i.test(ua))return /android/i.test(ua)?"android":"ios";
  return "";
 }
+// 1.19: 밖으로 연 주소에 표시를 붙여 두면, 새 브라우저에서 "홈 화면에 추가" 카드를 펼쳐 맨 위에 강조한다(사장님 요청).
+const HANDOFF="tk_install";
 export function openOutside(kind:InApp){
- const url=location.href;
+ const u=new URL(location.href);u.searchParams.set(HANDOFF,"1");const url=u.toString();
  if(kind==="kakao"){location.href="kakaotalk://web/openExternal?url="+encodeURIComponent(url);return}
  // 안드로이드는 크롬을 직접 부를 수 있다. 크롬이 없으면 기본 브라우저가 열린다.
  if(kind==="android"){location.href="intent://"+url.replace(/^https?:\/\//,"")+"#Intent;scheme=https;package=com.android.chrome;end";return}
@@ -33,7 +35,7 @@ export function openOutside(kind:InApp){
 
 type Step="todo"|"done"|"na";
 export function AppSetup({signedIn}:{signedIn:boolean}){
- const [s,setS]=useState<{ready:boolean;inApp:InApp;install:Step;how:"ios"|"samsung"|"other";push:Step;pushWhy:PushStatus|"";folded:boolean}>({ready:false,inApp:"",install:"done",how:"other",push:"done",pushWhy:"",folded:false});
+ const [s,setS]=useState<{ready:boolean;inApp:InApp;install:Step;how:"ios"|"samsung"|"other";push:Step;pushWhy:PushStatus|"";folded:boolean;handoff:boolean}>({ready:false,inApp:"",install:"done",how:"other",push:"done",pushWhy:"",folded:false,handoff:false});
  const [busy,setBusy]=useState("");
  const [help,setHelp]=useState<""|"install"|"push">("");
 
@@ -46,7 +48,11 @@ export function AppSetup({signedIn}:{signedIn:boolean}){
    const why=inApp?"":await pushStatus().catch(()=>"unsupported" as PushStatus);
    // 서버에 알림 키가 없거나 이 브라우저가 알림을 못 받으면 누를 것이 없다
    const push:Step=!signedIn?"na":inApp?"todo":why==="on"?"done":why==="server-off"||why==="unsupported"?"na":"todo";
-   if(live)setS({ready:true,inApp,install,how:st.how,push,pushWhy:why,folded:read(FOLD)});
+   // 앱 안 브라우저에서 넘어온 참이면 접어 둔 것도 펼치고, 표시는 주소에서 지운다.
+   const url=new URL(location.href),handoff=!inApp&&url.searchParams.get(HANDOFF)==="1";
+   if(url.searchParams.has(HANDOFF)){url.searchParams.delete(HANDOFF);history.replaceState(history.state,"",url.pathname+url.search+url.hash)}
+   if(handoff)write(FOLD,false);
+   if(live)setS({ready:true,inApp,install,how:st.how,push,pushWhy:why,folded:handoff?false:read(FOLD),handoff:handoff&&install==="todo"});
   })();
   const on=()=>setS(x=>({...x,push:"done"}));const inst=()=>{write(DONE,true);setS(x=>({...x,install:"done"}))};
   window.addEventListener("teamkick-push-on",on);window.addEventListener("appinstalled",inst);
@@ -79,7 +85,8 @@ export function AppSetup({signedIn}:{signedIn:boolean}){
 
  if(s.folded)return <button type="button" className="setup-fold" onClick={()=>fold(false)}><span>팀킥 준비하기 · {s.inApp?"다른 브라우저로 열기":left+"개 남음"}</span><ChevronDown size={16}/></button>;
 
- return <section className="setup-card" aria-label="팀킥 준비하기">
+ return <section className={"setup-card"+(s.handoff?" handoff":"")} aria-label="팀킥 준비하기">
+  {s.handoff&&<p className="setup-handoff">브라우저로 잘 옮겨 왔어요. 이제 <b>홈 화면에 추가</b>를 누르면 앱처럼 쓸 수 있어요.</p>}
   <div className="setup-head"><div><strong>팀킥 준비하기</strong><span>{s.inApp?"지금은 앱 안 브라우저라 설치·알림이 안 돼요":left+"개만 하면 끝나요"}</span></div><button type="button" className="setup-x" onClick={()=>fold(true)} aria-label="접기"><ChevronUp size={16}/></button></div>
   {s.inApp?<>
    <div className="setup-chips">
@@ -88,7 +95,7 @@ export function AppSetup({signedIn}:{signedIn:boolean}){
    <p className="setup-help">{s.inApp==="kakao"?<>버튼이 안 되면 카톡 화면의 <b>⋮</b>(또는 공유) 메뉴 → <b>다른 브라우저로 열기</b>를 눌러주세요.</>:s.inApp==="android"?<>버튼이 안 되면 오른쪽 위 <b>⋮</b> → <b>다른 브라우저로 열기</b>를 눌러주세요.</>:<>오른쪽 위 <b>⋯</b> 또는 아래 <b>공유</b> → <b>Safari로 열기</b>를 눌러주세요.</>} 열린 브라우저에서 로그인하면 홈 화면 추가·알림을 켤 수 있어요.</p>
   </>:<>
    <div className="setup-chips">
-    {s.install!=="na"&&<button type="button" className={"setup-chip"+(s.install==="done"?" done":"")} disabled={s.install==="done"||busy==="install"} onClick={install}>{s.install==="done"?<Check size={16}/>:busy==="install"?<LoaderCircle className="loader" size={16}/>:<Download size={16}/>}홈 화면에 추가</button>}
+    {s.install!=="na"&&<button type="button" className={"setup-chip"+(s.install==="done"?" done":s.handoff?" primary":"")} disabled={s.install==="done"||busy==="install"} onClick={install}>{s.install==="done"?<Check size={16}/>:busy==="install"?<LoaderCircle className="loader" size={16}/>:<Download size={16}/>}홈 화면에 추가</button>}
     {s.push!=="na"&&<button type="button" className={"setup-chip"+(s.push==="done"?" done":"")} disabled={s.push==="done"||busy==="push"} onClick={push}>{s.push==="done"?<Check size={16}/>:busy==="push"?<LoaderCircle className="loader" size={16}/>:<Bell size={16}/>}알림 켜기</button>}
    </div>
    {help==="install"&&<p className="setup-help">{manual}</p>}

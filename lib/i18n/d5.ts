@@ -35,5 +35,36 @@ const DICT=`다른 팀원이 공지를 올리거나 경기를 만들 때 옵니�
 건	items	件	条	mục
 개 팀 합산	teams combined	チーム合算	支球队合计	đội gộp lại
 팀킥 v	TeamKick v	TeamKick v	TeamKick v	TeamKick v
+지금 마감	Close now	今すぐ締切	立即截止	Đóng ngay
+마감하기	Close	締め切る	截止	Đóng
+지금 투표를 마감할까요? 참여 인원이 이대로 정해져요.	Close voting now? The headcount will be fixed as is.	今すぐ投票を締め切りますか？参加人数がこのまま確定します。	现在截止投票吗？参加人数将按现在确定。	Đóng bình chọn ngay? Số người sẽ được chốt như hiện tại.
+회비	Dues	会費	会费	Hội phí
+매달 회비	Monthly dues	毎月の会費	每月会费	Hội phí hàng tháng
+금액 · 안내 수정	Edit amount · note	金額・案内を編集	修改金额・说明	Sửa số tiền · ghi chú
+납부	Paid	納付	已缴	Đã đóng
+미납	Unpaid	未納	未缴	Chưa đóng
+모인 회비	Collected	集まった会費	已收会费	Đã thu
+달마다 누가 냈는지 기록해요.	Track who paid each month.	毎月誰が払ったか記録します。	记录每月谁已缴费。	Ghi lại ai đã đóng mỗi tháng.
+선수 고르기	Pick players	選手を選ぶ	选择球员	Chọn cầu thủ
+색 바꾸기	Change colors	色を変える	更换颜色	Đổi màu
+선발	Starter	先発	首发	Đá chính
+교체	Sub	交代	替补	Dự bị
+빼기	Remove	外す	移除	Bỏ
+배경	Background	背景	背景	Nền
+포인트	Accent	アクセント	强调色	Điểm nhấn
+유니폼	Kit	ユニフォーム	球衣	Áo đấu
+줄무늬	Stripes	ストライプ	条纹	Sọc
+이 색을 팀 기본으로 저장	Save as team default	この色をチームの基本に保存	保存为球队默认颜色	Lưu làm màu mặc định của đội
+경기 공유 이미지	Match share image	試合シェア画像	比赛分享图片	Ảnh chia sẻ trận đấu
+공유	Share	共有	分享	Chia sẻ
+대화	Chat	トーク	聊天	Trò chuyện
+프로필 보기	View profile	プロフィールを見る	查看资料	Xem hồ sơ
+팀 안내 · 투표 마감	Team note · vote deadline	チーム案内・投票締切	球队说明・投票截止	Ghi chú đội · hạn bình chọn
+일정 변경 제안	Propose new schedule	日程変更の提案	提议更改日程	Đề xuất đổi lịch
+변경 수락	Accept change	変更を承認	接受更改	Chấp nhận thay đổi
+경기별 기록	Match log	試合別記録	各场记录	Thành tích từng trận
+우리 팀 선수 기록	Our player stats	チーム選手記録	本队球员记录	Thống kê cầu thủ đội
+머리글을 누르면 그 순서로	Tap a header to sort	見出しを押すとその順に	点击表头排序	Chạm tiêu đề để sắp xếp
+노쇼 방지 보증금	No-show deposit	ノーショー防止保証金	防爽约押金	Tiền cọc chống bỏ trận
 `;
 export default DICT;

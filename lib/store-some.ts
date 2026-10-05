@@ -25,6 +25,9 @@ export async function loadSome(parts:Part[],into:State=blank()){
 export async function loadRoomState(room:string){
  let m=String(room).match(/^team:([A-Za-z0-9_-]{1,80})$/);
  if(m)return loadSome([{kind:"teams",ids:[m[1]]},{kind:"members",scopes:[m[1]]}]);
+ const gm=String(room).match(/^guest:([A-Za-z0-9_-]{1,80}):([A-Za-z0-9_-]{1,80})$/);
+ if(gm){const s=await loadSome([{kind:"games",ids:[gm[1]]},{kind:"guests",ids:[gm[2]]}]);const x=s.guests[0];if(!x)return s;
+  return loadSome([{kind:"teams",ids:[x.teamId]},{kind:"members",scopes:[x.teamId]}],s);}
  m=String(room).match(/^match:([A-Za-z0-9_-]{1,80}):([A-Za-z0-9_-]{1,80})$/);
  if(!m)return blank();
  const s=await loadSome([{kind:"games",ids:[m[1]]},{kind:"requests",scopes:[m[2]]}]);

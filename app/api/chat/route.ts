@@ -20,7 +20,8 @@ async function room(userId:string,name:string){
  return {state,r:r!};
 }
 const info=(r:NonNullable<ReturnType<typeof chatRoom>>)=>({room:r.room,kind:r.kind,title:r.title,sub:r.sub,
- ...("request" in r?{request:r.request,otherTeamId:r.otherTeamId,homeTeamId:r.homeTeamId,canDecide:r.canDecide,gameId:r.gameId}:{})});
+ ...("request" in r?{request:r.request,otherTeamId:r.otherTeamId,homeTeamId:r.homeTeamId,canDecide:r.canDecide,gameId:r.gameId}:{}),
+ ...(r.kind==="guest"&&"otherTeamId" in r?{otherTeamId:r.otherTeamId,gameId:r.gameId}:{})});
 
 // GET ?room=…&after=… → 그 방 메시지 / room 없으면 내 방 목록(안 읽은 개수·마지막 메시지)
 export async function GET(req:Request){
@@ -70,7 +71,7 @@ export async function POST(req:Request){
    // 이름은 그 팀에서 쓰는 선수 이름으로(없으면 계정 이름). 상대 팀과의 대화에는 팀 이름을 붙인다.
    const tid=r.teamOf(user.userId);const member=state.members.find(x=>x.teamId===tid&&x.userId===user.userId&&x.status==="active");
    const team=state.teams.find(x=>x.id===tid);
-   const name=(member?.name||user.fullName||"팀원")+(r.kind==="match"&&team?" · "+team.name:"");
+   const name=(member?.name||user.fullName||"팀원")+((r.kind==="match"||r.kind==="guest")&&team?" · "+team.name:"");
    const row=await sendMessage(r.room,user.userId,name,String(c.body??""));
    await markRead(user.userId,r.room,row.at);
    return json({ok:true,message:{id:row.id,name:row.name,body:row.body,deleted:false,at:row.at,mine:true}});

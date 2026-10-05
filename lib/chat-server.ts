@@ -73,6 +73,8 @@ export async function roomSummaries(accountId:string,rooms:string[]){
 export async function cleanup(now=Date.now()){
  await db().prepare(`DELETE FROM chat_messages WHERE room LIKE 'team:%' AND at<?`).bind(iso(now-KEEP_TEAM)).run();
  await db().prepare(`DELETE FROM chat_messages WHERE room LIKE 'match:%' AND at<?`).bind(iso(now-KEEP_MATCH)).run();
+ // 1.19 용병 대화도 경기 대화와 같이 60일
+ await db().prepare(`DELETE FROM chat_messages WHERE room LIKE 'guest:%' AND at<?`).bind(iso(now-KEEP_MATCH)).run();
  await db().prepare(`DELETE FROM chat_reports WHERE at<?`).bind(iso(now-KEEP_REPORT)).run();
 }
 

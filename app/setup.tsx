@@ -98,7 +98,8 @@ export function AppSetup({signedIn}:{signedIn:boolean}){
     {s.install!=="na"&&<button type="button" className={"setup-chip"+(s.install==="done"?" done":s.handoff?" primary":"")} disabled={s.install==="done"||busy==="install"} onClick={install}>{s.install==="done"?<Check size={16}/>:busy==="install"?<LoaderCircle className="loader" size={16}/>:<Download size={16}/>}홈 화면에 추가</button>}
     {s.push!=="na"&&<button type="button" className={"setup-chip"+(s.push==="done"?" done":"")} disabled={s.push==="done"||busy==="push"} onClick={push}>{s.push==="done"?<Check size={16}/>:busy==="push"?<LoaderCircle className="loader" size={16}/>:<Bell size={16}/>}알림 켜기</button>}
    </div>
-   {help==="install"&&<p className="setup-help">{manual}</p>}
+   {/* 1.21 설치가 안 된 사람에게는 직접 추가하는 방법을 늘 보여준다(사장님 메모 — 카톡에서 다른 브라우저로 넘어온 뒤 설치 창이 안 떠서 막힘). */}
+   {s.install==="todo"&&<p className={"setup-help"+(help==="install"?" strong":"")}>{help==="install"?"설치 창이 뜨지 않았어요. 이렇게 직접 추가해 주세요: ":"버튼이 안 되면 직접: "}{manual}</p>}
    {help==="push"&&<p className="setup-help">{s.pushWhy==="ios-install"?<>아이폰은 <b>홈 화면에 추가</b>한 팀킥 아이콘으로 열어야 알림을 받을 수 있어요. 먼저 홈 화면에 추가해주세요.</>:s.pushWhy==="denied"?<>이 브라우저에서 알림을 막아두셨어요. 주소창 왼쪽 <b>자물쇠(또는 ⓘ)</b> → <b>권한</b> → <b>알림 허용</b>으로 바꾼 뒤 다시 눌러주세요.</>:<>다시 한 번 눌러주세요. 계속 안 되면 <b>MY → 기기 알림</b>에서 이유를 볼 수 있어요.</>}</p>}
   </>}
  </section>;

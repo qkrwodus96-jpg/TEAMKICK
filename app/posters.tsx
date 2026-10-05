@@ -44,8 +44,15 @@ const cache=new Map<string,Promise<HTMLImageElement|null>>();
 function img(src?:string){if(!src)return Promise.resolve(null);if(!cache.has(src))cache.set(src,new Promise(res=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>res(null);i.src=src}));return cache.get(src)!}
 // 1.20 사진: 배경 지운 것(기기 안에서) · 원본(자르지 않음) · 안 넣기. 사진에 색을 덧입히지 않는다.
 type Pic={src:CanvasImageSource;w:number;h:number;cut:boolean};
+// 네 귀퉁이가 투명하면 배경을 지운 사진으로 본다.
+function clear(im:HTMLImageElement){
+ try{const c=document.createElement("canvas");c.width=16;c.height=16;const x=c.getContext("2d",{willReadFrequently:true})!;x.drawImage(im,0,0,16,16);
+  const d=x.getImageData(0,0,16,16).data,at=(i:number,j:number)=>d[(j*16+i)*4+3];return at(0,0)<20&&at(15,0)<20}catch{return false}
+}
 async function pic(p:P|undefined,mode:Photos):Promise<Pic|null>{
  if(!p?.photo||mode==="off")return null;const im=await img(imageUrl(p.photo));if(!im)return null;
+ // 1.21 올릴 때 이미 배경을 지운 사진(투명 PNG)은 다시 지우지 않는다.
+ if(clear(im))return {src:im,w:im.naturalWidth||im.width,h:im.naturalHeight||im.height,cut:true};
  if(mode==="cut"){const c=await cutout(p.photo,im);if(c)return {src:c,w:c.width,h:c.height,cut:true}}
  return {src:im,w:im.naturalWidth||im.width,h:im.naturalHeight||im.height,cut:false};
 }
@@ -64,11 +71,24 @@ function tall(ctx:C,text:string,x:number,y:number,size:number,stretch=1.25,align
  ctx.translate(x,y);ctx.scale(1,stretch);ctx.textAlign=align;ctx.textBaseline="alphabetic";ctx.fillText(text,0,0);ctx.restore();return s}
 async function crest(ctx:C,t:Team,cx:number,cy:number,r:number,ring:string){
  const im=await img(t.logo?imageUrl(t.logo):undefined);
- // 1.20: 팀이 올린 로고는 동그라미·바탕 없이 그대로 다 보이게(사장님 요청). 로고가 없을 때만 이니셜 원.
- if(im){const s=Math.min(2*r/im.width,2*r/im.height)*1.05;ctx.save();ctx.shadowColor="rgba(0,0,0,.35)";ctx.shadowBlur=12;ctx.shadowOffsetY=3;ctx.drawImage(im,cx-im.width*s/2,cy-im.height*s/2,im.width*s,im.height*s);ctx.restore();return}
+ // 1.21: 팀 로고는 보통 동그라미라 동그라미 안에 넣는다(사장님 요청). 로고는 잘리지 않게 전부 보이게 —
+ // 귀퉁이가 비어 있는(둥근) 로고는 원을 꽉 채우고, 네모난 로고는 원 안에 다 들어가게 줄인다.
  const base=TEAM_HEX[String(t.color??"")]??"#2a2f2c";
- ctx.save();ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fillStyle=base;ctx.fill();ctx.fillStyle="#fff";f(ctx,r*0.78,EN);ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(initials(t.name),cx,cy+r*0.04);ctx.restore();
- ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.lineWidth=Math.max(3,r*.06);ctx.strokeStyle=ring;ctx.stroke();
+ ctx.save();ctx.shadowColor="rgba(0,0,0,.35)";ctx.shadowBlur=14;ctx.shadowOffsetY=4;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fillStyle=im?"#ffffff":base;ctx.fill();ctx.restore();
+ if(im){const w=im.naturalWidth||im.width,h=im.naturalHeight||im.height,k=roundish(im)?0.98:0.72,s=Math.min(2*r/w,2*r/h)*k;
+  ctx.save();ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.clip();ctx.drawImage(im,cx-w*s/2,cy-h*s/2,w*s,h*s);ctx.restore()}
+ else{ctx.save();ctx.fillStyle="#fff";f(ctx,r*0.78,EN);ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(initials(t.name),cx,cy+r*0.04);ctx.restore()}
+ ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.lineWidth=Math.max(3,r*.05);ctx.strokeStyle=ring;ctx.stroke();
+}
+// 엠블럼 사이 VS 표시(마름모 테두리 + 글자)
+function vsMark(ctx:C,x:number,y:number,th:Theme){
+ ctx.save();ctx.translate(x,y);ctx.rotate(Math.PI/4);ctx.strokeStyle=th.accent;ctx.lineWidth=4;ctx.strokeRect(-34,-34,68,68);ctx.restore();
+ ctx.save();ctx.fillStyle=th.accent;f(ctx,44,EN);ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("VS",x,y+2);ctx.restore();
+}
+// 네 귀퉁이가 투명하거나 흰색이면 둥근 로고로 본다.
+function roundish(im:HTMLImageElement){
+ try{const c=document.createElement("canvas");c.width=20;c.height=20;const x=c.getContext("2d",{willReadFrequently:true})!;x.drawImage(im,0,0,20,20);const d=x.getImageData(0,0,20,20).data;
+  const empty=(i:number,j:number)=>{const k=(j*20+i)*4;return d[k+3]<30||(d[k]>235&&d[k+1]>235&&d[k+2]>235)};return empty(0,0)&&empty(19,0)&&empty(0,19)&&empty(19,19)}catch{return false}
 }
 // 바탕: 팀 색 그라데이션 + 비스듬한 가는 줄무늬 + 가장자리 어둡게
 function backdrop(ctx:C,th:Theme,angle=-0.5){
@@ -155,9 +175,9 @@ function wrapRow(ctx:C,items:string[],x:number,y:number,max:number,lh:number,gap
 // ───────── 1. STARTING XI · 카드 격자 ─────────
 async function tplGrid(ctx:C,d:D){
  const th=d.th;backdrop(ctx,th,-.4);argyle(ctx);glow(ctx,W*.2,0,520,th.accent,.12);
- await crest(ctx,d.team,108,118,60,"#ffffff");
- ctx.fillStyle="#ffffff";const s=tall(ctx,"STARTING",188,166,112,1.18,"left",420);
- const sw=(()=>{f(ctx,s,EN);return ctx.measureText("STARTING").width})();ctx.save();ctx.translate(188+sw+18,166);ctx.transform(1,0,-.2,1,0,0);ctx.fillStyle=th.accent;tall(ctx,"XI",0,0,s*1.08,1.18);ctx.restore();
+ await crest(ctx,d.team,124,126,82,"#ffffff");
+ ctx.fillStyle="#ffffff";const s=tall(ctx,"STARTING",230,170,112,1.18,"left",400);
+ const sw=(()=>{f(ctx,s,EN);return ctx.measureText("STARTING").width})();ctx.save();ctx.translate(230+sw+18,170);ctx.transform(1,0,-.2,1,0,0);ctx.fillStyle=th.accent;tall(ctx,"XI",0,0,s*1.08,1.18);ctx.restore();
  // 오른쪽 띠: 경기 정보 + 교체
  const PX=772,PW=W-PX-40,PY=234,PH=H-PY-90;
  ctx.fillStyle="rgba(0,0,0,.42)";ctx.fillRect(PX,PY,PW,PH);ctx.fillStyle=th.accent;ctx.fillRect(PX,PY,PW,6);
@@ -240,19 +260,17 @@ async function tplLineup(ctx:C,d:D){
 // ───────── 3. STARTING XI · 명단 + 대표 선수 ─────────
 async function tplList(ctx:C,d:D){
  const th=d.th;backdrop(ctx,th,-.2);glow(ctx,W*.75,H*.45,620,th.accent,.14);
- // 대표 선수 사진(오른쪽 크게). 없으면 큰 엠블럼과 큰 등번호.
- const hero=d.featured,im=await pic(hero,d.photos);
- if(im){const x=380,w=W-x,top=im.cut?150:64,h=H-top;drawPic(ctx,im,x,top,w,h);
-  if(!im.cut){const g=ctx.createLinearGradient(x,0,x+260,0);g.addColorStop(0,th.bg);g.addColorStop(1,rgba(th.bg,0));ctx.fillStyle=g;ctx.fillRect(x,0,260,H)}}
- else{bust(ctx,W*.72,H*.2,640,H*.8,th,hero?.group==="GK");
-  if(hero){ctx.save();ctx.globalAlpha=.9;ctx.fillStyle=ink(hero.group==="GK"?th.accent:th.shirt);f(ctx,120,EN);ctx.textAlign="center";ctx.fillText(no(hero),W*.72,H*.2+640*.0+H*.8*.84);ctx.restore()}}
+ // 1.21 오른쪽: 선수 사진 대신 우리 팀 vs 상대 팀 엠블럼(사장님 요청 — 선수 사진은 아직 어색해서).
+ const RX=W*.71;
+ if(d.opp){await crest(ctx,d.team,RX,H*.34,150,"#fff");vsMark(ctx,RX,H*.53,th);await crest(ctx,d.opp,RX,H*.72,150,"#fff")}
+ else await crest(ctx,d.team,RX,H*.52,200,"#fff");
  // 맨 위 띠
  ctx.fillStyle="rgba(0,0,0,.82)";ctx.fillRect(0,0,W,64);const w=when(d);
  ctx.fillStyle="#fff";f(ctx,28,KO);ctx.textAlign="center";ctx.textBaseline="middle";
  ctx.fillText([w?w.md+" ("+w.dow+") "+w.hm:"",d.venue??"",d.opp?"vs "+short(d.opp.name):""].filter(Boolean).join("  /  ")||short(d.team.name),W/2,34);
  ctx.textBaseline="alphabetic";
  ctx.fillStyle="#fff";ctx.save();ctx.translate(48,232);ctx.transform(1,0,-.14,1,0,0);tall(ctx,"STARTING XI",0,0,128,1.15,"left",700);ctx.restore();
- await crest(ctx,d.team,96,316,46,"#fff");if(d.opp){ctx.fillStyle=th.accent;f(ctx,40,EN);ctx.textAlign="center";ctx.fillText("VS",176,330);await crest(ctx,d.opp,256,316,46,"#fff")}
+ ctx.fillStyle="rgba(255,255,255,.85)";ctx.textAlign="left";fit(ctx,short(d.team.name)+(d.opp?"  vs  "+short(d.opp.name):""),560,32,KO);ctx.fillText(short(d.team.name)+(d.opp?"  vs  "+short(d.opp.name):""),52,322);
  const list=d.starters.slice(0,11),y0=430,lh=Math.min(66,(1180-y0)/Math.max(list.length,1));
  list.forEach((p,i)=>{const y=y0+i*lh;ctx.fillStyle=th.accent;f(ctx,40,EN);ctx.textAlign="right";ctx.fillText(no(p)||"-",112,y);
   ctx.fillStyle="#fff";ctx.textAlign="left";const s=fit(ctx,short(p.name),300,46,KO);ctx.fillText(short(p.name),136,y);
@@ -265,23 +283,19 @@ async function tplList(ctx:C,d:D){
 // ───────── 4. MATCHDAY ─────────
 async function tplMatchday(ctx:C,d:D){
  const th=d.th;backdrop(ctx,th,.35);curtain(ctx,W*.45,W);
- const hero=d.featured,im=await pic(hero,d.photos);
  // 왼쪽 위에서 오른쪽 아래로 가르는 사선 판
  ctx.save();ctx.beginPath();ctx.moveTo(W*.58,0);ctx.lineTo(W,0);ctx.lineTo(W,H);ctx.lineTo(W*.4,H);ctx.closePath();ctx.fillStyle=rgba(mix(th.bg,"#000000",.5),.85);ctx.fill();ctx.restore();
  ctx.save();ctx.beginPath();ctx.moveTo(W*.58-26,0);ctx.lineTo(W*.58-6,0);ctx.lineTo(W*.4-6,H);ctx.lineTo(W*.4-26,H);ctx.closePath();ctx.fillStyle=th.accent;ctx.fill();ctx.restore();
- if(im){ctx.save();ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(W*.58-30,0);ctx.lineTo(W*.4-30,H);ctx.lineTo(0,H);ctx.closePath();ctx.clip();
-  drawPic(ctx,im,0,im.cut?140:0,W*.56,im.cut?H-140:H);
-  const g=ctx.createLinearGradient(0,H*.55,0,H);g.addColorStop(0,"rgba(0,0,0,0)");g.addColorStop(1,"rgba(0,0,0,.6)");ctx.fillStyle=g;ctx.fillRect(0,0,W,H);ctx.restore();
-  ctx.fillStyle="#fff";ctx.textAlign="left";f(ctx,30,EN);if(hero&&no(hero))ctx.fillText(no(hero),44,H-110);fit(ctx,short(hero!.name),W*.36,46,KO);ctx.fillText(short(hero!.name),44,H-60)}
- else{ctx.save();ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(W*.58-30,0);ctx.lineTo(W*.4-30,H);ctx.lineTo(0,H);ctx.closePath();ctx.clip();bust(ctx,W*.27,H*.18,620,H*.82,th,hero?.group==="GK");ctx.restore();
-  if(hero){ctx.fillStyle="#fff";ctx.textAlign="left";f(ctx,30,EN);if(no(hero))ctx.fillText(no(hero),44,H-110);fit(ctx,short(hero.name),W*.34,46,KO);ctx.fillText(short(hero.name),44,H-60)}}
+ // 1.21 왼쪽: 선수 사진 대신 우리 팀 vs 상대 팀 엠블럼(사장님 요청). 상대가 아직 없으면 우리 팀만 크게.
+ const LX=W*.25;
+ if(d.opp){await crest(ctx,d.team,LX,H*.29,150,"rgba(255,255,255,.9)");vsMark(ctx,LX,H*.5,th);await crest(ctx,d.opp,LX,H*.71,150,"rgba(255,255,255,.9)")}
+ else await crest(ctx,d.team,LX,H*.48,190,"rgba(255,255,255,.9)");
+ ctx.fillStyle="#fff";ctx.textAlign="center";fit(ctx,short(d.team.name),W*.4,34,KO);
+ if(d.opp){ctx.fillText(short(d.team.name),LX,H*.29+150+48);fit(ctx,short(d.opp.name),W*.4,34,KO);ctx.fillText(short(d.opp.name),LX,H*.71+150+48)}else ctx.fillText(short(d.team.name),LX,H*.48+190+56);
  // 오른쪽 글자
  const RX=W*.5,RW=W-RX-40;
- const bx=RX+RW/2+10;const box=140;
- await crest(ctx,d.team,bx-box/2-14,150+box/2,62,"rgba(255,255,255,.85)");
- ctx.fillStyle=th.accent;f(ctx,34,EN);ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("VS",bx,150+box/2);ctx.textBaseline="alphabetic";
- if(d.opp)await crest(ctx,d.opp,bx+box/2+14,150+box/2,62,"rgba(255,255,255,.85)");else{ctx.fillStyle="#fff";f(ctx,60,EN);ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("?",bx+box/2+14,150+box/2);ctx.textBaseline="alphabetic"}
- const w=when(d);roundTag(ctx,d,bx,342,"center",26);
+ const bx=RX+RW/2+10;
+ const w=when(d);roundTag(ctx,d,bx,300,"center",26);
  ctx.fillStyle="#fff";tall(ctx,"MATCH",bx,600,200,1.35,"center",RW);tall(ctx,"DAY",bx,880,200,1.35,"center",RW);
  if(w){const t=w.md+"."+w.dow+"  "+w.hm;ctx.fillStyle="#fff";ctx.textAlign="center";fit(ctx,t,RW,62,EN);ctx.fillText(t,bx,980)}
  if(d.venue){ctx.fillStyle="#fff";fit(ctx,d.venue,RW,40,KO);ctx.textAlign="center";ctx.fillText(d.venue,bx,1040)}

@@ -6,6 +6,11 @@ import {AppError,ensure} from "./model";
 const ENDPOINT="https://dapi.kakao.com/v2/local/search/keyword.json";
 const key=()=>(env as unknown as {KAKAO_REST_KEY?:string}).KAKAO_REST_KEY??"";
 export const placeSearchReady=()=>!!key();
+// 1.21 지도 보기용 카카오 JavaScript 키. 브라우저에서 쓰는 공개용 키(카카오 개발자센터에서 사이트 도메인으로 제한)라
+// 로그인한 사람의 화면에 내려준다. 이름은 배포 때 붙인 이름이 무엇이든 찾도록 몇 가지를 본다.
+const MAP_KEYS=["KAKAO_JS_KEY","KAKAO_JAVASCRIPT_KEY","KAKAO_MAP_KEY","KAKAO_JS_APP_KEY","NEXT_PUBLIC_KAKAO_JS_KEY"] as const;
+export const mapKeyName=()=>MAP_KEYS.find(n=>String((env as unknown as Record<string,string|undefined>)[n]??"").trim())??"";
+export const mapJsKey=()=>{const n=mapKeyName();return n?String((env as unknown as Record<string,string>)[n]).trim():""};
 
 type KakaoPlace={place_name?:string;address_name?:string;road_address_name?:string;x?:string;y?:string;category_name?:string};
 export type Place={name:string;address:string;lotAddress:string;category:string;lat:number;lng:number};

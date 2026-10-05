@@ -73,19 +73,26 @@ function walk(css){
 }
 
 // shadcn 변수(:root)는 손으로 정한 값을 쓴다. 자동 변환보다 이 값들이 화면 전체 바탕이라 따로 맞춘다.
-const BASE=`${P}{color-scheme:dark;--background:#0b0b0d;--foreground:#ececee;--card:#18181b;--card-foreground:#ececee;--popover:#1f1f23;--popover-foreground:#ececee;--primary:#1f9d62;--primary-foreground:#fff;--secondary:#25252a;--secondary-foreground:#d4d4d8;--muted:#222227;--muted-foreground:#9a9aa2;--accent:#25252a;--accent-foreground:#7fd6a7;--destructive:#e0685f;--border:#313137;--input:#36363c;--ring:#2fb574;--sidebar:#111114;--sidebar-foreground:#c4c4ca;--sidebar-primary:#2fb574;--sidebar-primary-foreground:#fff;--sidebar-accent:#25252a;--sidebar-accent-foreground:#7fd6a7;--sidebar-border:#2a2a30;--sidebar-ring:#2fb574}
+const BASE=`${P}{color-scheme:dark;--background:#0e0e11;--foreground:#ececee;--card:#1b1b1f;--card-foreground:#ececee;--popover:#1f1f23;--popover-foreground:#ececee;--primary:#1f9d62;--primary-foreground:#fff;--secondary:#25252a;--secondary-foreground:#d4d4d8;--muted:#222227;--muted-foreground:#9a9aa2;--accent:#25252a;--accent-foreground:#7fd6a7;--destructive:#e0685f;--border:#35353c;--input:#3a3a41;--ring:#2fb574;--sidebar:#111114;--sidebar-foreground:#c4c4ca;--sidebar-primary:#2fb574;--sidebar-primary-foreground:#fff;--sidebar-accent:#25252a;--sidebar-accent-foreground:#7fd6a7;--sidebar-border:#2a2a30;--sidebar-ring:#2fb574}
 ${P} body{background:var(--background);color:var(--foreground)}
 ${P} .bg-white{background:var(--card)!important}
 ${P} img{opacity:.96}
 `;
 // 자동 변환 뒤에 덧붙이는 손질(자동 규칙이 맞지 않는 곳).
+// 1.21: 매칭 탭 카드처럼 다른 화면의 구역(.panel)도 카드 바탕·테두리로 나눈다(사장님 메모 — "조금만 더 구분, 매칭 탭 느낌 좋음").
 const TAIL=`${P}{--band:#08080a}
 ${P} .switch::after{background:#ececee}
 ${P} .seg{background:#232328}
 ${P} .seg button.on{background:#34343a;color:#7fd6a7}
 ${P} .next-match{background:#1b1b1f;background-image:radial-gradient(ellipse at 95% 0%,#1f9d6233,transparent 60%);border:1px solid #303036}
-${P} .bottom-nav{background:#0b0b0dfa}
+${P} .bottom-nav{background:#0e0e11fa}
 ${P} .match-arrow{background:#000000cc;border-color:#ffffff22}
+${P} .panel,${P} .vote-box,${P} .setup-card{background:var(--card);border:1px solid #3a3a41;border-radius:14px;padding:18px 16px}
+${P} .panel .panel{border:0;padding:0;background:transparent}
+${P} .main-column>section.panel,${P} .right-column>section.panel,${P} .two-col>section.panel,${P} .gap-grid>section.panel,${P} [data-slot=tabs-content]>section.panel{margin-inline:0;border-top:1px solid #3a3a41;padding:20px 16px 14px}
+${P} .rec-block+.rec-block{border-top:0;margin-inline:0;padding-inline:0}
+${P} .rec-block>[data-slot=tabs]>[data-slot=tabs-content]>section.panel:first-child{padding:16px 12px;border-top:1px solid #3a3a41}
+${P} .bottom-nav{border-top-color:#2c2c32}
 `;
 
 const css=fs.readFileSync(SRC,"utf8");

@@ -44,6 +44,8 @@ function dissolveTeam(s:State,t:string,stamp:string){
  const team=s.teams.find(x=>x.id===t);
  if(!team||team.status==="closed")return;
  team.status="closed";team.reason="주장이 탈퇴해 해산했어요.";
+ // 1.19 회비 장부는 팀 운영용이라 해산하면 지운다(처리방침).
+ delete team.dues;delete team.duesPaid;
  for(const m of s.members.filter(x=>x.teamId===t&&x.status==="pending"))m.status="left";
  for(const v of s.invites.filter(x=>x.teamId===t))v.active=false;
  for(const r of s.requests.filter(x=>x.teamId===t&&x.status==="pending"))r.status="closed";
@@ -453,6 +455,12 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  else if(type==="setDues"){
   requireTeam(s,t,a.id,"manager");const team=teamOf(s,t)!;
   team.dues={amount:integer(c.amount??0,0,1000000),note:textValue(c.note??"",200,false),at:stamp,by:a.id};
+ }
+ // 1.19 공유 이미지 색(배경·포인트·유니폼). 운영진이 팀 기본으로 저장하면 팀원 모두 같은 색으로 만든다.
+ else if(type==="setKit"){
+  requireTeam(s,t,a.id,"manager");const team=teamOf(s,t)!;
+  const hex=(x:unknown,optional=false)=>{const v=String(x??"").trim().toLowerCase();if(optional&&!v)return "";ensure(/^#[0-9a-f]{6}$/.test(v),"색을 목록에서 골라주세요.");return v};
+  team.kit={bg:hex(c.bg),accent:hex(c.accent),shirt:hex(c.shirt),stripe:hex(c.stripe,true),at:stamp};
  }
  else if(type==="markDues"){
   requireTeam(s,t,a.id,"manager");const team=teamOf(s,t)!;

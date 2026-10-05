@@ -3841,3 +3841,11 @@ test('1.19 회비 장부: 운영진만 금액·납부를 고치고, 일반 팀�
   const other=visibleState(s,B.id).teams.find(t=>t.id===a);
   assert.ok(!('duesPaid' in other)&&!('dues' in other));
 });
+
+test('1.19 팀 공유 이미지 색: 운영진만, 색 형식 검사',()=>{
+  const {s,a}=fixture();addPlayer(s,a);
+  command(s,A,{type:'setKit',teamId:a,bg:'#B3121B',accent:'#ffffff',shirt:'#b3121b',stripe:''});
+  assert.deepEqual({...s.teams.find(t=>t.id===a).kit,at:undefined},{bg:'#b3121b',accent:'#ffffff',shirt:'#b3121b',stripe:'',at:undefined});
+  assert.throws(()=>command(s,A,{type:'setKit',teamId:a,bg:'red',accent:'#fff',shirt:'#000000'}),/색/);
+  assert.throws(()=>command(s,member,{type:'setKit',teamId:a,bg:'#000000',accent:'#ffffff',shirt:'#000000'}),/권한|운영진|주장/);
+});

@@ -45,7 +45,7 @@ function dissolveTeam(s:State,t:string,stamp:string){
  if(!team||team.status==="closed")return;
  team.status="closed";team.reason="주장이 탈퇴해 해산했어요.";
  // 1.19 회비 장부는 팀 운영용이라 해산하면 지운다(처리방침).
- delete team.dues;delete team.duesPaid;delete team.duesReported;
+ delete team.dues;delete team.duesPaid;delete team.duesReported;delete team.duesReminded;
  for(const m of s.members.filter(x=>x.teamId===t&&x.status==="pending"))m.status="left";
  for(const v of s.invites.filter(x=>x.teamId===t))v.active=false;
  for(const r of s.requests.filter(x=>x.teamId===t&&x.status==="pending"))r.status="closed";
@@ -479,6 +479,23 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   row[me.id]=stamp;rep[month]=row;team.duesReported=Object.fromEntries(Object.keys(rep).sort().slice(-6).map(k=>[k,rep[k]]));
   for(const x of s.members.filter(y=>y.teamId===t&&y.status==="active"&&["captain","manager"].includes(y.role)&&y.userId!==a.id))
    userNotice(s,x.userId,"회비 납부 알림",me.name+"님이 "+Number(month.slice(5))+"월 회비를 냈다고 알렸어요. MY → 회비에서 확인해 주세요.",t,"modal:dues");
+ }
+ // 1.21 미납 팀원에게 회비 알림(사장님 요청). 운영진만. 이 달 아직 납부 표시가 없는 팀킥 계정 팀원에게만 간다.
+ // memberId 가 있으면 그 한 명, 없으면 미납 전원. 같은 사람에게는 20시간에 한 번만(알림 폭탄 방지).
+ // 알림에는 팀 계좌(은행·번호·예금주)와 금액을 함께 적는다 — 팀원에게만 가는 알림이라 팀원에게 보이는 정보와 같다.
+ else if(type==="remindDues"){
+  requireTeam(s,t,a.id,"manager");const team=teamOf(s,t)!;
+  const month=String(c.month??"");ensure(/^20\d\d-(0[1-9]|1[0-2])$/.test(month),"달을 확인해주세요.");
+  const paid=team.duesPaid?.[month]??{};const sent:Record<string,Record<string,string>>=team.duesReminded??{};const row={...(sent[month]??{})};
+  const targets=s.members.filter(x=>x.teamId===t&&x.status==="active"&&x.userId&&!paid[x.id]&&(!c.memberId||x.id===c.memberId));
+  ensure(targets.length,c.memberId?"이미 낸 팀원이거나 팀킥 계정이 없는 팀원이에요.":"이 달 미납 팀원이 없어요.",409);
+  const fresh=targets.filter(x=>!row[x.id]||Date.parse(stamp)-Date.parse(row[x.id])>=20*3600e3);
+  ensure(fresh.length,"오늘 이미 알렸어요. 내일 다시 보낼 수 있어요.",429);
+  const d=team.dues??{};const acct=[d.bank,d.accountNo,d.holder?"예금주 "+d.holder:""].filter(Boolean).join(" ");
+  const body=Number(month.slice(5))+"월 회비가 아직 입금되지 않았어요! 자동이체를 설정하거나 이번 달 회비를 입금해 주세요."+(d.amount?" 금액 "+Number(d.amount).toLocaleString()+"원.":"")+(acct?" 계좌 "+acct+".":"")+" 냈다면 MY → 회비에서 '냈어요 알리기'를 눌러 주세요.";
+  for(const x of fresh){userNotice(s,x.userId,"회비 입금 안내",body,t,"modal:dues");row[x.id]=stamp}
+  sent[month]=row;team.duesReminded=Object.fromEntries(Object.keys(sent).sort().slice(-6).map(k=>[k,sent[k]]));
+  output={notified:fresh.length,skipped:targets.length-fresh.length};
  }
  else if(type==="markDues"){
   requireTeam(s,t,a.id,"manager");const team=teamOf(s,t)!;
@@ -915,11 +932,13 @@ export function visibleState(s:State,userId:string,selected?:string){
  const tid=team?.teamId;const activeAccess=active.some(m=>teamOf(s,m.teamId)?.status==="active");
  const ownTeams=s.teams.filter(t=>t.applicant===userId);const publicTeams=s.teams.filter(t=>t.status==="active"||owner||active.some(m=>m.teamId===t.id)||t.applicant===userId).map(t=>{const full=owner||active.some(m=>m.teamId===t.id)||t.applicant===userId;const counts={memberCount:s.members.filter(m=>m.teamId===t.id&&m.status==="active").length,gameCount:s.games.filter(g=>containsTeam(g,t.id)&&g.status==="completed").length};
   // 회비 납부 표시는 운영진에게만 다 보인다. 일반 팀원은 자기 것과 달마다 몇 명 냈는지만.
-  if(full&&(t.duesPaid||t.duesReported)&&!owner&&!active.some(m=>m.teamId===t.id&&["captain","manager"].includes(m.role))){const me=active.find(m=>m.teamId===t.id)?.id;
+  if(full&&(t.duesPaid||t.duesReported||t.duesReminded)&&!owner&&!active.some(m=>m.teamId===t.id&&["captain","manager"].includes(m.role))){const me=active.find(m=>m.teamId===t.id)?.id;
    const book=(t.duesPaid??{}) as Record<string,Record<string,string>>;
    const reported=(t.duesReported??{}) as Record<string,Record<string,string>>;
    return {...t,...counts,duesPaid:Object.fromEntries(Object.entries(book).map(([k,row])=>[k,me&&row[me]?{[me]:row[me]}:{}])),duesCount:Object.fromEntries(Object.entries(book).map(([k,row])=>[k,Object.keys(row).length])),
-    duesReported:Object.fromEntries(Object.entries(reported).map(([k,row])=>[k,me&&row[me]?{[me]:row[me]}:{}]))}}
+    duesReported:Object.fromEntries(Object.entries(reported).map(([k,row])=>[k,me&&row[me]?{[me]:row[me]}:{}])),
+    // 1.21 누구에게 회비 알림을 보냈는지(=누가 미납인지)는 운영진만 본다.
+    duesReminded:Object.fromEntries(Object.entries((t.duesReminded??{}) as Record<string,Record<string,string>>).map(([k,row])=>[k,me&&row[me]?{[me]:row[me]}:{}]))}}
   return full?{...t,...counts}:{id:t.id,name:t.name,region:t.region,description:t.description,format:t.format,days:t.days,level:t.level,status:t.status,color:t.color,logo:t.logo,rules:t.rules??"",
    photos:(t.photos??[]).map((p:Row)=>({id:p.id,key:p.key,caption:p.caption,at:p.at})),recruiting:!!t.recruiting,recruitNote:t.recruitNote??"",fee:t.fee??null,founded:t.founded??"",...counts}});
  const games=s.games.filter(g=>tid&&containsTeam(g,tid));const listings=activeAccess?s.games.filter(g=>g.listing==="open"&&g.status==="scheduled"&&Date.parse(g.start)>Date.now()&&teamOf(s,g.home)?.status==="active"):[];

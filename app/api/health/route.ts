@@ -1,7 +1,7 @@
 import {schemaStatus,BUILD} from "@/lib/schema";
 import {APP_VERSION} from "@/lib/version";
 import {storageReady} from "@/lib/images";
-import {placeSearchReady} from "@/lib/places";
+import {placeSearchReady,mapKeyName} from "@/lib/places";
 import {mailReady,mailAccount,fromDomain} from "@/lib/mail";
 import {hashPassword,currentUser} from "@/lib/auth";
 import {kakaoReady,kakaoSecretSet} from "@/lib/kakao";
@@ -57,6 +57,9 @@ export async function GET(req:Request){
   mailFromDomain:fromDomain(),
   storageReady:storageReady(),
   placeSearchReady:placeSearchReady(),
+  // 1.21 매칭 지도: 카카오 JavaScript 키가 들어 있는지와 어느 이름으로 들어갔는지(값은 보여주지 않는다)
+  mapReady:!!mapKeyName(),
+  mapKeyName:mapKeyName()||null,
   kakaoReady:kakaoReady(),
   kakaoSecret:kakaoSecretSet()?"set":"missing",
   googleReady:socialReady("google"),

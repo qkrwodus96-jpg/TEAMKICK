@@ -75,6 +75,11 @@ const DICT=`다른 팀원이 공지를 올리거나 경기를 만들 때 옵니�
 카카오페이로 보내기	Send via KakaoPay	KakaoPayで送金	用KakaoPay转账	Gửi qua KakaoPay
 경기 때 날씨	Weather at kickoff	試合時の天気	比赛时天气	Thời tiết lúc đá
 상대 전적	Head-to-head	対戦成績	交锋记录	Thành tích đối đầu
+지도	Map	地図	地图	Bản đồ
+등록된 모집 없음	No listings	募集なし	暂无招募	Chưa có trận đăng
+미납자 모두에게 알림	Remind all unpaid	未納者全員に通知	提醒所有未缴者	Nhắc tất cả người chưa đóng
+배경 지우고 올리기(누끼) — 공유 포스터에서 선수만 보여요	Remove background before upload — only the player shows on posters	背景を消してアップロード — ポスターに選手だけ表示	去除背景后上传 — 海报只显示球员	Xóa nền trước khi tải — áp phích chỉ hiện cầu thủ
+모든 날	All days	全日	全部日期	Mọi ngày
 배경 지우기	Remove background	背景を消す	去除背景	Xóa nền
 원본 그대로	Original	元のまま	保持原图	Giữ nguyên
 안 넣기	Leave out	入れない	不放入	Không thêm

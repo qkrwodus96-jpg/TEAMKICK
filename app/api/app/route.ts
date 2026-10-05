@@ -1,6 +1,6 @@
 import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";
 import {storageReady} from "@/lib/images";
-import {placeSearchReady} from "@/lib/places";
+import {placeSearchReady,mapJsKey} from "@/lib/places";
 import {mailReady} from "@/lib/mail";
 import {load,commit} from "@/lib/store";
 import {applyCommand,visibleState,AppError,iso,prune,setupIncomplete,SETUP_MESSAGE,pushTargets} from "@/lib/model";
@@ -19,7 +19,7 @@ export async function GET(req:Request){try{await ensureSchema();const user=await
  // 기록된 운영자의 계정이 사라졌으면 다시 등록할 수 있어야 한다. 그렇지 않으면 아무도 운영자가 될 수 없다.
  const ownerId=state.settings.find(x=>x.id==="owner")?.userId;
  const ownerMissing=!!ownerId&&ownerId!==user.userId&&!(await accountExists(ownerId));
- return json({rev:version,storageReady:storageReady(),ownerMissing,placeSearchReady:placeSearchReady(),mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver"),needsVerification:mailReady()&&!user.verified,invitedTeam:invite?.teamId??null,user:{id:user.userId,name:state.users.find(x=>x.id===user.userId)?.name??user.fullName??"팀원",provider:user.provider??"local"},...visibleState(state,user.userId,teamId)});}catch(e){console.error("TeamKick load",e);return json({error:e instanceof AppError?e.message:setupIncomplete(e)?SETUP_MESSAGE:"데이터를 불러오지 못했어요. 다시 시도해주세요."},e instanceof AppError?e.status:503)}}
+ return json({rev:version,storageReady:storageReady(),ownerMissing,placeSearchReady:placeSearchReady(),mapKey:mapJsKey(),mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver"),needsVerification:mailReady()&&!user.verified,invitedTeam:invite?.teamId??null,user:{id:user.userId,name:state.users.find(x=>x.id===user.userId)?.name??user.fullName??"팀원",provider:user.provider??"local"},...visibleState(state,user.userId,teamId)});}catch(e){console.error("TeamKick load",e);return json({error:e instanceof AppError?e.message:setupIncomplete(e)?SETUP_MESSAGE:"데이터를 불러오지 못했어요. 다시 시도해주세요."},e instanceof AppError?e.status:503)}}
 export async function POST(req:Request){
  try{
   await ensureSchema();

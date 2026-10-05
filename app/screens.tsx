@@ -20,6 +20,8 @@ import {Dues} from "./dues";
 import {ShareStudio} from "./share-cards";
 import {PosterStudio} from "./posters";
 import {PlayerSheet} from "./player-sheet";
+import {cutout} from "./cutout";
+import {VenueMap} from "./venue-map";
 import {WeatherLine,CalendarButtons} from "./weather";
 import {kakaoRoute,naverSearch} from "@/lib/maps";
 import {whenText,whenRange} from "@/lib/when";
@@ -147,6 +149,16 @@ export function AuthPanel({onDemo,mailReady=true,kakaoReady=false,googleReady=fa
  </section>;
 }
 // 올리기 전에 브라우저에서 줄여 저장 용량과 전송량을 아낀다.
+// 1.21 배경 지우기(기기 안 MediaPipe). 결과는 투명 PNG. 안 되면 원본 그대로.
+async function removeBackground(file:File):Promise<File>{
+ try{
+  const url=URL.createObjectURL(file);const im=new Image();im.src=url;await im.decode();
+  const c=await cutout("upload-"+Date.now()+"-"+Math.random(),im);URL.revokeObjectURL(url);
+  if(!c)return file;
+  const blob=await new Promise<Blob|null>(res=>c.toBlob(res,"image/png"));
+  return blob&&blob.size<=2*1024*1024?new File([blob],file.name.replace(/\.\w+$/,"")+".png",{type:"image/png"}):file;
+ }catch{return file}
+}
 async function shrink(file:File,max=512){
  try{
   const bitmap=await createImageBitmap(file);
@@ -244,6 +256,10 @@ export function ImageField({title,current,kind,teamId,memberId,onSaved,disabled,
  const [state,setState]=useState({busy:false,error:""});
  // 고른 그림을 바로 올리지 않는다. 먼저 크기·위치를 맞추게 한다.
  const [chosen,setChosen]=useState<File|null>(null);
+ // 1.21 선수 사진은 올릴 때 배경을 지워(누끼) 저장한다(사장님 요청 — 모든 선수 이미지를 누끼 버전으로).
+ // 이용자 기기 안에서만 처리하고(app/cutout.ts), 원하지 않으면 끄고 올릴 수 있다. 실패하면 원본을 올린다.
+ const [cut,setCut]=useState(kind==="memberPhoto");
+ const [step,setStep]=useState("");
  function pick(e:ChangeEvent<HTMLInputElement>){
   const file=e.target.files?.[0];e.target.value="";
   if(!file)return;
@@ -253,7 +269,8 @@ export function ImageField({title,current,kind,teamId,memberId,onSaved,disabled,
  async function upload(file:File){
   setState({busy:true,error:""});
   try{
-   const small=await shrink(file);
+   let small:File=await shrink(file);
+   if(cut){setStep("배경 지우는 중… (처음 한 번은 몇 초 더 걸려요)");small=await removeBackground(small);setStep("")}
    const body=new FormData();
    body.append("file",small,file.name);body.append("kind",kind);body.append("teamId",teamId);
    if(memberId)body.append("memberId",memberId);
@@ -263,12 +280,14 @@ export function ImageField({title,current,kind,teamId,memberId,onSaved,disabled,
    await onSaved(out.key);
    setState({busy:false,error:""});
    setChosen(null);
-  }catch(err){setState({busy:false,error:err instanceof Error?err.message:"이미지를 올리지 못했어요."})}
+  }catch(err){setStep("");setState({busy:false,error:err instanceof Error?err.message:"이미지를 올리지 못했어요."})}
  }
  if(!ready)return <div><label style={{marginBottom:8}}>{title}</label><p className="data-note">이미지 저장소가 아직 연결되지 않아 사진을 올릴 수 없어요. 관리자가 저장소를 연결하면 바로 쓸 수 있어요.</p></div>;
  if(chosen)return <div>
   <label style={{marginBottom:8}}>{title}</label>
   <ImageCropper file={chosen} busy={state.busy} onCancel={()=>{setChosen(null);setState({busy:false,error:""})}} onDone={upload} square={kind==="teamPhoto"}/>
+  {kind==="memberPhoto"&&<label className="row cut-opt"><Checkbox checked={cut} disabled={state.busy} onCheckedChange={x=>setCut(x===true)}/>배경 지우고 올리기(누끼) — 공유 포스터에서 선수만 보여요</label>}
+  {step&&<p className="data-note" role="status">{step}</p>}
   {state.error&&<p className="error-bar" role="alert" style={{marginTop:10}}>{state.error}</p>}
  </div>;
  return <div>
@@ -470,12 +489,25 @@ export function Matching(p:any){
  const filtered=!!date||!!term;
  // 1.20 구장별 보기(사장님 요청 — "수지체육공원 누르면 시간대별로 매칭 구하는 팀"). 지도는 카카오 지도 키가 있어야 해서
  // 먼저 구장 이름으로 묶는다. 같은 구장이면 시간순으로 모아 보여준다.
- const [byVenue,setByVenue]=useState(false),[venue,setVenue]=useState("");
+ // 1.21 시간순 · 구장별 · 지도(사장님 승인 시안). 구장별·지도에서는 날짜 줄과 시간대 칩으로 거른다.
+ const [mode,setMode]=useState<"time"|"venue"|"map">("time"),[venue,setVenue]=useState(""),[allVenues,setAllVenues]=useState(false),[slot,setSlot]=useState("all");
+ const byVenue=mode!=="time";
+ const SLOTS:[string,string][]=[["all","전체"],["dawn","새벽"],["am","오전"],["pm","오후"],["eve","저녁"]];
+ const slotOf=(iso:string)=>{const h=new Date(Date.parse(iso)+9*3600e3).getUTCHours();return h<7?"dawn":h<12?"am":h<18?"pm":"eve"};
+ const slotted=byVenue?listings.filter((g:Row)=>slot==="all"||slotOf(g.start)===slot):listings;
  const venueOf=(g:Row)=>String(g.venue||g.address||"구장 미정").trim();
- const venues=[...listings.reduce((m:Map<string,Row[]>,g:Row)=>{const k=norm(venueOf(g));m.set(k,[...(m.get(k)??[]),g]);return m},new Map<string,Row[]>()).entries()]
-  .map(([key,list])=>({key,list,name:venueOf(list[0]),area:String(list[0].address??"").split(/\s+/).slice(0,2).join(" ")||String(list[0].region??"")})).sort((a,b)=>b.list.length-a.list.length||a.name.localeCompare(b.name,"ko"));
+ const recentList=[...new Set((v.games as Row[]).filter((g:Row)=>g.status!=="cancelled"&&Date.parse(g.start)<=now).sort((a:Row,b:Row)=>String(b.start).localeCompare(String(a.start))).map((g:Row)=>norm(venueOf(g))))];
+ const recentOf=(k:string)=>{const i=recentList.indexOf(k);return i<0?1e6:i};
+ const venues=[...slotted.reduce((m:Map<string,Row[]>,g:Row)=>{const k=norm(venueOf(g));m.set(k,[...(m.get(k)??[]),g]);return m},new Map<string,Row[]>()).entries()]
+  .map(([key,list])=>({key,list,name:venueOf(list[0]),area:String(list[0].address??"").split(/\s+/).slice(0,2).join(" ")||String(list[0].region??"")}))
+  // 1.21 우리 팀이 최근에 쓴 구장을 앞에(사장님 메모), 그다음 모집 많은 순.
+  .sort((a,b)=>recentOf(a.key)-recentOf(b.key)||b.list.length-a.list.length||a.name.localeCompare(b.name,"ko"));
  const venueKey=venues.some(x=>x.key===venue)?venue:venues[0]?.key??"";
  const venueList=venues.find(x=>x.key===venueKey)?.list??[];
+ // 같은 날 등록된 시간 사이가 비면 "등록된 모집 없음" 줄을 넣는다(구장 운영 시간은 계절마다 달라 미리 정한 칸은 쓰지 않는다).
+ const venueLine:Row[]=[];venueList.forEach((g:Row,i:number)=>{const p=venueList[i-1];if(p&&localDay(p.start)===localDay(g.start)&&Date.parse(p.end)<Date.parse(g.start))venueLine.push({gap:true,id:"gap-"+g.id,start:p.end,end:g.start});venueLine.push(g)});
+ const days=Array.from({length:7},(_,i)=>{const d=new Date(now+9*3600e3+i*864e5);return {key:d.toISOString().slice(0,10),d:d.getUTCDate(),w:d.getUTCDay(),i}});
+ const dayCount=(k:string)=>v.listings.filter((g:Row)=>localDay(g.start)===k&&hit(hay(g))).length;
  function resetFilters(){setDraft("");setQuery("");setDate("")}
  const dateText=date?(()=>{const d=new Date(date+"T00:00:00Z");return (d.getUTCMonth()+1)+"월 "+d.getUTCDate()+"일 ("+"일월화수목금토"[d.getUTCDay()]+")"})():"날짜 선택";
  const searchBar=<div className="filter-bar search-bar">
@@ -498,9 +530,14 @@ export function Matching(p:any){
  const teamById=(id?:string)=>v.teams.find((t:Row)=>t.id===id);
  const chatRoomOf=(r:Row)=>"match:"+r.gameId+":"+r.teamId;
  return <><Tabs value={tab} onValueChange={setTab}><TabsList className="mb-5 tab-scroll"><TabsTrigger value="open">모집 중</TabsTrigger><TabsTrigger value="confirmed">모집 완료</TabsTrigger>{captain&&<TabsTrigger value="received">받은 신청{pendingIn>0&&<i className="red-dot" aria-label={"새 신청 "+pendingIn+"건"}>{pendingIn}</i>}</TabsTrigger>}<TabsTrigger value="mine">우리 팀 매칭 내역</TabsTrigger><TabsTrigger value="guest">용병{guestIn>0&&<i className="red-dot" aria-label={"용병 신청 "+guestIn+"건"}>{guestIn}</i>}</TabsTrigger></TabsList></Tabs>
- {tab==="open"&&<>{searchBar}{!!listings.length&&<div className="seg venue-view" role="tablist" aria-label="모집글 보기 방식"><button role="tab" aria-selected={!byVenue} className={!byVenue?"on":""} onClick={()=>setByVenue(false)}>시간순</button><button role="tab" aria-selected={byVenue} className={byVenue?"on":""} onClick={()=>setByVenue(true)}>구장별</button></div>}
-  {byVenue&&!!venues.length&&<div className="venue-chips">{venues.map(x=><button key={x.key} type="button" className={"venue-chip"+(venueKey===x.key?" on":"")} aria-pressed={venueKey===x.key} onClick={()=>setVenue(x.key)}><MapPin size={14}/><span><b>{x.name}</b><small>{x.area}</small></span><i>{x.list.length}</i></button>)}</div>}
-  <div className="mcard-list">{(byVenue?venueList:listings).map((g:Row)=>{const t=v.teams.find((t:Row)=>t.id===g.home),sent=mine.find((r:Row)=>r.gameId===g.id&&r.status==="pending");return <MatchCard key={g.id} team={t} onTeam={t?()=>setModal({kind:"teamProfile",teamId:t.id}):undefined} title={t?.name} price={opponentPrice(g)} start={g.start} end={g.end} chips={[formatLabel(g.format),t?levelChip(t.level):"",g.secured?"":"구장 협의 중"]} venue={g.venue} address={g.address} action={g.home===v.teamId?<button className="btn" onClick={()=>setModal({kind:"game",id:g.id})}>모집글 관리</button>:<button disabled={busy||!captain||!!sent} className="btn btn-green" onClick={()=>setModal({kind:"applyMatch",game:g})}>{sent?"신청 완료":captain?"매칭 신청":"주장만 신청 가능"}</button>}/>})}</div>{!listings.length&&<section className="panel"><Empty title={filtered?"조건에 맞는 모집글이 없어요":"모집 중인 경기가 없어요"} description={filtered
+ {tab==="open"&&<>{searchBar}{(!!v.listings.length)&&<div className="seg venue-view" role="tablist" aria-label="모집글 보기 방식">{([["time","시간순"],["venue","구장별"],["map","지도"]] as const).map(([k,n])=><button key={k} role="tab" aria-selected={mode===k} className={mode===k?"on":""} onClick={()=>setMode(k)}>{n}</button>)}</div>}
+  {byVenue&&!!v.listings.length&&<><div className="day-strip" role="group" aria-label="날짜">{[{key:"",label:"전체",sub:"",w:-1},...days.map(x=>({key:x.key,label:String(x.d),sub:x.i===0?"오늘":"일월화수목금토"[x.w],w:x.w}))].map(x=><button key={x.key||"all"} type="button" aria-pressed={date===x.key} className={(date===x.key?"on":"")+(x.w===0?" sun":x.w===6?" sat":"")} onClick={()=>setDate(x.key)}><small>{x.sub||"모든 날"}</small><b>{x.label}</b>{x.key&&<i>{dayCount(x.key)}</i>}</button>)}</div>
+   <div className="slot-chips" role="group" aria-label="시간대">{SLOTS.map(([k,n])=><button key={k} type="button" aria-pressed={slot===k} className={slot===k?"on":""} onClick={()=>setSlot(k)}>{n}<i>{listings.filter((g:Row)=>k==="all"||slotOf(g.start)===k).length}</i></button>)}</div></>}
+  {mode==="map"&&!!v.listings.length&&(v.mapKey?<VenueMap apiKey={String(v.mapKey)} region={String(v.myRegion??"")} selected={venueKey} onSelect={(k:string)=>setVenue(k)} venues={venues.map(x=>({key:x.key,name:x.name,lat:x.list.find((g:Row)=>typeof g.lat==="number")?.lat,lng:x.list.find((g:Row)=>typeof g.lng==="number")?.lng,count:x.list.length}))}/>
+   :<p className="data-note">지도는 카카오 지도 키(JavaScript 키)가 서버에 들어가면 보여요. 지금은 아래 구장 칩으로 골라 주세요.</p>)}
+  {byVenue&&!!venues.length&&<div className={"venue-chips"+(allVenues?" all":"")}>{(allVenues?venues:venues.filter((x,i)=>i<4||x.key===venueKey)).map(x=><button key={x.key} type="button" className={"venue-chip"+(venueKey===x.key?" on":"")} aria-pressed={venueKey===x.key} onClick={()=>setVenue(x.key)}><MapPin size={14}/><span><b>{x.name}</b><small>{x.area}</small></span><i>{x.list.length}</i></button>)}{venues.length>4&&<button type="button" className="venue-more" onClick={()=>setAllVenues(o=>!o)}>{allVenues?"접기":"더보기 "+(venues.length-4)}</button>}</div>}
+  {byVenue&&!venues.length&&!!listings.length&&<p className="gap-row only">이 시간대엔 등록된 모집이 없어요.</p>}
+  <div className="mcard-list">{(byVenue?venueLine:listings).map((g:Row)=>{if(g.gap)return <div key={g.id} className="gap-row"><span>{whenRange(g.start,g.end).replace(/^\S+ /,"")}</span><span>등록된 모집 없음</span></div>;const t=v.teams.find((t:Row)=>t.id===g.home),sent=mine.find((r:Row)=>r.gameId===g.id&&r.status==="pending");return <MatchCard key={g.id} team={t} onTeam={t?()=>setModal({kind:"teamProfile",teamId:t.id}):undefined} title={t?.name} price={opponentPrice(g)} start={g.start} end={g.end} chips={[formatLabel(g.format),t?levelChip(t.level):"",g.secured?"":"구장 협의 중"]} venue={g.venue} address={g.address} action={g.home===v.teamId?<button className="btn" onClick={()=>setModal({kind:"game",id:g.id})}>모집글 관리</button>:<button disabled={busy||!captain||!!sent} className="btn btn-green" onClick={()=>setModal({kind:"applyMatch",game:g})}>{sent?"신청 완료":captain?"매칭 신청":"주장만 신청 가능"}</button>}/>})}</div>{!listings.length&&<section className="panel"><Empty title={filtered?"조건에 맞는 모집글이 없어요":"모집 중인 경기가 없어요"} description={filtered
   ? "위 조건을 지우면 모든 모집글을 볼 수 있어요."
   : v.listings.length?"":"경기를 만들 때 \u0027상대팀을 모집할게요\u0027 를 체크해야 이 목록에 올라와요. 이미 만든 경기는 일정에서 열어 모집을 열 수 있어요."}/>
   {filtered&&<button type="button" className="btn" style={{marginTop:14}} onClick={resetFilters}>조건 지우기</button>}</section>}</>}
@@ -587,7 +624,7 @@ export function Management(p:any){
   {id:"next",label:"다음 경기",icon:Home,go:()=>setView("home")},
   {id:"records",label:"팀 기록",icon:BarChart3,go:()=>setView("records")},
   {id:"schedule",label:"팀 일정",icon:CalendarDays,go:()=>setView("schedule")},
-  {id:"chat",label:"채팅",icon:MessageCircle,go:()=>setMyTab("chat")},
+  {id:"chat",label:"채팅",icon:MessageCircle,go:()=>setMyTab("chat"),badge:Number(p.chatUnread??0)},
   {id:"board",label:"게시판",icon:Megaphone,go:()=>setMyTab("board")},
   {id:"members",label:"팀원",icon:Users,go:()=>setMyTab("members")},
   {id:"profile",label:"팀 프로필",icon:Shield,go:()=>setModal({kind:"teamProfile",teamId:v.teamId})},
@@ -597,7 +634,7 @@ export function Management(p:any){
  ];
  const back=myTab!=="home"&&<button type="button" className="text-link back-link" onClick={()=>setMyTab("home")}>← MY 처음으로</button>;
  return <div className="gap-grid"><section className="panel"><div className="row between"><div className="team-header"><Crest name={team?.name} color={team?.color} logo={team?.logo}/><div><h2>{team?.name}</h2><p>{team?.region} · {levelChip(team?.level)} · {team?.days}</p></div></div><div className="row" style={{gap:6}}><button className="btn" onClick={()=>setModal({kind:"teamProfile",teamId:v.teamId})}>팀 프로필</button>{captain&&<button className="icon-button" aria-label="팀 정보 수정" onClick={()=>setModal({kind:"editTeam"})}><Settings size={19}/></button>}</div></div><p className="small muted" style={{lineHeight:1.8,marginTop:20}}>{team?.description}</p><div className="action-strip">{captain&&<button className="btn btn-green" onClick={()=>setModal({kind:"invite"})}><Plus/>팀원 초대</button>}<button className="btn" onClick={()=>setModal({kind:"profile",member:me})}>내 선수 정보 수정</button><button className="btn" onClick={()=>setModal({kind:"createTeam"})}>다른 팀 등록 신청</button><button className="btn" onClick={()=>setModal({kind:"findTeam"})}>다른 팀 가입</button></div>{team?.transferTo===me?.id&&<button className="btn btn-green" style={{marginTop:16}} disabled={busy} onClick={()=>run({type:"acceptCaptain",teamId:v.teamId,memberId:me.id})}>주장 인계 수락</button>}</section>
- <nav className="team-tiles" aria-label="팀 메뉴">{tiles.filter(x=>x.show!==false).map(x=><button key={x.id} type="button" className={"team-tile"+(myTab===x.id?" on":"")} onClick={x.go}><x.icon size={21}/><span>{x.label}</span>{!!x.badge&&<i className="red-dot">{x.badge}</i>}</button>)}</nav>
+ <nav className="team-tiles" aria-label="팀 메뉴">{tiles.filter(x=>x.show!==false).map(x=><button key={x.id} type="button" className={"team-tile"+(myTab===x.id?" on":"")} onClick={x.go}><x.icon size={21}/><span>{x.label}</span>{!!x.badge&&<i className="red-dot">{x.badge>99?"99+":x.badge}</i>}</button>)}</nav>
  {myTab==="home"&&<> <section className="panel"><div className="panel-title"><h2 className="row" style={{gap:6}}><MessageCircle size={18}/>채팅</h2></div><ChatRooms demo={demo} onOpen={(room:string)=>setModal({kind:"chat",room})}/></section>
  <section className="panel"><div className="panel-title"><h2>팀 공지</h2>{captain&&<button className="btn" onClick={()=>setModal({kind:"notice"})}><Plus/>공지 작성</button>}</div><NoticeList notices={v.notices??[]} birthdays={v.birthdaysToday??[]} onOpen={(n:Row)=>setModal({kind:"noticeDetail",notice:n})}/></section><MyHub {...p}/></>}
  {myTab==="chat"&&<>{back} <section className="panel"><div className="panel-title"><h2 className="row" style={{gap:6}}><MessageCircle size={18}/>채팅</h2></div><ChatRooms demo={demo} onOpen={(room:string)=>setModal({kind:"chat",room})}/></section>
@@ -714,6 +751,15 @@ export function AppDialogs(p:any){
    <button type="button" className="text-link" style={{justifySelf:"start"}} onClick={()=>field("customTime",true)}>분까지 직접 입력</button>
   </div>;
  }
+ // 1.21 투표 마감은 날짜 + 시(정각)만 고른다(사장님 요청 — 분 설정은 빼기). 값은 "YYYY-MM-DDTHH:00".
+ function deadlineField(key:string,required=true){
+  const cur=String(form[key]??""),date=cur.slice(0,10),hour=cur.length>=13?Number(cur.slice(11,13)):"";
+  const set=(d:string,h:number|string)=>field(key,d&&h!==""?d+"T"+String(h).padStart(2,"0")+":00":d?d+"T"+String(hour===""?20:hour).padStart(2,"0")+":00":"");
+  return <div className="deadline-field"><span className="field-label">투표 마감</span><div className="two-col fields">
+   <label className="sr-label">날짜<input type="date" required={required} value={date} onChange={e=>set(e.target.value,hour)}/></label>
+   <label className="sr-label">시<select value={hour===""?"":String(hour)} required={required} disabled={!date} onChange={e=>set(date,e.target.value)}><option value="">시간</option>{Array.from({length:24},(_,h)=><option key={h} value={h}>{(h<12?"오전 ":"오후 ")+((h%12)||12)+"시"}</option>)}</select></label>
+  </div></div>;
+ }
  function startChanged(value:string){
   setForm((f:Row)=>{
    const next:Row={...f,start:value};
@@ -827,7 +873,7 @@ export function AppDialogs(p:any){
  {modal?.kind==="createGame"&&<form className="form-grid" onSubmit={e=>{e.preventDefault();const intra=form.kind==="intra";save({...form,type:"createGame",teamId:v.teamId,start:fromInput(form.start),end:fromInput(form.end),deadline:form.deadline?fromInput(form.deadline):"",...(intra?{kind:"intra",squads:form.squads,listing:false,external:""}:{kind:undefined,squads:undefined})})}}>
  <div className="field-block"><span className="field-label">경기 종류</span><div className="chip-row" role="radiogroup" aria-label="경기 종류">{[{k:"match",t:"상대팀과 경기",d:"다른 팀·외부 팀"},{k:"intra",t:"자체전",d:"우리 팀끼리 나눠서"}].map(x=><button type="button" role="radio" aria-checked={(form.kind??"match")===x.k} key={x.k} className={"chip-option"+((form.kind??"match")===x.k?" on":"")} onClick={()=>{field("kind",x.k);if(x.k==="intra"){field("listing",false);field("external","")}}}><strong>{x.t}</strong><small>{x.d}</small></button>)}</div></div>
  {form.kind==="intra"&&<div className="field-block"><span className="field-label">몇 팀으로 나눌까요?</span><div className="chip-row" role="radiogroup" aria-label="팀 수">{[2,3,4].map(n=><button type="button" role="radio" aria-checked={form.squads===n} key={n} className={"chip-num"+(form.squads===n?" on":"")} onClick={()=>field("squads",n)}>{n}팀</button>)}</div><p className="data-note">{SQUAD_NAMES.slice(0,form.squads??2).join(" · ")}. 경기 상세의 <strong>팀 나누기</strong>에서 참여자를 자동으로 나눌 수 있어요. 자체전은 팀 전적(승률)에는 들어가지 않고 개인 기록에는 들어가요.</p></div>}
- {whenFields("경기 시작","경기 종료")}<VenuePicker v={v} field={field} ready={v.placeSearchReady!==false} demo={demo}/>{label("구장 이름","venue")}{label("구장 전체 주소","address")}{label("필요 인원","needed","number")}{label("투표 마감","deadline","datetime-local",false)}{whenNote(form.deadline,"",true)}<p className="data-note">비워두면 경기 시작 시각에 마감돼요. 경기 시작보다 늦게는 정할 수 없어요.</p><div className="two-col fields"><label>지역<Picker value={form.region} onChange={(x:string)=>field("region",x)} options={REGIONS}/></label>{label("전체 구장비 (원)","cost","number")}</div>{form.kind!=="intra"&&<>{label("상대팀 부담 구장비 (원)","opponentCost","number",false)}<p className="data-note">매칭 모집 글에 <strong>상대팀 구장비</strong>로 보여요. 없으면 0.</p></>}<label className="row"><Checkbox checked={form.secured} onCheckedChange={x=>field("secured",x===true)}/>구장을 확보했어요</label>{form.kind!=="intra"&&captain&&<label className="row"><Checkbox checked={form.listing} onCheckedChange={x=>{field("listing",x===true);if(x)field("external","")}}/>상대팀을 모집할게요</label>}{form.kind!=="intra"&&!form.listing&&label("외부 상대팀 이름 (없으면 미정)","external","text",false)}{/* 1.19: 상대팀을 모집하는 경기는 팀 안내 칸을 뺀다(나중에 경기 상세에서 쓸 수 있다) */}{!form.listing&&<label>팀 안내<textarea value={form.note??""} onChange={e=>field("note",e.target.value)}/></label>}{submit("경기 등록하기")}</form>}
+ {whenFields("경기 시작","경기 종료")}<VenuePicker v={v} field={field} ready={v.placeSearchReady!==false} demo={demo}/>{label("구장 이름","venue")}{label("구장 전체 주소","address")}{label("필요 인원","needed","number")}{deadlineField("deadline",false)}{whenNote(form.deadline,"",true)}<p className="data-note">비워두면 경기 시작 시각에 마감돼요. 경기 시작보다 늦게는 정할 수 없어요.</p><div className="two-col fields"><label>지역<Picker value={form.region} onChange={(x:string)=>field("region",x)} options={REGIONS}/></label>{label("전체 구장비 (원)","cost","number")}</div>{form.kind!=="intra"&&<>{label("상대팀 부담 구장비 (원)","opponentCost","number",false)}<p className="data-note">매칭 모집 글에 <strong>상대팀 구장비</strong>로 보여요. 없으면 0.</p></>}<label className="row"><Checkbox checked={form.secured} onCheckedChange={x=>field("secured",x===true)}/>구장을 확보했어요</label>{form.kind!=="intra"&&captain&&<label className="row"><Checkbox checked={form.listing} onCheckedChange={x=>{field("listing",x===true);if(x)field("external","")}}/>상대팀을 모집할게요</label>}{form.kind!=="intra"&&!form.listing&&label("외부 상대팀 이름 (없으면 미정)","external","text",false)}{/* 1.19: 상대팀을 모집하는 경기는 팀 안내 칸을 뺀다(나중에 경기 상세에서 쓸 수 있다) */}{!form.listing&&<label>팀 안내<textarea value={form.note??""} onChange={e=>field("note",e.target.value)}/></label>}{submit("경기 등록하기")}</form>}
  {modal?.kind==="editTeam"&&!demo&&<div style={{marginBottom:18}}><ImageField title="팀 로고" ready={v.storageReady!==false} current={team?.logo} kind="teamLogo" teamId={v.teamId} disabled={busy} onSaved={(key:string)=>action({type:"setTeamLogo",teamId:v.teamId,key})}/></div>}
  {(modal?.kind==="createTeam"||modal?.kind==="editTeam")&&<form className="form-grid" onSubmit={e=>{e.preventDefault();save({...form,type:modal.kind,teamId:v.teamId})}}>{label("팀 이름","name")}<label>활동 지역<Picker value={form.region} onChange={(x:string)=>field("region",x)} options={REGIONS}/></label><label>팀 실력<Picker value={levelOf(form.level)} onChange={(x:string)=>field("level",x)} options={LEVELS}/></label><label>주로 뛰는 때<Picker value={DAYS.includes(form.days)?form.days:"상관없음"} onChange={(x:string)=>field("days",x)} options={DAYS}/></label><p className="data-note">상대팀을 찾을 때 보여요. 정해두지 않았으면 <strong>상관없음</strong> 을 고르세요.</p><label>팀 소개<textarea value={form.description??""} onChange={e=>field("description",e.target.value)}/></label>{modal.kind==="editTeam"&&<>
   <div className="two-col fields"><label>월 회비 (원, 선택)<input type="number" inputMode="numeric" min={0} value={form.fee??""} onChange={e=>field("fee",e.target.value)}/></label><label>창단 연도 (선택)<input inputMode="numeric" maxLength={4} placeholder="예: 2019" value={form.founded??""} onChange={e=>field("founded",e.target.value.replace(/\D/g,"").slice(0,4))}/></label></div>
@@ -916,7 +962,7 @@ export function AppDialogs(p:any){
  {modal?.kind==="records"&&<form className="form-grid" onSubmit={e=>{e.preventDefault();save({type:"records",teamId:v.teamId,gameId:modal.gameId,...form})}}><p className="small muted">출석이 확정된 선수의 골·어시스트를 입력하세요.</p><Table className="roster-table"><TableHeader><TableRow><TableHead>선수</TableHead><TableHead>골</TableHead><TableHead>어시스트</TableHead></TableRow></TableHeader><TableBody>{Object.entries(form.values??{}).map(([mid,rec]:any)=><TableRow key={mid}><TableCell>{v.sides.find((s:Row)=>s.gameId===modal.gameId)?.roster?.find((m:Row)=>m.id===mid)?.name}</TableCell>{["goals","assists"].map(k=><TableCell key={k}><Stepper label={k==="goals"?"골":"도움"} value={rec[k]} onChange={x=>field("values",{...form.values,[mid]:{...rec,[k]:x}})}/></TableCell>)}</TableRow>)}</TableBody></Table><div className="two-col fields">{label("상대 자책골","ownGoals","number")}{label("득점자 미상","unknownGoals","number")}</div>{submit("개인 기록 확정")}</form>}
  {modal?.kind==="result"&&<form className="form-grid" onSubmit={e=>{e.preventDefault();save({type:"result",teamId:v.teamId,gameId:modal.gameId,...form})}}><div className="two-col fields">{label("우리 팀 득점","own","number")}{label("상대팀 득점","opponent","number")}</div><p className="data-note">앱 내 매칭 경기는 상대 주장 확인 후 확정됩니다. 외부팀 경기는 우리 팀 자체 기록으로 확정됩니다.</p>{submit("결과 제출")}</form>}
  {modal?.kind==="changeGame"&&<form className="form-grid" onSubmit={e=>{e.preventDefault();save({type:"changeGame",teamId:v.teamId,gameId:modal.gameId,...form,start:fromInput(form.start),end:fromInput(form.end)},()=>{if(form.away)toast.info("변경 제안을 보냈어요. 상대팀 주장이 수락하면 일정이 바뀌어요.");setModal(null)})}}>{whenFields("변경 시작","변경 종료")}<VenuePicker v={v} field={field} ready={v.placeSearchReady!==false} demo={demo}/>{label("구장 이름","venue")}{label("구장 주소","address")}{!form.away&&form.listing!=="open"&&label("외부 상대팀 이름","external","text",false)}{label("전체 구장비","cost","number")}{!isIntra(form)&&label("상대팀 부담 구장비","opponentCost","number",false)}<p className="data-note">상대팀이 확정되었다면 상대 주장의 동의가 필요합니다. 변경 후 참여 여부를 다시 확인합니다.</p>{submit("일정 변경 제출")}</form>}
- {modal?.kind==="sideSettings"&&<form className="form-grid" onSubmit={e=>{e.preventDefault();save({type:"sideSettings",teamId:v.teamId,gameId:modal.gameId,note:form.note,meeting:form.meeting,needed:form.needed,...(form.deadline?{deadline:fromInput(form.deadline)}:{})})}}>{label("집합 시간·안내","meeting","text",false)}{label("필요 인원","needed","number")}{label("투표 마감","deadline","datetime-local")}{whenNote(form.deadline,"",true)}<p className="data-note">지금 이후, 경기 시작 시각까지로 정할 수 있어요.</p><label>우리 팀 안내<textarea value={form.note??""} onChange={e=>field("note",e.target.value)}/></label>{submit()}</form>}
+ {modal?.kind==="sideSettings"&&<form className="form-grid" onSubmit={e=>{e.preventDefault();save({type:"sideSettings",teamId:v.teamId,gameId:modal.gameId,note:form.note,meeting:form.meeting,needed:form.needed,...(form.deadline?{deadline:fromInput(form.deadline)}:{})})}}>{label("집합 시간·안내","meeting","text",false)}{label("필요 인원","needed","number")}{deadlineField("deadline")}{whenNote(form.deadline,"",true)}<p className="data-note">지금 이후, 경기 시작 시각까지로 정할 수 있어요.</p><label>우리 팀 안내<textarea value={form.note??""} onChange={e=>field("note",e.target.value)}/></label>{submit()}</form>}
  {modal?.kind==="notice"&&<form className="form-grid" onSubmit={e=>{e.preventDefault();save({type:"createNotice",teamId:v.teamId,...form})}}>{label("공지 제목","title")}<label>내용<textarea required value={form.body??""} onChange={e=>field("body",e.target.value)}/></label><label className="row"><Checkbox checked={form.pinned??false} onCheckedChange={x=>field("pinned",x===true)}/>상단에 고정하기</label><p className="data-note">올리면 팀원 모두의 알림함에 쌓이고, <strong>기기 알림을 켜 둔 팀원에게는 잠금화면 알림도 바로 갑니다.</strong> 따로 보내는 단추는 없어요.</p>{submit("공지 등록")}</form>}
  {modal?.kind==="noticeDetail"&&<><p style={{whiteSpace:"pre-wrap",lineHeight:1.85}}>{modal.notice.body}</p><p className="data-note">{localDay(modal.notice.at)}</p>{modal.notice.kind==="transfer"&&modal.notice.memberId&&<button className="btn btn-green" onClick={()=>setModal({kind:"shareTransfer",memberId:modal.notice.memberId})}><ImageIcon size={16}/>영입 카드 만들기</button>}
  {captain&&<div className="action-strip">

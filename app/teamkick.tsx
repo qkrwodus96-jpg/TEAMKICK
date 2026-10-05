@@ -124,6 +124,18 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
   document.addEventListener("visibilitychange",vis);window.addEventListener("focus",vis);
   return()=>{live=false;clearInterval(timer);document.removeEventListener("visibilitychange",vis);window.removeEventListener("focus",vis)};
  },[loggedIn,demo]);
+ // 1.21 안 읽은 채팅 수(사장님 요청 — "채팅 온지 모를 수도"). 채팅은 저장 번호(rev)와 따로 저장돼서
+ // 화면이 열려 있는 동안 20초마다, 그리고 화면으로 돌아오거나 채팅 창을 닫을 때 방 목록을 다시 센다.
+ const [chatUnread,setChatUnread]=useState(0);
+ const chatOpen=modal?.kind==="chat";
+ useEffect(()=>{if(!loggedIn||demo)return;let live=true,running=false;
+  const count=async()=>{if(running||document.visibilityState!=="visible")return;running=true;
+   try{const r=await fetch("/api/chat",{cache:"no-store"});if(!r.ok)return;const {rooms}=await r.json() as {rooms:{unread?:number}[]};
+    if(live)setChatUnread((rooms??[]).reduce((a,x)=>a+Number(x.unread??0),0));}catch{}finally{running=false}};
+  count();const timer=setInterval(count,20000);const vis=()=>{if(document.visibilityState==="visible")count()};
+  document.addEventListener("visibilitychange",vis);window.addEventListener("focus",vis);
+  return()=>{live=false;clearInterval(timer);document.removeEventListener("visibilitychange",vis);window.removeEventListener("focus",vis)};
+ },[loggedIn,demo,chatOpen]);
  // 잠금화면 알림을 누르고 들어오면 주소에 갈 화면이 실려 있다(`?to=`). 서비스 워커는
  // 이미 열려 있는 창에는 메시지로 알려 준다. 둘 다 받아 탭을 옮긴다.
  const VIEWS=["home","schedule","matching","records","team","admin"];
@@ -201,7 +213,7 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  const monthStats=summaries({...v,games:v.games??[],members:v.members??[],sides:v.sides??[]},isoDay(today.slice(0,7)+"-01"),new Date(Date.UTC(Number(today.slice(0,4)),Number(today.slice(5,7)),1)-9*3600e3).toISOString());
  const teamPicker=<Picker value={v.teamId||"none"} onChange={switchTeam} options={(demo?v.teams.filter((t:Row)=>["team-a","team-b"].includes(t.id)):v.teams.filter((t:Row)=>v.mine?.some((m:Row)=>m.teamId===t.id&&m.status==="active"))).map((t:Row)=>({value:t.id,label:t.name})).concat(v.teamId?[]:[{value:"none",label:"소속 팀 없음"}])}/>;
  const [jumpTab,setJumpTab]=useState("");
- const common={v,team,demo,busy,action,run,setModal,setView,toActual,manager,captain,setJumpTab};
+ const common={v,team,demo,busy,action,run,setModal,setView,toActual,manager,captain,setJumpTab,chatUnread};
  const goDate=(day:string)=>{setSelected(day);setMonth(day.slice(0,7));setDateFilter(true);setView("schedule")};
  // 빨간 점만으로는 몇 건인지, 무슨 일인지 알 수 없었다. 개수와 가장 최근 소식을 함께 보여준다.
  const unreadList=(v.notifications??[]).filter((n:Row)=>!n.read);
@@ -246,7 +258,7 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  {(view==="team"||view==="admin")&&<Management {...common} admin={view==="admin"}/>}
  </>}
  <footer className="footer-note"><span>TEAMKICK · 함께 뛰고, 함께 기록하다.</span><span>우리 팀의 모든 경기</span></footer>
- </main><nav className="bottom-nav">{nav.map(n=><button key={n.id} className={(view===n.id?"active":"")+" dot-host"} onClick={()=>setView(n.id)}><n.icon/>{n.label}{n.id==="matching"&&inbox>0&&<i className="red-dot nav-dot">{inbox}</i>}</button>)}</nav></div>
+ </main><nav className="bottom-nav">{nav.map(n=><button key={n.id} className={(view===n.id?"active":"")+" dot-host"} onClick={()=>setView(n.id)}><n.icon/>{n.label}{n.id==="matching"&&inbox>0&&<i className="red-dot nav-dot">{inbox}</i>}{n.id==="team"&&chatUnread>0&&<i className="red-dot nav-dot" aria-label={"안 읽은 채팅 "+chatUnread+"개"}>{chatUnread>99?"99+":chatUnread}</i>}</button>)}</nav></div>
  <AppDialogs {...common} modal={modal} real={real} setDemo={setDemo} samples={samples} refresh={refresh}/>
  <WelcomeGuide ready={!demo&&!!real?.user} hasTeam={!!team} onCreateTeam={()=>setModal({kind:"createTeam"})} onFindTeam={()=>setModal({kind:"findTeam"})}/>
  <Toaster position="top-center" richColors/>

@@ -3,7 +3,7 @@
 // 표: 선수 칸을 왼쪽에 고정하고 숫자는 오른쪽 정렬·같은 폭 숫자. 머리글을 누르면 그 기준으로 정렬하고,
 // 정렬 중인 칸만 진하게 보여 어느 숫자로 줄 세웠는지 바로 보인다.
 // 상세: 위에 큰 숫자 6칸, 아래 경기별 기록에 승/무/패 표시. 3경기가 넘으면 더보기.
-import {useState} from "react";
+import {useState,type ReactNode} from "react";
 import {ChevronDown} from "lucide-react";
 import {isIntra,type Row} from "@/lib/model";
 import {dayText} from "@/lib/when";
@@ -16,21 +16,25 @@ export const RANK_COLS:{key:string;label:string;short:string}[]=[
 const val=(p:Row,k:string)=>k==="rate"?(p.rate??-1):Number(p[k]??0);
 
 export function RecordsTable({players,rank,setRank,onOpen}:{players:Row[];rank:string;setRank:(k:string)=>void;onOpen:(p:Row)=>void}){
- // 1.20: 순위 숫자 칸을 빼고(사장님 요청), 옆으로 넘기지 않아도 출석~출석률이 한 화면에 들어오게 좁혔다.
+ // 1.20: 옆으로 넘기지 않아도 출석~출석률이 한 화면에 들어오게 좁혔다.
+ // 1.21: 순위 숫자를 다시 보인다(사장님 요청). 1·2·3등은 금·은·동 동그라미, 같은 값이면 같은 등수.
  const list=[...players].sort((a,b)=>val(b,rank)-val(a,rank)||b.points-a.points||String(a.name).localeCompare(String(b.name)));
  if(!list.length)return null;
  const top=val(list[0],rank);
+ const place=(i:number)=>{let k=i;while(k>0&&val(list[k-1],rank)===val(list[i],rank))k--;return k+1};
  return <table className="rt" aria-label="우리 팀 선수 기록">
-  <colgroup><col className="rt-c-name"/>{RANK_COLS.map(c=><col key={c.key}/>)}</colgroup>
+  <colgroup><col className="rt-c-no"/><col className="rt-c-name"/>{RANK_COLS.map(c=><col key={c.key}/>)}</colgroup>
   <thead><tr>
+   <th className="rt-no" scope="col"><span className="sr-only">순위</span></th>
    <th className="rt-player" scope="col">선수</th>
    {RANK_COLS.map(c=><th key={c.key} scope="col" className={rank===c.key?"on":""} aria-sort={rank===c.key?"descending":"none"}>
     <button type="button" onClick={()=>setRank(c.key)} title={c.label+" 순으로 보기"}>{c.short}</button></th>)}
   </tr></thead>
-  <tbody>{list.map(p=><tr key={p.id} onClick={()=>onOpen(p)} className={top>0&&val(p,rank)===top?"lead":""}>
+  <tbody>{list.map((p,i)=>{const n=place(i),medal=val(p,rank)>0&&n<=3?" m"+n:"";return <tr key={p.id} onClick={()=>onOpen(p)} className={top>0&&val(p,rank)===top?"lead":""}>
+   <td className={"rt-no"+medal}><span>{n}</span></td>
    <th className="rt-player" scope="row"><span className="rt-name"><b>{p.name}</b><small>{[backNo(p.number),p.position].filter(Boolean).join(" ")}{p.status!=="active"?" 과거":""}</small></span></th>
    {RANK_COLS.map(c=><td key={c.key} className={rank===c.key?"on":""}>{c.key==="attend"?<>{p.attend}<small>/{p.eligible}</small></>:c.key==="rate"?(p.rate==null?"–":p.rate+"%"):p[c.key]??0}</td>)}
-  </tr>)}</tbody>
+  </tr>})}</tbody>
  </table>;
 }
 
@@ -56,6 +60,15 @@ export function PlayerSheet({v,player}:{v:Row;player:Row}){
    <PlayerPhoto name={player.name} photo={player.photo}/>
    <div className="ps-id"><h2>{player.name}</h2><div className="ps-tags">{backNo(player.number)&&<span className="ps-no">{backNo(player.number)}</span>}{player.position&&<span>{player.position}</span>}{player.status!=="active"&&<span>과거 선수</span>}</div></div>
   </div>
+  {(()=>{
+   // 1.21 선수 프로필(사장님 요청 — 기록에서 선수를 누르면 프로필도). 같은 팀 팀원에게 보이는 항목만(서버가 걸러 보냄).
+   const pr=((v.members as Row[]).find(m=>m.id===player.id)?.profile??null) as Row|null;
+   if(!pr)return null;
+   const items:[string,ReactNode][]=[["포지션",[pr.main,pr.sub].filter(Boolean).join(" · ")],["주발",pr.foot],["활동 지역",(pr.regions??[]).join(", ")],["생일",pr.birthday],
+    ["인스타그램",pr.instagram?<a href={"https://instagram.com/"+encodeURIComponent(pr.instagram)} target="_blank" rel="noopener noreferrer">@{pr.instagram}</a>:""]];
+   const shown=items.filter(([,x])=>x);
+   return shown.length?<dl className="ps-prof">{shown.map(([k,x])=><div key={k}><dt>{k}</dt><dd>{x}</dd></div>)}</dl>:<p className="small muted">프로필을 아직 적지 않았어요.</p>;
+  })()}
   <div className="ps-kpi">{kpi.map(([k,x])=><div key={String(k)}><b>{x}</b><span>{k}</span></div>)}</div>
   <p className="data-note">위 숫자는 기록 탭에서 고른 기간 기준이에요.</p>
   <div className="ps-log-head"><strong>경기별 기록</strong>{form.length>0&&<span className="ps-wdl"><i className="w">{wdl.w}승</i><i className="d">{wdl.d}무</i><i className="l">{wdl.l}패</i><small>뛴 경기</small></span>}</div>

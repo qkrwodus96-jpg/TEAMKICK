@@ -26,6 +26,11 @@ export function Dues({v,team,staff,busy,run}:{v:Row;team:Row;staff:boolean;busy:
  const pct=members.length?Math.round(count/members.length*100):0;
  const toggle=(m:Row)=>run({type:"markDues",teamId:v.teamId,month,memberId:m.id,paid:!paid[m.id]});
  const reported:Record<string,string>=team?.duesReported?.[month]??{};
+ const reminded:Record<string,string>=team?.duesReminded?.[month]??{};
+ const unpaid=members.filter(m=>m.userId&&!paid[m.id]);
+ const remind=(m?:Row)=>run({type:"remindDues",teamId:v.teamId,month,...(m?{memberId:m.id}:{})});
+ const [now]=useState(()=>Date.now());
+ const recent=(m:Row)=>!!reminded[m.id]&&now-Date.parse(reminded[m.id])<20*3600e3;
  const d=team?.dues??{};const hasAcct=!!(d.accountNo||d.tossId||d.kakaoLink);
  function copy(){const t=[d.bank,d.accountNo,d.holder].filter(Boolean).join(" ");navigator.clipboard.writeText(t).then(()=>toast.success("계좌번호를 복사했어요. 은행 앱에 붙여 넣으세요.")).catch(()=>toast.error("복사하지 못했어요. 길게 눌러 직접 복사해 주세요."))}
  return <div className="dues">
@@ -57,9 +62,12 @@ export function Dues({v,team,staff,busy,run}:{v:Row;team:Row;staff:boolean;busy:
    {d.accountNo&&<div className="dues-acct"><span><b>{d.bank||"계좌"}</b> {d.accountNo}{d.holder&&<small> 예금주 {d.holder}</small>}</span><button type="button" className="btn" onClick={copy}><Copy size={15}/>복사</button></div>}
    {(d.tossId||d.kakaoLink)&&<div className="btn-pair">{d.tossId&&<a className="btn" href={"https://toss.me/"+encodeURIComponent(d.tossId)+(fee?"/"+fee:"")} target="_blank" rel="noopener noreferrer"><Send size={15}/>토스로 보내기</a>}{d.kakaoLink&&<a className="btn" href={d.kakaoLink} target="_blank" rel="noopener noreferrer"><Send size={15}/>카카오페이로 보내기</a>}</div>}
   </div>}
+  {staff&&unpaid.length>0&&<div className="dues-remind-all"><span>미납 {unpaid.length}명</span><button type="button" className="btn" disabled={busy||unpaid.every(recent)} onClick={()=>remind()}><BellRing size={15}/>미납자 모두에게 알림</button></div>}
+  {staff&&unpaid.length>0&&<p className="data-note">알림에는 팀 계좌·금액과 “자동이체를 설정하거나 이번 달 회비를 입금해 주세요” 안내가 같이 가요. 같은 사람에게는 하루 한 번만.</p>}
   {staff?<ul className="dues-list">{members.map(m=><li key={m.id}>
     <span className="dues-name"><b>{m.name}</b><small>{[backNo(m.number),m.position].filter(Boolean).join(" ")}{reported[m.id]&&!paid[m.id]&&<em className="dues-flag">냈다고 알림</em>}</small></span>
-    <button type="button" className={"dues-check"+(paid[m.id]?" on":"")} disabled={busy} aria-pressed={!!paid[m.id]} onClick={()=>toggle(m)}>{paid[m.id]?<><Check size={15}/>납부</>:"미납"}</button>
+    <span className="dues-act">{!paid[m.id]&&m.userId&&<button type="button" className="dues-remind" disabled={busy||recent(m)} onClick={()=>remind(m)} aria-label={m.name+"님에게 회비 알림"} title={recent(m)?"오늘 알렸어요":"회비 알림 보내기"}><BellRing size={14}/>{recent(m)?"보냄":"알림"}</button>}
+    <button type="button" className={"dues-check"+(paid[m.id]?" on":"")} disabled={busy} aria-pressed={!!paid[m.id]} onClick={()=>toggle(m)}>{paid[m.id]?<><Check size={15}/>납부</>:"미납"}</button></span>
    </li>)}</ul>
   :<div className={"dues-mine"+(me&&paid[me.id]?" on":"")}><Wallet size={18}/><span>{me&&paid[me.id]?"이 달 회비 납부가 확인됐어요.":me&&reported[me.id]?"냈다고 알렸어요. 운영진이 확인하면 납부로 바뀌어요.":"아직 납부 기록이 없어요."}</span>
    {me&&!paid[me.id]&&<button type="button" className="btn btn-dark" disabled={busy} onClick={()=>run({type:"reportDues",teamId:v.teamId,month})}><BellRing size={15}/>{reported[me.id]?"다시 알리기":"냈어요 알리기"}</button>}</div>}

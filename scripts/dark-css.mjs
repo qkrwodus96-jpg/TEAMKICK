@@ -73,7 +73,7 @@ function walk(css){
 }
 
 // shadcn 변수(:root)는 손으로 정한 값을 쓴다. 자동 변환보다 이 값들이 화면 전체 바탕이라 따로 맞춘다.
-const BASE=`${P}{color-scheme:dark;--background:#000000;--foreground:#ececee;--card:#121214;--card-foreground:#ececee;--popover:#1a1a1d;--popover-foreground:#ececee;--primary:#1f9d62;--primary-foreground:#fff;--secondary:#1f1f22;--secondary-foreground:#d4d4d8;--muted:#1c1c1f;--muted-foreground:#9a9aa2;--accent:#1f1f22;--accent-foreground:#7fd6a7;--destructive:#e0685f;--border:#2a2a2e;--input:#2e2e33;--ring:#2fb574;--sidebar:#0b0b0d;--sidebar-foreground:#c4c4ca;--sidebar-primary:#2fb574;--sidebar-primary-foreground:#fff;--sidebar-accent:#1f1f22;--sidebar-accent-foreground:#7fd6a7;--sidebar-border:#222226;--sidebar-ring:#2fb574}
+const BASE=`${P}{color-scheme:dark;--background:#0b0b0d;--foreground:#ececee;--card:#18181b;--card-foreground:#ececee;--popover:#1f1f23;--popover-foreground:#ececee;--primary:#1f9d62;--primary-foreground:#fff;--secondary:#25252a;--secondary-foreground:#d4d4d8;--muted:#222227;--muted-foreground:#9a9aa2;--accent:#25252a;--accent-foreground:#7fd6a7;--destructive:#e0685f;--border:#313137;--input:#36363c;--ring:#2fb574;--sidebar:#111114;--sidebar-foreground:#c4c4ca;--sidebar-primary:#2fb574;--sidebar-primary-foreground:#fff;--sidebar-accent:#25252a;--sidebar-accent-foreground:#7fd6a7;--sidebar-border:#2a2a30;--sidebar-ring:#2fb574}
 ${P} body{background:var(--background);color:var(--foreground)}
 ${P} .bg-white{background:var(--card)!important}
 ${P} img{opacity:.96}
@@ -81,9 +81,9 @@ ${P} img{opacity:.96}
 // 자동 변환 뒤에 덧붙이는 손질(자동 규칙이 맞지 않는 곳).
 const TAIL=`${P}{--band:#08080a}
 ${P} .switch::after{background:#ececee}
-${P} .seg{background:#1c1c1f}
-${P} .seg button.on{background:#2a2a2e;color:#7fd6a7}
-${P} .next-match{background:#141416;background-image:radial-gradient(ellipse at 95% 0%,#1f9d6233,transparent 60%);border:1px solid #26262a}
+${P} .seg{background:#232328}
+${P} .seg button.on{background:#34343a;color:#7fd6a7}
+${P} .next-match{background:#1b1b1f;background-image:radial-gradient(ellipse at 95% 0%,#1f9d6233,transparent 60%);border:1px solid #303036}
 ${P} .bottom-nav{background:#0b0b0dfa}
 ${P} .match-arrow{background:#000000cc;border-color:#ffffff22}
 `;

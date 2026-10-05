@@ -66,5 +66,17 @@ const DICT=`다른 팀원이 공지를 올리거나 경기를 만들 때 옵니�
 우리 팀 선수 기록	Our player stats	チーム選手記録	本队球员记录	Thống kê cầu thủ đội
 머리글을 누르면 그 순서로	Tap a header to sort	見出しを押すとその順に	点击表头排序	Chạm tiêu đề để sắp xếp
 노쇼 방지 보증금	No-show deposit	ノーショー防止保証金	防爽约押金	Tiền cọc chống bỏ trận
+쿼터 자동 분배	Auto-split quarters	クォーター自動配分	自动分配节次	Tự chia hiệp
+시간순	By time	時間順	按时间	Theo giờ
+구장별	By venue	グラウンド別	按场地	Theo sân
+랭킹에서 내 프로필도 보여주기	Show my profile in rankings	ランキングでプロフィールも表示	在排行榜中显示我的资料	Hiện hồ sơ của tôi trên bảng xếp hạng
+냈어요 알리기	Tell them I paid	支払いを知らせる	告知已缴费	Báo đã đóng
+토스로 보내기	Send via Toss	Tossで送金	用Toss转账	Gửi qua Toss
+카카오페이로 보내기	Send via KakaoPay	KakaoPayで送金	用KakaoPay转账	Gửi qua KakaoPay
+경기 때 날씨	Weather at kickoff	試合時の天気	比赛时天气	Thời tiết lúc đá
+상대 전적	Head-to-head	対戦成績	交锋记录	Thành tích đối đầu
+배경 지우기	Remove background	背景を消す	去除背景	Xóa nền
+원본 그대로	Original	元のまま	保持原图	Giữ nguyên
+안 넣기	Leave out	入れない	不放入	Không thêm
 `;
 export default DICT;

@@ -3,10 +3,10 @@
 // 자리를 누르고 이름 한두 글자만 치면("재연") 우리 팀 선수·확정 용병이 추려지고, 고르면 유니폼에 등번호와 이름이 들어간다.
 // 운영진이 고치고 저장하면 팀원은 같은 그림을 본다. 아래에는 선수별 출전 쿼터 수(최소 출전 보장 확인용)를 보여준다.
 import {useMemo,useState} from "react";
-import {Copy,Eraser,Search,X} from "lucide-react";
+import {Copy,Eraser,Search,X,Shuffle} from "lucide-react";
 import {toast} from "sonner";
-import {FORMATIONS,FORMATION_NAMES,slotGroup} from "@/lib/formations";
-import type {Row} from "@/lib/model";
+import {FORMATIONS,FORMATION_NAMES,slotGroup,splitQuarters} from "@/lib/formations";
+import {positionGroup,type Row} from "@/lib/model";
 
 type Who={memberId?:string;guestId?:string;name:string;number?:number|null};
 type Q={formation:string;slots:Record<string,Who>};
@@ -65,11 +65,31 @@ export function Lineup({g,side,v,canEdit,busy,run,demo}:{g:Row;side:Row;v:Row;ca
   for(const k of next)if(!slots[k]&&left.length)slots[k]=left.shift()!;
   put({formation:f,slots});
  }
+ const payload=(q:Q)=>{const slots:Record<string,Record<string,unknown>>={};for(const [k,w] of Object.entries(q.slots))slots[k]=w.memberId?{memberId:w.memberId}:w.guestId?{guestId:w.guestId}:{name:w.name,number:w.number??""};return slots};
  async function save(){
   if(demo){toast("샘플에서는 저장되지 않아요.");return}
-  const slots:Record<string,Record<string,unknown>>={};for(const [k,w] of Object.entries(cur.slots))slots[k]=w.memberId?{memberId:w.memberId}:w.guestId?{guestId:w.guestId}:{name:w.name,number:w.number??""};
-  await run({type:"setLineup",teamId:v.teamId,gameId:g.id,quarter:qi+1,formation:cur.formation,slots});
+  await run({type:"setLineup",teamId:v.teamId,gameId:g.id,quarter:qi+1,formation:cur.formation,slots:payload(cur)});
   setDraft(d=>{const n={...d};delete n[qi];return n});toast.success((qi+1)+"쿼터 라인업을 저장했어요.");
+ }
+ // 1.20 고친 쿼터를 한 번에 저장(자동 분배 뒤). 하나라도 실패하면 거기서 멈추고 남은 쿼터는 고치는 중으로 둔다.
+ async function saveAll(){
+  if(demo){toast("샘플에서는 저장되지 않아요.");return}
+  const keys=Object.keys(draft).map(Number).sort((a,b)=>a-b);let ok=0;
+  for(const i of keys){try{await run({type:"setLineup",teamId:v.teamId,gameId:g.id,quarter:i+1,formation:draft[i].formation,slots:payload(draft[i])})}catch{break}
+   ok++;setDraft(d=>{const n={...d};delete n[i];return n})}
+  if(ok===keys.length)toast.success(ok+"개 쿼터 라인업을 저장했어요.");
+ }
+ // 1.20 쿼터 자동 분배: 참여(yes)한 팀원 + 확정 용병을 쿼터마다 고르게 나누고, 포지션대로 자리에 넣는다.
+ function autoSplit(){
+  const going=people.filter(p=>p.tag==="참여"||p.tag==="용병");
+  if(!going.length){toast("아직 참여한 사람이 없어요. 참여 투표가 모이면 다시 눌러 주세요.");return}
+  const list=going.map(p=>({...p,id:idOf(p),position:String(p.pos??"MF"),group:positionGroup(p.pos)}));
+  const plan=splitQuarters(cur.formation,list,quarters);
+  const next:Record<number,Q>={};plan.forEach((q,i)=>{const slots:Record<string,Who>={};for(const [k,p] of Object.entries(q))slots[k]={memberId:p.memberId,guestId:p.guestId,name:p.name,number:p.number??null};next[i]={formation:cur.formation,slots}});
+  setDraft(next);setPick(null);
+  const n=new Map<string,number>();for(const q of plan)for(const p of Object.values(q))n.set(p.id,(n.get(p.id)??0)+1);
+  const vals=[...n.values()],lo=Math.min(...vals,quarters),hi=Math.max(...vals,0);
+  toast.success("참여 "+going.length+"명을 "+quarters+"쿼터에 나눴어요 · 한 사람당 "+(lo===hi?lo:lo+"~"+hi)+"쿼터. 확인하고 ‘전체 저장’을 눌러 주세요.");
  }
  function copyPrev(){const prev=draft[qi-1]??saved[qi-1];if(!prev){toast("앞 쿼터 라인업이 없어요.");return}put({formation:prev.formation,slots:{...prev.slots}})}
  // 선수별 출전 쿼터(저장된 것 + 고치는 중인 것)
@@ -96,6 +116,9 @@ export function Lineup({g,side,v,canEdit,busy,run,demo}:{g:Row;side:Row;v:Row;ca
   {canEdit&&<div className="lu-actions"><span className="small muted">{filled}/{slots.length}명 · {dirty?"저장 안 됨":saved[qi]?"저장됨":"아직 없음"}</span>
    <button type="button" className="btn" onClick={copyPrev} disabled={qi===0}><Copy size={15}/>앞 쿼터 복사</button>
    <button type="button" className="btn btn-green" disabled={busy||!dirty} onClick={save}>{qi+1}Q 저장</button></div>}
+  {canEdit&&<div className="lu-auto"><button type="button" className="btn" disabled={busy} onClick={autoSplit}><Shuffle size={15}/>쿼터 자동 분배</button>
+   {Object.keys(draft).length>1&&<button type="button" className="btn btn-dark" disabled={busy} onClick={saveAll}>고친 {Object.keys(draft).length}개 쿼터 전체 저장</button>}
+   <small className="muted">참여한 사람이 같은 쿼터 수만큼 뛰도록 지금 포메이션({cur.formation})으로 나누고, 포지션대로 자리에 넣어요. 저장 전에는 팀원에게 안 보여요.</small></div>}
   {pick&&<div className="lu-sheet" role="dialog" aria-label={pick+" 자리에 넣을 선수"}>
    <div className="row between"><strong>{pick} 자리</strong><button type="button" className="icon-button" onClick={()=>setPick(null)} aria-label="닫기"><X size={18}/></button></div>
    <div className="search-input"><Search size={16} className="muted"/><input autoFocus value={term} onChange={e=>setTerm(e.target.value)} placeholder="이름 일부나 등번호 (예: 재연, 10)" style={{border:0}}

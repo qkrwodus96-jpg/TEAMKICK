@@ -16,26 +16,22 @@ export const RANK_COLS:{key:string;label:string;short:string}[]=[
 const val=(p:Row,k:string)=>k==="rate"?(p.rate??-1):Number(p[k]??0);
 
 export function RecordsTable({players,rank,setRank,onOpen}:{players:Row[];rank:string;setRank:(k:string)=>void;onOpen:(p:Row)=>void}){
+ // 1.20: 순위 숫자 칸을 빼고(사장님 요청), 옆으로 넘기지 않아도 출석~출석률이 한 화면에 들어오게 좁혔다.
  const list=[...players].sort((a,b)=>val(b,rank)-val(a,rank)||b.points-a.points||String(a.name).localeCompare(String(b.name)));
- // 같은 숫자면 같은 순위(1,1,3…)
- const place=(i:number)=>list.findIndex(x=>val(x,rank)===val(list[i],rank))+1;
  if(!list.length)return null;
- return <div className="rt-wrap" role="region" aria-label="우리 팀 선수 기록" tabIndex={0}>
-  <table className="rt">
-   <thead><tr>
-    <th className="rt-player" scope="col">선수</th>
-    {RANK_COLS.map(c=><th key={c.key} scope="col" className={rank===c.key?"on":""} aria-sort={rank===c.key?"descending":"none"}>
-     <button type="button" onClick={()=>setRank(c.key)} title={c.label+" 순으로 보기"}>{c.short}</button></th>)}
-   </tr></thead>
-   <tbody>{list.map((p,i)=>{const top=place(i);return <tr key={p.id} onClick={()=>onOpen(p)} className={top===1&&val(p,rank)>0?"lead":""}>
-    <th className="rt-player" scope="row">
-     <span className={"rt-rank"+(top<=3&&val(p,rank)>0?" r"+top:"")}>{top}</span>
-     <span className="rt-name"><b>{p.name}</b><small>{[backNo(p.number),p.position].filter(Boolean).join(" ")}{p.status!=="active"?" 과거 선수":""}</small></span>
-    </th>
-    {RANK_COLS.map(c=><td key={c.key} className={rank===c.key?"on":""}>{c.key==="attend"?<>{p.attend}<small>/{p.eligible}</small></>:c.key==="rate"?(p.rate==null?"–":p.rate+"%"):p[c.key]??0}</td>)}
-   </tr>})}</tbody>
-  </table>
- </div>;
+ const top=val(list[0],rank);
+ return <table className="rt" aria-label="우리 팀 선수 기록">
+  <colgroup><col className="rt-c-name"/>{RANK_COLS.map(c=><col key={c.key}/>)}</colgroup>
+  <thead><tr>
+   <th className="rt-player" scope="col">선수</th>
+   {RANK_COLS.map(c=><th key={c.key} scope="col" className={rank===c.key?"on":""} aria-sort={rank===c.key?"descending":"none"}>
+    <button type="button" onClick={()=>setRank(c.key)} title={c.label+" 순으로 보기"}>{c.short}</button></th>)}
+  </tr></thead>
+  <tbody>{list.map(p=><tr key={p.id} onClick={()=>onOpen(p)} className={top>0&&val(p,rank)===top?"lead":""}>
+   <th className="rt-player" scope="row"><span className="rt-name"><b>{p.name}</b><small>{[backNo(p.number),p.position].filter(Boolean).join(" ")}{p.status!=="active"?" 과거":""}</small></span></th>
+   {RANK_COLS.map(c=><td key={c.key} className={rank===c.key?"on":""}>{c.key==="attend"?<>{p.attend}<small>/{p.eligible}</small></>:c.key==="rate"?(p.rate==null?"–":p.rate+"%"):p[c.key]??0}</td>)}
+  </tr>)}</tbody>
+ </table>;
 }
 
 // 경기 하나의 결과: 우리 점수 기준 승/무/패. 자체전·결과 미확정은 따로.

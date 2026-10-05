@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 1.20 그대로 가져온 외부 라이브러리(MediaPipe, 압축본) — 우리 코드가 아니라 검사하지 않는다.
+    "public/vendor/**",
   ]),
   {
     files: ["components/ui/**/*.{ts,tsx}", "hooks/use-mobile.ts"],

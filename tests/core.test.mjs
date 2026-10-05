@@ -433,7 +433,10 @@ test('수기 득점은 출석·합계를 검증하고 정정 시 덮어쓰며 �
   const c={type:'records',teamId:a,gameId:g,values:{[m.id]:{goals:'2',assists:0}}};
   command(s,A,c);command(s,A,c);
   let stats=summaries(visibleState(s,A.id,a),'1970','2100');assert.equal(stats.players.find(x=>x.id===m.id).goals,2);assert.equal(stats.wins,1);
-  command(s,A,{type:'cancelGame',teamId:a,gameId:g,reason:'우천 취소 정정'});
+  // 1.20: 끝난 경기는 취소할 수 없다(기록 악용 방지). 취소된 경기가 기록에서 빠지는지는 상태를 직접 바꿔 확인한다.
+  assert.throws(()=>command(s,A,{type:'cancelGame',teamId:a,gameId:g,reason:'우천 취소 정정'}),/끝난 경기는 취소/);
+  assert.throws(()=>command(s,A,{type:'sideSettings',teamId:a,gameId:g,note:'x'}),/끝난 경기/);
+  s.games.find(x=>x.id===g).status='cancelled';
   stats=summaries(visibleState(s,A.id,a),'1970','2100');assert.equal(stats.played,0);assert.equal(stats.winRate,null);assert.equal(stats.players.find(x=>x.id===m.id).goals,0);
 });
 
@@ -3116,18 +3119,19 @@ test('전국 랭킹은 참여를 켠 사람만, 계정 번호 없이 이름·팀
   command(f.s,A,{type:'matchRecord',teamId:f.a,gameId:f.gameId,values:{[f.p1.id]:{goals:3,assists:0},[f.p2.id]:{goals:1,assists:2}},extra:[0,0]});
   // 픽스처 경기는 이틀 전이라 '올해' 기간으로 본다
   let view=visibleState(f.s,'stranger').national;
-  assert.equal(view.year.goals.length,0,'아무도 참여를 켜지 않으면 비어 있다');
+  assert.equal(view.year.attend.length,0,'아무도 참여를 켜지 않으면 비어 있다');
   command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:true});
   view=visibleState(f.s,'stranger').national;
-  assert.deepEqual(view.year.goals.map(r=>[r.name,r.value,r.rank]),[['선수1',3,1]],'켠 사람만');
-  assert.equal(view.year.goals[0].team,'팀 0');
+  assert.deepEqual(view.year.attend.map(r=>[r.name,r.value,r.rank]),[['선수1',1,1]],'켠 사람만');
+  assert.equal(view.year.goals.length,0,'1.20: 자체전 골은 전국 순위에 안 센다(우리 팀 기록에는 남음)');
+  assert.equal(view.year.attend[0].team,'팀 0');
   const text=JSON.stringify(visibleState(f.s,'stranger').national);
   for(const uid of ['p1','p2','p3',A.id])assert.ok(!text.includes('"'+uid+'"'),'계정 번호가 섞이지 않는다');
-  assert.equal(visibleState(f.s,'p1').national.year.goals[0].me,true,'내 줄은 표시');
+  assert.equal(visibleState(f.s,'p1').national.year.attend[0].me,true,'내 줄은 표시');
   assert.equal(visibleState(f.s,'p1').rankPublic,true);
   // 끄면 빠진다(기록은 그대로)
   command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:false});
-  assert.equal(visibleState(f.s,'stranger').national.year.goals.length,0);
+  assert.equal(visibleState(f.s,'stranger').national.year.attend.length,0);
   assert.equal(summaries(visibleState(f.s,A.id,f.a),'1970','2100').players.find(x=>x.id===f.p1.id).goals,3);
 });
 
@@ -3136,12 +3140,12 @@ test('전국 랭킹은 정지·해산된 팀의 기록과 탈퇴한 사람을 �
   command(f.s,A,{type:'squads',teamId:f.a,gameId:f.gameId,assign:{[f.p1.id]:0}});
   command(f.s,A,{type:'matchRecord',teamId:f.a,gameId:f.gameId,values:{[f.p1.id]:{goals:2,assists:0}},extra:[0,0]});
   command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:true});
-  assert.equal(nationalRanking(f.s,'x').year.goals.length,1);
+  assert.equal(nationalRanking(f.s,'x').year.attend.length,1);
   command(f.s,owner,{type:'suspendTeam',teamId:f.a,reason:'테스트'});
-  assert.equal(nationalRanking(f.s,'x').year.goals.length,0,'정지된 팀');
+  assert.equal(nationalRanking(f.s,'x').year.attend.length,0,'정지된 팀');
   command(f.s,owner,{type:'restoreTeam',teamId:f.a});
   command(f.s,{id:'p1',name:'선수1'},{type:'closeAccount'});
-  assert.equal(nationalRanking(f.s,'x').year.goals.length,0,'탈퇴한 사람');
+  assert.equal(nationalRanking(f.s,'x').year.attend.length,0,'탈퇴한 사람');
 });
 
 // --- 1.12.1: 내 지역 랭킹 · 일요일 경기 ---
@@ -3150,13 +3154,13 @@ test('내 지역 랭킹은 참여를 켠 사람이 그 지역 팀에서 남긴 �
   command(f.s,A,{type:'squads',teamId:f.a,gameId:f.gameId,assign:{[f.p1.id]:0}});
   command(f.s,A,{type:'matchRecord',teamId:f.a,gameId:f.gameId,values:{[f.p1.id]:{goals:2,assists:0}},extra:[0,0]});
   command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:true});
-  assert.equal(nationalRanking(f.s,'x',Date.now(),'서울').year.goals.length,1);
-  assert.equal(nationalRanking(f.s,'x',Date.now(),'부산').year.goals.length,0,'다른 지역 팀 기록은 안 센다');
+  assert.equal(nationalRanking(f.s,'x',Date.now(),'서울').year.attend.length,1);
+  assert.equal(nationalRanking(f.s,'x',Date.now(),'부산').year.attend.length,0,'다른 지역 팀 기록은 안 센다');
   const v=visibleState(f.s,'p1',f.a);
-  assert.equal(v.myRegion,'서울');assert.equal(v.regional.year.goals[0].me,true);
+  assert.equal(v.myRegion,'서울');assert.equal(v.regional.year.attend[0].me,true);
   // 켜지 않은 사람은 지역 랭킹에도 없다
   command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:false});
-  assert.equal(visibleState(f.s,'p1',f.a).regional.year.goals.length,0);
+  assert.equal(visibleState(f.s,'p1',f.a).regional.year.attend.length,0);
 });
 
 test('일요일 오전 경기는 그날 밤 "이번 주" 랭킹에 들어간다(주는 월~일)',()=>{
@@ -3353,7 +3357,7 @@ test('다른 지역 랭킹: 참여한 선수가 있는 지역만, 그 지역 팀
   command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:true});
   const v=visibleState(f.s,B.id,f.b);
   assert.deepEqual(Object.keys(v.regions),['서울']);
-  assert.equal(v.regions['서울'].year.goals[0].name,'선수1','다른 팀 사람도 그 지역 랭킹을 볼 수 있다');
+  assert.equal(v.regions['서울'].year.attend[0].name,'선수1','다른 팀 사람도 그 지역 랭킹을 볼 수 있다');
 });
 
 test('축구 소식은 축구 기사만 남기고, 제목에서 팀·선수·대회 태그를 뽑는다',()=>{
@@ -3848,4 +3852,78 @@ test('1.19 팀 공유 이미지 색: 운영진만, 색 형식 검사',()=>{
   assert.deepEqual({...s.teams.find(t=>t.id===a).kit,at:undefined},{bg:'#b3121b',accent:'#ffffff',shirt:'#b3121b',stripe:'',at:undefined});
   assert.throws(()=>command(s,A,{type:'setKit',teamId:a,bg:'red',accent:'#fff',shirt:'#000000'}),/색/);
   assert.throws(()=>command(s,member,{type:'setKit',teamId:a,bg:'#000000',accent:'#ffffff',shirt:'#000000'}),/권한|운영진|주장/);
+});
+
+test('1.20 회비 받을 곳·"냈어요" 알림: 형식 검사, 운영진 알림, 확인하면 알림 표시가 지워지고, 팀원은 자기 것만 본다',()=>{
+  const {s,a}=fixture();const m=addPlayer(s,a);
+  const D={id:'d',name:'D'};command(s,D,{type:'joinTeam',teamId:a,name:'D',position:'MF',number:5});
+  const md=s.members.find(x=>x.userId==='d');command(s,A,{type:'approveMember',teamId:a,memberId:md.id,announce:false});
+  assert.throws(()=>command(s,A,{type:'setDues',teamId:a,amount:30000,kakaoLink:'https://evil.example/x'}),/카카오페이/);
+  assert.throws(()=>command(s,A,{type:'setDues',teamId:a,amount:30000,tossId:'한글아이디'}),/토스/);
+  command(s,A,{type:'setDues',teamId:a,amount:30000,bank:'카카오뱅크',accountNo:'3333-01-1234567',holder:'김총무',tossId:'teamkick_fc',kakaoLink:'https://qr.kakaopay.com/Ej8abc123'});
+  const d=s.teams.find(t=>t.id===a).dues;assert.equal(d.accountNo,'3333-01-1234567');assert.equal(d.tossId,'teamkick_fc');
+  command(s,member,{type:'reportDues',teamId:a,month:'2026-10'},NOW);
+  assert.ok(s.notifications.some(n=>n.userId==='a'&&n.title==='회비 납부 알림'),'주장에게 알림');
+  assert.throws(()=>command(s,member,{type:'reportDues',teamId:a,month:'2026-10'},NOW+60e3),/방금/);
+  command(s,D,{type:'reportDues',teamId:a,month:'2026-10'},NOW);
+  const mv=visibleState(s,member.id,a).teams.find(t=>t.id===a);
+  assert.deepEqual(Object.keys(mv.duesReported['2026-10']),[m.id],'팀원은 자기 알림만');
+  assert.equal(mv.dues.accountNo,'3333-01-1234567','팀원은 계좌를 본다');
+  command(s,A,{type:'markDues',teamId:a,month:'2026-10',memberId:m.id});
+  assert.ok(!s.teams.find(t=>t.id===a).duesReported['2026-10'][m.id],'확인하면 알림 표시 지움');
+  assert.throws(()=>command(s,member,{type:'reportDues',teamId:a,month:'2026-10'},NOW+2*3600e3),/이미 납부/);
+  const other=visibleState(s,B.id).teams.find(t=>t.id===a);assert.ok(!('dues' in other),'다른 팀은 계좌를 못 본다');
+});
+
+test('1.20 전국·지역 순위의 골·도움은 팀킥 매칭으로 잡히고 두 팀이 점수를 확인한 경기만 센다',()=>{
+  const f=matchFixture();const p=addPlayer(f.s,f.a,{id:'rk',name:'랭커'});
+  command(f.s,{id:'rk',name:'랭커'},{type:'setRankPublic',on:true});
+  const g=f.s.games.find(x=>x.id===f.gameId);
+  // 매칭 경기: 기록을 넣고 상대가 점수를 확인해야 센다
+  const later=Date.parse(g.end)+3600e3;
+  command(f.s,A,{type:'completeGame',teamId:f.a,gameId:f.gameId},later);
+  const z=sideOf(f.s,f.gameId,f.a);
+  command(f.s,A,{type:'attendance',teamId:f.a,gameId:f.gameId,values:Object.fromEntries(rosterFor(f.s,z,g).map(x=>[x.id,true]))},later);
+  command(f.s,A,{type:'matchRecord',teamId:f.a,gameId:f.gameId,values:{[p.id]:{goals:2,assists:1}},ownGoals:0,unknownGoals:0,opponent:1},later);
+  const year=()=>nationalRanking(f.s,'x',later).year;
+  assert.equal(year().goals.length,0,'상대 확인 전에는 안 센다');
+  const prop=g.resultProposal;command(f.s,B,{type:'confirmResult',teamId:f.b,gameId:f.gameId,revision:prop.revision,agree:true},later);
+  assert.deepEqual(year().goals.map(r=>[r.name,r.value]),[['랭커',2]],'확인 뒤에 센다');
+  assert.equal(year().assists[0].value,1);
+  // 외부 팀 경기 골은 안 센다
+  const ext=game(f.s,f.a,{start:NOW-5*DAY});const eg=f.s.games.find(x=>x.id===ext);
+  assert.ok(!eg.away);
+});
+
+test('1.20 랭킹 프로필 카드: 따로 켠 사람만 포지션·인스타가 보이고, 랭킹에서 빠지면 같이 꺼진다',()=>{
+  const f=intraFixture();attendAll(f);
+  command(f.s,{id:'p1',name:'선수1'},{type:'setPlayerProfile',main:'ST',foot:'왼발',instagram:'p1.goal',regions:['서울']});
+  assert.throws(()=>command(f.s,{id:'p1',name:'선수1'},{type:'setProfilePublic',on:true}),/먼저/);
+  command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:true});
+  let row=visibleState(f.s,'stranger').national.year.attend[0];
+  assert.equal(row.card,null,'랭킹만 켜면 카드 없음');
+  command(f.s,{id:'p1',name:'선수1'},{type:'setProfilePublic',on:true});
+  row=visibleState(f.s,'stranger').national.year.attend[0];
+  assert.deepEqual([row.card.main,row.card.foot,row.card.instagram],['ST','왼발','p1.goal']);
+  assert.ok(!('height' in row.card)&&!('birthday' in row.card),'키·생일은 안 간다');
+  command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:false});
+  assert.equal(f.s.users.find(u=>u.id==='p1').profilePublic,false);
+});
+
+test('1.20 쿼터 자동 분배: 참여 인원이 고르게 뛰고, 골키퍼는 GK 자리, 포지션 맞는 자리에 들어간다',async()=>{
+  const F=await import(path.join(runtime,'formations.mjs'));
+  const pos=['GK','LB','CB','CB','RB','CM','CM','LM','RM','ST','ST','CDM','LW','RW','CB'];
+  const ps=pos.map((p,i)=>({id:'m'+i,position:p,group:p==='GK'?'GK':/B$/.test(p)?'DF':/ST|W$/.test(p)?'FW':'MF',number:i+1}));
+  const plan=F.splitQuarters('4-4-2',ps,4);
+  assert.equal(plan.length,4);
+  const n=new Map();for(const q of plan){assert.equal(Object.keys(q).length,11);assert.equal(q.GK.id,'m0');for(const p of Object.values(q))n.set(p.id,(n.get(p.id)??0)+1)}
+  // 골키퍼(혼자)는 4쿼터, 필드 14명은 40자리를 나눠 2~3쿼터씩
+  const field=[...n.entries()].filter(([id])=>id!=='m0').map(([,c])=>c);
+  assert.equal(field.length,14);assert.ok(Math.max(...field)-Math.min(...field)<=1,'필드 선수 차이는 1쿼터 이내');
+  assert.equal(field.reduce((a,b)=>a+b,0),40);
+  const q1=plan[0];assert.equal(q1.LB.position,'LB');assert.equal(q1.RB.position,'RB');
+  // 인원이 자리보다 적으면 전원 매 쿼터
+  const few=F.splitQuarters('4-4-2',ps.slice(0,8),3);for(const q of few)assert.equal(Object.keys(q).length,8);
+  // 같은 입력이면 같은 결과
+  assert.deepEqual(F.splitQuarters('4-4-2',ps,4).map(q=>Object.keys(q).map(k=>k+q[k].id).join()),plan.map(q=>Object.keys(q).map(k=>k+q[k].id).join()));
 });

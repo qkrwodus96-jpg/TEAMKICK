@@ -7,12 +7,13 @@ import {Sun,Cloud,CloudSun,CloudRain,CloudSnow,CloudDrizzle,Umbrella,CalendarPlu
 import {googleCalendarUrl} from "@/lib/calendar";
 import type {GameWeather} from "@/lib/weather";
 
-type Game={id:string;start:string;end:string;lat?:number|null;lng?:number|null;region?:string;venue?:string;address?:string;format?:string;status?:string};
+type Saved={label:string;temp:number|null;pop:number|null;pty:number;sky:number;air?:{pm10:string|null;pm25:string|null}|null;at:string};
+type Game={id:string;start:string;end:string;lat?:number|null;lng?:number|null;region?:string;venue?:string;address?:string;format?:string;status?:string;weather?:Saved|null};
 const memo=new Map<string,{at:number;p:Promise<GameWeather>}>();
 function loadWeather(g:Game){
  const k=[g.lat,g.lng,g.address,g.start,g.region].join("|");const hit=memo.get(k);
  if(hit&&Date.now()-hit.at<30*60e3)return hit.p;
- const p=fetch("/api/weather?"+new URLSearchParams({lat:String(g.lat??""),lng:String(g.lng??""),address:g.lat==null?String(g.address??""):"",at:g.start,region:String(g.region??"")}).toString(),{credentials:"same-origin"})
+ const p=fetch("/api/weather?"+new URLSearchParams({lat:String(g.lat??""),lng:String(g.lng??""),address:g.lat==null?String(g.address??""):"",at:g.start,region:String(g.region??""),game:g.id}).toString(),{credentials:"same-origin"})
   .then(async r=>{const b=await r.json().catch(()=>({})) as GameWeather&{error?:string};if(!r.ok)throw Object.assign(new Error(b.error||"지금은 날씨를 불러올 수 없어요."),{status:r.status});return b as GameWeather});
  memo.set(k,{at:Date.now(),p});p.catch(()=>memo.delete(k));return p;
 }
@@ -22,16 +23,22 @@ function Icon({pty,sky}:{pty:number;sky:number}){const s=18;
 }
 const airText=(a:GameWeather["air"])=>!a?"":[a.pm10&&"미세먼지 "+a.pm10,a.pm25&&"초미세 "+a.pm25].filter(Boolean).join(" · ");
 
+// 1.20: 경기 때 적어 둔 날씨(지난 경기도 계속 보인다)
+function SavedLine({w,detail}:{w:Saved;detail:boolean}){const air=airText(w.air??null);
+ return <div className={"wx"+(detail?" wx-detail":"")}><span className="wx-main"><Icon pty={w.pty} sky={w.sky}/><b>{w.label}{w.temp!=null&&" "+w.temp+"°"}</b>{w.pop!=null&&<span>강수 {w.pop}%</span>}{air&&<span>{air}</span>}<span className="wx-tag">경기 때 날씨</span></span>{detail&&<small className="wx-src">날씨: 기상청 예보(경기 시각 기준으로 남겨 둔 값)</small>}</div>}
 export function WeatherLine({g,detail=false,onRain}:{g:Game;detail?:boolean;onRain?:()=>void}){
- const has=((g.lat!=null&&g.lng!=null)||!!g.address)&&g.status!=="cancelled";const k=[g.lat,g.lng,g.address,g.start].join("|");
+ const [now]=useState(()=>Date.now());const ended=Date.parse(g.start)<now-3*3600e3;
+ const has=((g.lat!=null&&g.lng!=null)||!!g.address)&&g.status!=="cancelled"&&!ended;const k=[g.lat,g.lng,g.address,g.start].join("|");
  const [res,setRes]=useState<{k:string;w:GameWeather|null;err:string;status:number}>({k:"",w:null,err:"",status:0});
  useEffect(()=>{if(!has)return;let live=true;loadWeather(g).then(w=>{if(live)setRes({k,w,err:"",status:200})}).catch((e:Error&{status?:number})=>{if(live)setRes({k,w:null,err:e.message,status:e.status??0})});return()=>{live=false}},[has,k]);// eslint-disable-line react-hooks/exhaustive-deps
+ if(ended||g.status==="completed")return g.weather?<SavedLine w={g.weather} detail={detail}/>:null;
  if(!has)return detail?<p className="wx-note">구장 주소가 있어야 날씨를 볼 수 있어요.</p>:null;
  if(res.k!==k)return detail?<p className="wx-note">날씨를 불러오는 중…</p>:null;
  const w=res.w;
- if(!w){if(!detail||res.status===401)return null;return <p className="wx-note">{res.err}</p>}
- if(w.status==="past")return null;
- if(w.status==="far")return detail?<p className="wx-note">경기 날 날씨 예보는 경기 약 3일 전부터 나와요.</p>:null;
+ // 1.20: 홈에서도 왜 안 보이는지 한 줄로 알려준다(예전엔 조용히 숨겨서 "갑자기 안 뜬다"로 보였다).
+ if(!w){if(res.status===401)return null;if(g.weather)return <SavedLine w={g.weather} detail={detail}/>;return <p className="wx-note">{detail?res.err:"날씨를 지금 불러오지 못했어요."}</p>}
+ if(w.status==="past")return g.weather?<SavedLine w={g.weather} detail={detail}/>:null;
+ if(w.status==="far")return <p className="wx-note">날씨 예보는 경기 약 3일 전부터 나와요.</p>;
  const f=w.forecast!;const air=airText(w.air);
  return <div className={"wx"+(detail?" wx-detail":"")+(f.rainy?" rainy":"")}>
   <span className="wx-main"><Icon pty={f.pty} sky={f.sky}/><b>{f.label}{f.temp!=null&&" "+f.temp+"°"}</b>{f.pop!=null&&<span>강수 {f.pop}%</span>}{air&&<span>{air}</span>}</span>

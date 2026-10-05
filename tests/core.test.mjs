@@ -13,8 +13,9 @@ function compile(file,name,replace=s=>s){
   fs.writeFileSync(path.join(runtime,name),ts.transpileModule(replace(fs.readFileSync(file,'utf8')),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText);
 }
 compile('lib/formations.ts','formations.mjs');
+compile('lib/when.ts','when.mjs');
 for(const n of ['d1','d2','d3','d4','d5'])compile('lib/i18n/'+n+'.ts','i18n-'+n+'.mjs');
-compile('lib/model.ts','model.mjs',s=>s.replace('"./news"','"./news.mjs"').replace('"./formations"','"./formations.mjs"'));
+compile('lib/model.ts','model.mjs',s=>s.replace('"./news"','"./news.mjs"').replace('"./formations"','"./formations.mjs"').replace('"./when"','"./when.mjs"'));
 compile('lib/store.ts','store.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/owner-config.ts','owner-config.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;'));
 compile('lib/legal.ts','legal.mjs');
@@ -53,6 +54,7 @@ compile('app/api/cron/route.ts','cron-api.mjs',s=>s.replace('import {ensureSchem
 compile('lib/close.ts','close.mjs',s=>s.replace('"./store"','"./store.mjs"').replace('"./model"','"./model.mjs"').replace('"./auth"','"./auth.mjs"').replace('"./unlink"','"./unlink.mjs"'));
 globalThis.__teamkickTestEnv={};
 const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp,mvpView,mvpWinners,periodRange,rankRows,nationalRanking,canSeeGame,gameTitle}=await import(path.join(runtime,'model.mjs'));
+const {whenText,whenRange}=await import(path.join(runtime,'when.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
 const auth=await import(path.join(runtime,'auth.mjs'));
 const mail=await import(path.join(runtime,'mail.mjs'));
@@ -309,7 +311,47 @@ test('알림 문구는 UTC 원문이 아니라 Asia/Seoul 로 적힌다',()=>{
   const n=s.notifications.find(x=>x.title==='새 경기 일정');
   assert.ok(n,'경기 알림이 있어야 한다');
   assert.ok(!/\d{4}-\d{2}-\d{2}T/.test(n.body),'ISO 원문이 알림에 그대로 나가면 안 된다: '+n.body);
-  assert.equal(n.body,seoulStamp(iso(start))+' · 난지천공원');
+  assert.equal(n.body,whenRange(iso(start),iso(start+7200e3))+' 난지천공원');
+});
+
+test('1.19 날짜 표기: 10/7(수) 오전 10시~12시, 점 없이',()=>{
+  assert.equal(whenText('2026-10-07T01:00:00.000Z'),'10/7(수) 오전 10시');
+  assert.equal(whenRange('2026-10-07T01:00:00.000Z','2026-10-07T03:00:00.000Z'),'10/7(수) 오전 10시~12시');
+  assert.equal(whenRange('2026-10-07T02:00:00.000Z','2026-10-07T04:00:00.000Z'),'10/7(수) 오전 11시~오후 1시');
+  assert.equal(whenRange('2026-10-07T10:30:00.000Z','2026-10-07T12:30:00.000Z'),'10/7(수) 오후 7시 30분~9시 30분');
+  assert.equal(whenText('2026-10-06T15:00:00.000Z'),'10/7(수) 오전 12시'); // 한국 자정 = 날짜가 넘어간 쪽
+});
+
+test('1.19 일정 변경 제안 알림은 UTC 원문이 아니라 한국 시간으로 적는다',()=>{
+  const {s,a,b}=fixture();
+  const start=NOW+3*DAY;
+  const {gameId}=command(s,A,{type:'createGame',teamId:a,start:iso(start),end:iso(start+7200e3),venue:'난지천',address:'서울',listing:true},NOW);
+  command(s,B,{type:'applyMatch',teamId:b,gameId,message:'hi'},NOW);
+  const r=s.requests.find(x=>x.gameId===gameId);
+  command(s,A,{type:'acceptMatch',teamId:a,gameId,requestId:r.id},NOW);
+  const ns=start+DAY;
+  command(s,A,{type:'changeGame',teamId:a,gameId,start:iso(ns),end:iso(ns+7200e3),venue:'수지체육공원',address:'용인'},NOW);
+  const n=s.notifications.filter(x=>x.title==='일정 변경 제안').pop();
+  assert.ok(n);
+  assert.ok(!/\d{4}-\d{2}-\d{2}T/.test(n.body),'ISO 원문 금지: '+n.body);
+  assert.ok(n.body.startsWith(whenRange(iso(ns),iso(ns+7200e3))+' 수지체육공원'),n.body);
+  // 상대가 있는 경기는 바로 바뀌지 않고 제안으로 남는다
+  const g=s.games.find(x=>x.id===gameId);
+  assert.equal(g.start,iso(start));assert.ok(g.change);
+});
+
+test('1.19 투표 마감: 운영진이 지금 마감하면 더 이상 투표할 수 없고 팀에 알린다',()=>{
+  const {s,a}=fixture();
+  const start=NOW+3*DAY;
+  const {gameId}=command(s,A,{type:'createGame',teamId:a,start:iso(start),end:iso(start+7200e3),venue:'난지천',address:'서울'},NOW);
+  command(s,A,{type:'vote',teamId:a,gameId,value:'yes'},NOW);
+  command(s,A,{type:'closeVote',teamId:a,gameId},NOW+1000);
+  const side=s.sides.find(x=>x.gameId===gameId&&x.teamId===a);
+  assert.equal(side.deadline,iso(NOW+1000));
+  const n=s.notifications.find(x=>x.title==='참여 투표 마감');
+  assert.ok(n&&n.body.startsWith('참여 1명으로 마감했어요.'),n?.body);
+  assert.throws(()=>command(s,A,{type:'vote',teamId:a,gameId,value:'no'},NOW+2000),/마감/);
+  assert.throws(()=>command(s,A,{type:'closeVote',teamId:a,gameId},NOW+3000),/이미 마감/);
 });
 
 test('팀 등록 상태 알림은 영문 상태값 대신 한국어와 사유를 보여준다',()=>{
@@ -3712,9 +3754,9 @@ test('1.18 생일: 프로필 저장·팀원에게는 월·일만, 아침 9시 �
 test('1.18 영입 소식: 가입 승인 때 HERE WE GO 공지와 팀원 알림(끌 수 있음)',()=>{
   const {s,a}=fixture();const m=addPlayer(s,a);
   const n=s.notices.find(x=>x.kind==='transfer'&&x.memberId===m.id);
-  assert.ok(n);assert.match(n.title,/^HERE WE GO! 선수 합류$/);
-  assert.ok(s.notifications.some(x=>x.userId==='a'&&/^영입 소식/.test(x.title)));
-  assert.ok(!s.notifications.some(x=>x.userId==='player'&&/^영입 소식/.test(x.title)),'본인에게는 안 감');
+  assert.ok(n);assert.equal(n.title,'HERE WE GO!');assert.match(n.body,/^선수 선수가 .+에 합류했어요/);
+  assert.ok(s.notifications.some(x=>x.userId==='a'&&/영입 소식$/.test(x.title)));
+  assert.ok(!s.notifications.some(x=>x.userId==='player'&&/영입 소식$/.test(x.title)),'본인에게는 안 감');
   assert.equal(modelLib.notifyKind({title:'영입 소식 · 선수 합류'}),'team');
   const D={id:'d',name:'D'};command(s,D,{type:'joinTeam',teamId:a,name:'D',position:'MF',number:5});
   const md=s.members.find(x=>x.userId==='d');command(s,A,{type:'approveMember',teamId:a,memberId:md.id,announce:false});
@@ -3728,4 +3770,74 @@ test('1.18 다국어 사전: 모든 줄이 한국어+4개 언어, 비어 있는 
   const ko=new Set(lines.map(l=>l.split('\t')[0]));
   for(const must of ['홈','일정','매칭','기록','팀 채팅','모집 중','모집 완료','받은 신청','매칭 수락','거절','라인업','알림 설정','화면 모드','공유하기','팀 성향 분석'])assert.ok(ko.has(must),must+' 번역 없음');
   assert.ok(lines.length>=1100,'사전 크기 '+lines.length);
+});
+
+// --- 1.19 용병 대화 ---
+test('1.19 용병 대화: 모집 팀 주장·운영진과 신청자만, 거절되면 닫힌다',()=>{
+  const {s,a}=fixture();const m=addPlayer(s,a);
+  const {chatRoom,chatRooms}=modelLib;
+  const gameId=game(s,a,{start:NOW+3*DAY});
+  command(s,A,{type:'openGuests',teamId:a,gameId,needed:2});
+  const guestId=applyGuest(s,a,gameId,C);
+  const room='guest:'+gameId+':'+guestId;
+  assert.ok(chatRoom(s,A.id,room),'모집 팀 주장');
+  assert.ok(chatRoom(s,C.id,room),'신청자');
+  assert.equal(chatRoom(s,member.id,room),null,'일반 팀원은 못 들어감');
+  assert.equal(chatRoom(s,B.id,room),null,'관계없는 사람');
+  assert.equal(chatRoom(s,A.id,'guest:'+gameId+':nope'),null,'없는 신청');
+  assert.ok(chatRooms(s,C.id).some(x=>x.room===room),'신청자 목록에 보임');
+  assert.ok(chatRooms(s,A.id).some(x=>x.room===room),'주장 목록에 보임');
+  assert.ok(!chatRooms(s,member.id).some(x=>x.room===room));
+  command(s,A,{type:'setRole',teamId:a,memberId:m.id,role:'manager'});
+  assert.ok(chatRoom(s,member.id,room),'운영진이 되면 들어감');
+  command(s,A,{type:'rejectGuest',teamId:a,gameId,guestId});
+  assert.equal(chatRoom(s,C.id,room),null,'거절되면 닫힘');
+});
+
+test('1.19 저장소 재사용: 번호가 같으면 기억한 상태를 쓰되, 복사본이라 고쳐도 새지 않고, 커밋·직접 삭제를 놓치지 않는다',async()=>{
+  const db=localDatabase();const f=fixture();
+  let {state,version}=await repository.load();
+  await repository.commit(state,f.s,version);
+  const a=await repository.load();
+  assert.equal(a.state.teams.length,3);
+  a.state.teams.length=0; // 부르는 쪽이 고쳐도
+  const b=await repository.load();
+  assert.equal(b.state.teams.length,3,'기억한 상태는 그대로');
+  assert.equal(b.version,a.version);
+  // 커밋하면 새 번호의 상태가 바로 보인다
+  const next=structuredClone(b.state);next.teams[0].name='바뀐 이름';
+  await repository.commit(b.state,next,b.version);
+  const c=await repository.load();
+  assert.equal(c.version,b.version+1);assert.equal(c.state.teams[0].name,'바뀐 이름');
+  // 다른 서버(기억 없음)가 커밋한 것처럼 번호만 올라가도 다시 읽는다
+  db.exec("UPDATE entities SET body=json_set(body,'$.name','밖에서 바꿈') WHERE kind='teams' AND id='teams:"+c.state.teams[0].id+"'");
+  db.exec('UPDATE state_revision SET version=version+1 WHERE id=1');
+  const d=await repository.load();
+  assert.equal(d.state.teams[0].name,'밖에서 바꿈');
+  // 번호를 거치지 않은 직접 삭제도 행 개수로 알아챈다
+  db.exec('DELETE FROM entities');
+  assert.equal((await repository.load()).state.teams.length,0);
+});
+
+test('1.19 회비 장부: 운영진만 금액·납부를 고치고, 일반 팀원은 자기 것과 인원 수만 본다',()=>{
+  const {s,a}=fixture();const m=addPlayer(s,a);
+  const D={id:'d',name:'D'};command(s,D,{type:'joinTeam',teamId:a,name:'D',position:'MF',number:5});
+  const md=s.members.find(x=>x.userId==='d');command(s,A,{type:'approveMember',teamId:a,memberId:md.id,announce:false});
+  command(s,A,{type:'setDues',teamId:a,amount:30000,note:'매달 5일까지'});
+  assert.equal(s.teams.find(t=>t.id===a).dues.amount,30000);
+  assert.throws(()=>command(s,member,{type:'setDues',teamId:a,amount:1}),/권한|운영진|주장/);
+  assert.throws(()=>command(s,member,{type:'markDues',teamId:a,month:'2026-10',memberId:m.id}),/권한|운영진|주장/);
+  assert.throws(()=>command(s,A,{type:'markDues',teamId:a,month:'2026-13',memberId:m.id}),/달/);
+  command(s,A,{type:'markDues',teamId:a,month:'2026-10',memberId:m.id});
+  command(s,A,{type:'markDues',teamId:a,month:'2026-10',memberId:md.id});
+  const capView=visibleState(s,A.id,a).teams.find(t=>t.id===a);
+  assert.equal(Object.keys(capView.duesPaid['2026-10']).length,2,'주장은 전부');
+  const memView=visibleState(s,member.id,a).teams.find(t=>t.id===a);
+  assert.deepEqual(Object.keys(memView.duesPaid['2026-10']),[m.id],'팀원은 자기 것만');
+  assert.equal(memView.duesCount['2026-10'],2,'몇 명 냈는지는 보임');
+  command(s,A,{type:'markDues',teamId:a,month:'2026-10',memberId:m.id,paid:false});
+  assert.ok(!s.teams.find(t=>t.id===a).duesPaid['2026-10'][m.id],'취소');
+  // 다른 팀 사람에게는 장부가 안 간다
+  const other=visibleState(s,B.id).teams.find(t=>t.id===a);
+  assert.ok(!('duesPaid' in other)&&!('dues' in other));
 });

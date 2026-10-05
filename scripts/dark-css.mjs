@@ -22,9 +22,10 @@ const alpha=(hex,a)=>a===undefined||a>=1?hex:hex+Math.round(a*255).toString(16).
 
 function convert(hex,kind){
  const c=hex2rgb(hex),[h,s,l]=rgb2hsl(c),a=c[3];
- if(kind==="text"){ if(l>=.7)return null; return alpha(hsl2hex(h,Math.min(s,.55),.93-l*.55),a); }
- // 회색(채도 0)도 팀킥 초록 기운을 조금 섞어 화면 전체가 한 톤으로 보이게 한다.
- const hue=s<.02?.41:h,sat=v=>s<.02?.1:Math.max(Math.min(s,v),.08);
+ if(kind==="text"){ if(l>=.7)return null; return alpha(hsl2hex(h,s<.35?0:Math.min(s,.55),.93-l*.55),a); }
+ // 1.19: 바탕·선은 초록 기운을 빼고 검정·회색으로(사장님 요청 — "짙은 초록이 이상하다").
+ // 연한 초록·회녹색 면(채도 낮음)은 완전한 회색으로, 주황·빨강처럼 뚜렷한 색만 색조를 조금 남긴다.
+ const tinted=s>=.5&&!(h>.3&&h<.5),hue=h,sat=v=>tinted?Math.min(s,v):0;
  if(kind==="bg"){ if(l<.8)return null; if(l>=.99&&a===undefined)return "var(--card)"; return alpha(hsl2hex(hue,sat(.3),.1+(1-l)*1.1),a); }
  if(kind==="line"){ if(l<.75)return null; if(l>=.99&&a===undefined)return "var(--border)"; return alpha(hsl2hex(hue,sat(.18),.2+(1-l)*.6),a); }
  return null;
@@ -35,9 +36,13 @@ const kindOf=prop=>/^(color|fill|stroke|caret-color|text-decoration-color|-webki
 
 function decls(body){
  const out=[];
+ // 1.19: 라임 단추처럼 다크에서도 그대로 남는 밝은 바탕 위 글자는 어두운 채로 둔다(밝게 바꾸면 안 보인다).
+ const bgm=body.match(/(?:^|;)\s*background(?:-color)?\s*:\s*(#[0-9a-fA-F]{3,8})\b/);
+ const keepText=!!bgm&&convert(bgm[1],"bg")===null&&rgb2hsl(hex2rgb(bgm[1]))[2]>=.55;
  for(const part of body.split(/;(?![^(]*\))/)){
   const i=part.indexOf(":");if(i<0)continue;
   const prop=part.slice(0,i).trim(),val=part.slice(i+1).trim();const kind=kindOf(prop);if(!kind)continue;
+  if(kind==="text"&&keepText){out.push(prop+":"+val);continue}
   const nv=val.replace(/#[0-9a-fA-F]{3,8}\b|\bwhite\b/g,m=>{const hx=m==="white"?"#ffffff":m;const x=convert(hx,kind);return x??m});
   // 바뀌지 않은 색 선언도 함께 낸다. 다크 규칙은 모두 같은 만큼 구체성이 올라가므로, 원래 순서(.btn 다음 .btn-green)를
   // 그대로 지키려면 초록 단추의 초록 배경도 다시 적어 줘야 앞의 .btn 다크 규칙에 덮이지 않는다.
@@ -68,16 +73,19 @@ function walk(css){
 }
 
 // shadcn 변수(:root)는 손으로 정한 값을 쓴다. 자동 변환보다 이 값들이 화면 전체 바탕이라 따로 맞춘다.
-const BASE=`${P}{color-scheme:dark;--background:#0e1512;--foreground:#e6eee9;--card:#151e19;--card-foreground:#e6eee9;--popover:#18221c;--popover-foreground:#e6eee9;--primary:#1f9d62;--primary-foreground:#fff;--secondary:#1d2a23;--secondary-foreground:#cfe0d6;--muted:#1b2520;--muted-foreground:#98a8a0;--accent:#183426;--accent-foreground:#8fdcb2;--destructive:#e0685f;--border:#26332c;--input:#2b3931;--ring:#2fb574;--sidebar:#121a16;--sidebar-foreground:#b9c8c0;--sidebar-primary:#2fb574;--sidebar-primary-foreground:#fff;--sidebar-accent:#183426;--sidebar-accent-foreground:#8fdcb2;--sidebar-border:#22302a;--sidebar-ring:#2fb574}
+const BASE=`${P}{color-scheme:dark;--background:#000000;--foreground:#ececee;--card:#121214;--card-foreground:#ececee;--popover:#1a1a1d;--popover-foreground:#ececee;--primary:#1f9d62;--primary-foreground:#fff;--secondary:#1f1f22;--secondary-foreground:#d4d4d8;--muted:#1c1c1f;--muted-foreground:#9a9aa2;--accent:#1f1f22;--accent-foreground:#7fd6a7;--destructive:#e0685f;--border:#2a2a2e;--input:#2e2e33;--ring:#2fb574;--sidebar:#0b0b0d;--sidebar-foreground:#c4c4ca;--sidebar-primary:#2fb574;--sidebar-primary-foreground:#fff;--sidebar-accent:#1f1f22;--sidebar-accent-foreground:#7fd6a7;--sidebar-border:#222226;--sidebar-ring:#2fb574}
 ${P} body{background:var(--background);color:var(--foreground)}
 ${P} .bg-white{background:var(--card)!important}
 ${P} img{opacity:.96}
 `;
 // 자동 변환 뒤에 덧붙이는 손질(자동 규칙이 맞지 않는 곳).
-const TAIL=`${P}{--band:#0a100d}
-${P} .switch::after{background:#e9f0ec}
-${P} .seg{background:#1b2520}
-${P} .seg button.on{background:#26352d;color:#8fdcb2}
+const TAIL=`${P}{--band:#08080a}
+${P} .switch::after{background:#ececee}
+${P} .seg{background:#1c1c1f}
+${P} .seg button.on{background:#2a2a2e;color:#7fd6a7}
+${P} .next-match{background:#141416;background-image:radial-gradient(ellipse at 95% 0%,#1f9d6233,transparent 60%);border:1px solid #26262a}
+${P} .bottom-nav{background:#0b0b0dfa}
+${P} .match-arrow{background:#000000cc;border-color:#ffffff22}
 `;
 
 const css=fs.readFileSync(SRC,"utf8");

@@ -184,7 +184,8 @@ export function NotifyInvite(){
  </div>;
 }
 
-export function NotifyToggle(){
+// 1.19: "이 기기 알림 기록"(발송 추적)은 운영자에게만 보인다(사장님 요청 — 팀원에게는 필요 없는 시험용 정보).
+export function NotifyToggle({admin=false}:{admin?:boolean}){
  const [s,setS]=useState<State|null>(null);
  const [on,setOn]=useState(false);
  const [busy,setBusy]=useState(false);
@@ -195,7 +196,7 @@ export function NotifyToggle(){
  // 폰이 신호를 받았는지는 서비스 워커만 안다. 받으면 이 화면에 알려 준다(sw.js).
  const [heard,setHeard]=useState("");
  const [trace,setTrace]=useState<Trace|null>(null);
- async function loadTrace(){
+ async function loadTrace(){if(!admin)return;
   try{
    const reg=await navigator.serviceWorker?.getRegistration?.();
    const sub=await reg?.pushManager?.getSubscription?.();
@@ -350,7 +351,7 @@ export function NotifyToggle(){
    </div>
    {testNote&&<p className="data-note" role="status" style={{userSelect:"text"}}><strong>시험 결과</strong> · {testNote}</p>}
    {heard&&<p className="data-note" role="status" style={{userSelect:"text"}}>{heard}</p>}
-   {trace&&<div className="push-trace" role="status" style={{userSelect:"text"}}>
+   {admin&&trace&&<div className="push-trace" role="status" style={{userSelect:"text"}}>
     <div className="row between"><strong>이 기기 알림 기록</strong>
      <button type="button" className="text-link" onClick={()=>loadTrace()}>새로고침</button></div>
     {traceLines(trace).map(x=><p key={x} className="data-note">{x}</p>)}

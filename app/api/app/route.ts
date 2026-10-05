@@ -15,11 +15,11 @@ const json=(x:any,status=200,cookie?:string)=>Response.json(x,{status,headers:co
 export async function GET(req:Request){try{await ensureSchema();const user=await currentUser(req);
  // 로그인 전이라도 초대 링크로 왔으면 어느 팀 초대인지(팀 이름만) 알려 준다. 가입 화면에 "OO 팀 초대"를 띄운다.
  if(!user){const token=new URL(req.url).searchParams.get("invite");let invitedTeamName:string|null=null;if(token){const {state}=await load();const inv=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());const team=inv?state.teams.find(t=>t.id===inv.teamId&&t.status==="active"):null;invitedTeamName=team?.name??null}
-  return json({user:null,invitedTeamName,mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver")});}const {state}=await load();const teamId=new URL(req.url).searchParams.get("team")??undefined;const token=new URL(req.url).searchParams.get("invite");const invite=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());
+  return json({user:null,invitedTeamName,mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver")});}const {state,version}=await load();const teamId=new URL(req.url).searchParams.get("team")??undefined;const token=new URL(req.url).searchParams.get("invite");const invite=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());
  // 기록된 운영자의 계정이 사라졌으면 다시 등록할 수 있어야 한다. 그렇지 않으면 아무도 운영자가 될 수 없다.
  const ownerId=state.settings.find(x=>x.id==="owner")?.userId;
  const ownerMissing=!!ownerId&&ownerId!==user.userId&&!(await accountExists(ownerId));
- return json({storageReady:storageReady(),ownerMissing,placeSearchReady:placeSearchReady(),mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver"),needsVerification:mailReady()&&!user.verified,invitedTeam:invite?.teamId??null,user:{id:user.userId,name:state.users.find(x=>x.id===user.userId)?.name??user.fullName??"팀원",provider:user.provider??"local"},...visibleState(state,user.userId,teamId)});}catch(e){console.error("TeamKick load",e);return json({error:e instanceof AppError?e.message:setupIncomplete(e)?SETUP_MESSAGE:"데이터를 불러오지 못했어요. 다시 시도해주세요."},e instanceof AppError?e.status:503)}}
+ return json({rev:version,storageReady:storageReady(),ownerMissing,placeSearchReady:placeSearchReady(),mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver"),needsVerification:mailReady()&&!user.verified,invitedTeam:invite?.teamId??null,user:{id:user.userId,name:state.users.find(x=>x.id===user.userId)?.name??user.fullName??"팀원",provider:user.provider??"local"},...visibleState(state,user.userId,teamId)});}catch(e){console.error("TeamKick load",e);return json({error:e instanceof AppError?e.message:setupIncomplete(e)?SETUP_MESSAGE:"데이터를 불러오지 못했어요. 다시 시도해주세요."},e instanceof AppError?e.status:503)}}
 export async function POST(req:Request){
  try{
   await ensureSchema();
@@ -53,11 +53,12 @@ export async function POST(req:Request){
     // 나머지를 실행기(waitUntil)에 맡겼는데, 운영 호스트에서 그게 지켜지는지 확인할 방법이
     // 없었고 실제 알림만 안 왔다. 시험 발송은 끝까지 기다려서 늘 됐다. 저장이 조금 늦더라도
     // 확실히 보내는 쪽을 고른다(한 기기 최대 4초, 대개 1초 안).
-    const delivery=woken.length?await wakeDevices(woken).catch(e=>{console.error("TeamKick push",e);return null}):null;
+    // 1.19: 기기 수 세기는 발송과 동시에 돌린다(차례로 하면 저장 응답이 그만큼 늦었다).
+    const [delivery,devices]=woken.length?await Promise.all([wakeDevices(woken).catch(e=>{console.error("TeamKick push",e);return null}),pushReady()?devicesAmong(woken).catch(()=>-1):Promise.resolve(0)]):[null,0];
     // 알림이 몇 명에게 갔고, 폰 알림을 켠 사람이 몇 명이고, 푸시 서버가 몇 통을 받았는지(숫자만).
     // 실패가 있으면 첫 실패의 푸시 서버와 답(상태 번호)만 붙인다 — 누구인지는 담지 않는다.
     const bad=delivery?.results?.find(r=>!r.ok);
-    const pushed=woken.length?{people:woken.length,withDevice:pushReady()?await devicesAmong(woken).catch(()=>-1):0,
+    const pushed=woken.length?{people:woken.length,withDevice:devices,
      sent:delivery?.sent??0,failed:delivery?.failed??0,
      ...(bad?{reason:(bad.host||"푸시 서버")+" "+(bad.status||"응답 없음")}:{})}:undefined;
     return json({ok:true,output,...(pushed?{pushed}:{}),...visibleState(after,user.userId,seen)});

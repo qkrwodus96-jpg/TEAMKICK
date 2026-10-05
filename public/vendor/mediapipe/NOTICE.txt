@@ -1,0 +1,7 @@
+MediaPipe Selfie Segmentation (@mediapipe/selfie_segmentation 0.1.1675465747)
+Copyright The MediaPipe Authors (Google LLC).
+Licensed under the Apache License, Version 2.0 — https://www.apache.org/licenses/LICENSE-2.0
+Files in this folder are redistributed unmodified from the npm package.
+
+팀킥에서는 공유 포스터를 만들 때 선수 사진의 배경을 지우는 데만 쓴다.
+사진은 이용자 기기(브라우저) 안에서만 처리되고 서버나 외부로 보내지 않는다.

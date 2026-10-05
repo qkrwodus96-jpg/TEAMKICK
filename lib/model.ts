@@ -45,7 +45,7 @@ function dissolveTeam(s:State,t:string,stamp:string){
  if(!team||team.status==="closed")return;
  team.status="closed";team.reason="주장이 탈퇴해 해산했어요.";
  // 1.19 회비 장부는 팀 운영용이라 해산하면 지운다(처리방침).
- delete team.dues;delete team.duesPaid;
+ delete team.dues;delete team.duesPaid;delete team.duesReported;
  for(const m of s.members.filter(x=>x.teamId===t&&x.status==="pending"))m.status="left";
  for(const v of s.invites.filter(x=>x.teamId===t))v.active=false;
  for(const r of s.requests.filter(x=>x.teamId===t&&x.status==="pending"))r.status="closed";
@@ -346,15 +346,18 @@ export function nationalRanking(s:State,userId:string,now=Date.now(),region=""){
     const p=people.get(m.userId)??{name:String(m.name??""),teams:new Map(),goals:0,assists:0,mvp:0,attend:0};
     const came=side.attendanceFinal&&side.attendance?.[r.id]===true;
     if(came){p.attend++;p.teams.set(team.name,(p.teams.get(team.name)??0)+1)}
-    if(side.recordsFinal&&g.result?.status==="confirmed"){p.goals+=Number(side.records?.[r.id]?.goals??0);p.assists+=Number(side.records?.[r.id]?.assists??0)}
+    // 1.20 거짓 기록 방지: 전국·지역 순위의 골·도움은 **팀킥 매칭으로 잡힌 경기**(상대도 팀킥 팀, 매칭 수락)이고
+    // 상대 팀까지 점수를 확인한 경기만 센다. 외부 팀·자체전 기록은 우리 팀 기록에는 남지만 여기엔 안 들어간다.
+    if(side.recordsFinal&&g.away&&!isIntra(g)&&g.result?.status==="confirmed"){p.goals+=Number(side.records?.[r.id]?.goals??0);p.assists+=Number(side.records?.[r.id]?.assists??0)}
     if(winners.includes(r.id))p.mvp++;
     if(m.status==="active")p.name=String(m.name??p.name);
     people.set(m.userId,p);
    }
   }
-  const rows=[...people.entries()].map(([uid,p])=>({name:p.name,team:[...p.teams.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]??"",goals:p.goals,assists:p.assists,points:p.goals+p.assists,mvp:p.mvp,attend:p.attend,me:uid===userId}));
+  const cardOf=(uid:string)=>{if(s.users.find(x=>x.id===uid)?.profilePublic!==true)return null;const pv=profileView(s,uid,false);if(!pv)return null;return {main:pv.main,sub:pv.sub,foot:pv.foot,regions:pv.regions,instagram:pv.instagram}};
+  const rows=[...people.entries()].map(([uid,p])=>({name:p.name,team:[...p.teams.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]??"",goals:p.goals,assists:p.assists,points:p.goals+p.assists,mvp:p.mvp,attend:p.attend,me:uid===userId,card:cardOf(uid)}));
   out[period]={};
-  for(const key of RANK_KEYS)out[period][key]=rankRows(rows,key).map(({name,team,value,rank,me},i)=>({id:"n"+i,name,team,value,rank,me})).filter((r,i)=>i<NATIONAL_LIMIT||r.me);
+  for(const key of RANK_KEYS)out[period][key]=rankRows(rows,key).map(({name,team,value,rank,me,card},i)=>({id:"n"+i,name,team,value,rank,me,card})).filter((r,i)=>i<NATIONAL_LIMIT||r.me);
  }
  return out;
 }
@@ -454,7 +457,11 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  // 기록만 한다 — 팀킥이 돈을 받거나 옮기지 않는다. 운영진(주장·매니저)만 고칠 수 있다.
  else if(type==="setDues"){
   requireTeam(s,t,a.id,"manager");const team=teamOf(s,t)!;
-  team.dues={amount:integer(c.amount??0,0,1000000),note:textValue(c.note??"",200,false),at:stamp,by:a.id};
+  // 1.20 회비 받을 곳: 계좌(은행·번호·예금주)와 토스 아이디·카카오페이 송금 링크(선택). 팀원에게만 보인다.
+  const acct=String(c.accountNo??"").replace(/[^0-9-]/g,"");ensure(acct.length<=30,"계좌번호를 확인해주세요.");
+  const toss=String(c.tossId??"").trim();ensure(!toss||/^[A-Za-z0-9_.-]{2,30}$/.test(toss),"토스 아이디를 확인해주세요.");
+  const kakao=String(c.kakaoLink??"").trim();ensure(!kakao||(/^https:\/\/qr\.kakaopay\.com\/[A-Za-z0-9_-]{4,80}$/.test(kakao)),"카카오페이 송금 링크는 https://qr.kakaopay.com/ 으로 시작해요.");
+  team.dues={amount:integer(c.amount??0,0,1000000),note:textValue(c.note??"",200,false),bank:textValue(c.bank??"",20,false),accountNo:acct,holder:textValue(c.holder??"",20,false),tossId:toss,kakaoLink:kakao,at:stamp,by:a.id};
  }
  // 1.19 공유 이미지 색(배경·포인트·유니폼). 운영진이 팀 기본으로 저장하면 팀원 모두 같은 색으로 만든다.
  else if(type==="setKit"){
@@ -462,12 +469,24 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   const hex=(x:unknown,optional=false)=>{const v=String(x??"").trim().toLowerCase();if(optional&&!v)return "";ensure(/^#[0-9a-f]{6}$/.test(v),"색을 목록에서 골라주세요.");return v};
   team.kit={bg:hex(c.bg),accent:hex(c.accent),shirt:hex(c.shirt),stripe:hex(c.stripe,true),at:stamp};
  }
+ // 1.20 팀원이 "냈어요" 알리기 → 운영진에게 알림. 운영진이 납부 체크하면 확정.
+ else if(type==="reportDues"){
+  const me=requireTeam(s,t,a.id,"member");const team=teamOf(s,t)!;
+  const month=String(c.month??"");ensure(/^20\d\d-(0[1-9]|1[0-2])$/.test(month),"달을 확인해주세요.");
+  ensure(!team.duesPaid?.[month]?.[me.id],"이미 납부 확인된 달이에요.",409);
+  const rep:Record<string,Record<string,string>>=team.duesReported??{};const row={...(rep[month]??{})};
+  ensure(!row[me.id]||Date.parse(stamp)-Date.parse(row[me.id])>3600e3,"방금 알렸어요. 운영진이 확인할 때까지 기다려 주세요.",429);
+  row[me.id]=stamp;rep[month]=row;team.duesReported=Object.fromEntries(Object.keys(rep).sort().slice(-6).map(k=>[k,rep[k]]));
+  for(const x of s.members.filter(y=>y.teamId===t&&y.status==="active"&&["captain","manager"].includes(y.role)&&y.userId!==a.id))
+   userNotice(s,x.userId,"회비 납부 알림",me.name+"님이 "+Number(month.slice(5))+"월 회비를 냈다고 알렸어요. MY → 회비에서 확인해 주세요.",t,"modal:dues");
+ }
  else if(type==="markDues"){
   requireTeam(s,t,a.id,"manager");const team=teamOf(s,t)!;
   const month=String(c.month??"");ensure(/^20\d\d-(0[1-9]|1[0-2])$/.test(month),"달을 확인해주세요.");
   const target=s.members.find(x=>x.id===c.memberId&&x.teamId===t&&["active","left","removed"].includes(x.status));ensure(target,"팀원을 찾을 수 없어요.",404);
   const book:Record<string,Record<string,string>>=team.duesPaid??{};const row={...(book[month]??{})};
   if(c.paid===false)delete row[target!.id];else row[target!.id]=stamp;
+  if(team.duesReported?.[month]?.[target!.id]){const r={...team.duesReported[month]};delete r[target!.id];team.duesReported={...team.duesReported,[month]:r}}
   book[month]=row;
   // 2년이 지난 달은 지운다(장부가 끝없이 커지지 않게).
   const keep=Object.keys(book).sort().slice(-24);team.duesPaid=Object.fromEntries(keep.map(k=>[k,book[k]]));
@@ -543,7 +562,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   const side=sideOf(s,g!.id,t);ensure(side,"경기 팀 정보를 찾을 수 없어요.",404);
   ensure(g!.status!=="cancelled","취소된 경기예요.",409);
   if(type==="vote"){ensure(g!.status==="scheduled"&&now<Math.min(Date.parse(side!.deadline),Date.parse(g!.start)),"참여 투표가 마감되었어요.",409);ensure(["yes","no","maybe"].includes(c.value),"응답을 선택해주세요.");(side!.votes[m.id]??=[]).push({value:c.value,at:stamp});}
-  if(type==="sideSettings"){side!.note=textValue(c.note,500,false);side!.meeting=textValue(c.meeting,50,false);side!.needed=integer(c.needed??side!.needed,1,50);if(c.deadline){ensure(now<Date.parse(c.deadline)&&Date.parse(c.deadline)<=Date.parse(g!.start),"투표 마감 시간을 확인해주세요.");side!.deadline=iso(Date.parse(c.deadline));}}
+  if(type==="sideSettings"){ensure(g!.status==="scheduled"&&now<Date.parse(g!.end),"끝난 경기의 팀 안내·투표는 바꿀 수 없어요.",409);side!.note=textValue(c.note,500,false);side!.meeting=textValue(c.meeting,50,false);side!.needed=integer(c.needed??side!.needed,1,50);if(c.deadline){ensure(now<Date.parse(c.deadline)&&Date.parse(c.deadline)<=Date.parse(g!.start),"투표 마감 시간을 확인해주세요.");side!.deadline=iso(Date.parse(c.deadline));}}
   // 1.19: 투표 마감(인원 끊기). 마감 시각을 지금으로 당긴다. 다시 열려면 [팀 안내 · 투표 마감 수정]에서 새 마감 시각을 고른다.
   if(type==="closeVote"){
    ensure(g!.status==="scheduled"&&now<Math.min(Date.parse(side!.deadline),Date.parse(g!.start)),"이미 마감된 투표예요.",409);
@@ -567,7 +586,8 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    for(const z of s.sides.filter(x=>x.gameId===g!.id))if(guestStatusOf(z)==="open")z.guestStatus="closed";
    for(const r of s.guests.filter(x=>x.gameId===g!.id&&x.status==="pending"))r.status="closed";
   }
-  if(type==="cancelGame"){if(g!.status==="completed")ensure(textValue(c.reason,300),"정정 사유를 입력해주세요.");g!.status="cancelled";g!.reason=textValue(c.reason,300);g!.listing="cancelled";g!.change=null;for(const r of s.requests.filter(x=>x.gameId===g!.id&&x.status==="pending"))r.status="closed";for(const z of s.sides.filter(x=>x.gameId===g!.id))if(guestStatusOf(z)==="open")z.guestStatus="closed";for(const r of s.guests.filter(x=>x.gameId===g!.id&&x.status==="pending"))r.status="closed";for(const tid of [g!.home,g!.away].filter(Boolean))notice(s,tid,"경기 취소",g!.reason,g!.id);}
+  // 1.20 끝난 경기는 취소할 수 없다(기록을 지우는 데 악용될 수 있어서 — 사장님 요청). 잘못 만든 경기는 시작 전에 취소한다.
+  if(type==="cancelGame"){ensure(g!.status==="scheduled"&&now<Date.parse(g!.end),"이미 끝난 경기는 취소할 수 없어요. 기록이 틀렸다면 기록 정정 요청을 써 주세요.",409);g!.status="cancelled";g!.reason=textValue(c.reason,300);g!.listing="cancelled";g!.change=null;for(const r of s.requests.filter(x=>x.gameId===g!.id&&x.status==="pending"))r.status="closed";for(const z of s.sides.filter(x=>x.gameId===g!.id))if(guestStatusOf(z)==="open")z.guestStatus="closed";for(const r of s.guests.filter(x=>x.gameId===g!.id&&x.status==="pending"))r.status="closed";for(const tid of [g!.home,g!.away].filter(Boolean))notice(s,tid,"경기 취소",g!.reason,g!.id);}
   if(type==="setOpponent"){ensure(!g!.away&&g!.listing!=="open"&&!g!.result?.status,"외부 상대팀을 입력할 수 없는 경기예요.");g!.external=textValue(c.external,60);}
   if(type==="openListing"){ensure(g!.home===t&&!g!.away&&!g!.external&&Date.parse(g!.start)>now&&g!.status==="scheduled","상대팀 모집을 열 수 없는 경기예요.");g!.listing="open";}
   if(type==="closeListing"){ensure(g!.home===t&&!g!.away,"확정된 매칭은 경기 취소로 처리해주세요.");g!.listing="closed";for(const r of s.requests.filter(x=>x.gameId===g!.id&&x.status==="pending"))r.status="closed";}
@@ -841,7 +861,9 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   output={changed:rows.length};
  }
  // 전국 랭킹 참여 켜기·끄기. 본인만 바꾼다. 꺼도 기록은 그대로, 전국 목록에서만 빠진다.
- else if(type==="setRankPublic"){const u=s.users.find(x=>x.id===a.id)!;u.rankPublic=c.on===true;u.rankPublicAt=stamp;}
+ else if(type==="setRankPublic"){const u=s.users.find(x=>x.id===a.id)!;u.rankPublic=c.on===true;u.rankPublicAt=stamp;if(c.on!==true)u.profilePublic=false;}
+ // 1.20 랭킹에서 내 프로필 카드(포지션·주발·활동 지역·인스타)도 보여줄지. 랭킹 참여와 따로 켠다(기본 꺼짐).
+ else if(type==="setProfilePublic"){const u=s.users.find(x=>x.id===a.id)!;ensure(c.on!==true||u.rankPublic===true,"먼저 지역·전국 랭킹에 참여해 주세요.");u.profilePublic=c.on===true;u.profilePublicAt=stamp;}
  // 축구 소식에서 고른 좋아하는 팀(선택). 목록에 있는 것만, 최대 NEWS_TEAMS_MAX 개.
  else if(type==="setNewsTeams"){const teams=cleanNewsTeams(c.teams);ensure(teams.length<=NEWS_TEAMS_MAX,"좋아하는 팀은 "+NEWS_TEAMS_MAX+"개까지 고를 수 있어요.");const u=s.users.find(x=>x.id===a.id)!;u.newsTeams=teams;}
  else if(type==="readNotifications"){for(const n of s.notifications.filter(x=>x.userId===a.id))n.read=true;}
@@ -893,9 +915,11 @@ export function visibleState(s:State,userId:string,selected?:string){
  const tid=team?.teamId;const activeAccess=active.some(m=>teamOf(s,m.teamId)?.status==="active");
  const ownTeams=s.teams.filter(t=>t.applicant===userId);const publicTeams=s.teams.filter(t=>t.status==="active"||owner||active.some(m=>m.teamId===t.id)||t.applicant===userId).map(t=>{const full=owner||active.some(m=>m.teamId===t.id)||t.applicant===userId;const counts={memberCount:s.members.filter(m=>m.teamId===t.id&&m.status==="active").length,gameCount:s.games.filter(g=>containsTeam(g,t.id)&&g.status==="completed").length};
   // 회비 납부 표시는 운영진에게만 다 보인다. 일반 팀원은 자기 것과 달마다 몇 명 냈는지만.
-  if(full&&t.duesPaid&&!owner&&!active.some(m=>m.teamId===t.id&&["captain","manager"].includes(m.role))){const me=active.find(m=>m.teamId===t.id)?.id;
-   const book=t.duesPaid as Record<string,Record<string,string>>;
-   return {...t,...counts,duesPaid:Object.fromEntries(Object.entries(book).map(([k,row])=>[k,me&&row[me]?{[me]:row[me]}:{}])),duesCount:Object.fromEntries(Object.entries(book).map(([k,row])=>[k,Object.keys(row).length]))}}
+  if(full&&(t.duesPaid||t.duesReported)&&!owner&&!active.some(m=>m.teamId===t.id&&["captain","manager"].includes(m.role))){const me=active.find(m=>m.teamId===t.id)?.id;
+   const book=(t.duesPaid??{}) as Record<string,Record<string,string>>;
+   const reported=(t.duesReported??{}) as Record<string,Record<string,string>>;
+   return {...t,...counts,duesPaid:Object.fromEntries(Object.entries(book).map(([k,row])=>[k,me&&row[me]?{[me]:row[me]}:{}])),duesCount:Object.fromEntries(Object.entries(book).map(([k,row])=>[k,Object.keys(row).length])),
+    duesReported:Object.fromEntries(Object.entries(reported).map(([k,row])=>[k,me&&row[me]?{[me]:row[me]}:{}]))}}
   return full?{...t,...counts}:{id:t.id,name:t.name,region:t.region,description:t.description,format:t.format,days:t.days,level:t.level,status:t.status,color:t.color,logo:t.logo,rules:t.rules??"",
    photos:(t.photos??[]).map((p:Row)=>({id:p.id,key:p.key,caption:p.caption,at:p.at})),recruiting:!!t.recruiting,recruitNote:t.recruitNote??"",fee:t.fee??null,founded:t.founded??"",...counts}});
  const games=s.games.filter(g=>tid&&containsTeam(g,tid));const listings=activeAccess?s.games.filter(g=>g.listing==="open"&&g.status==="scheduled"&&Date.parse(g.start)>Date.now()&&teamOf(s,g.home)?.status==="active"):[];
@@ -907,7 +931,7 @@ export function visibleState(s:State,userId:string,selected?:string){
  const myGuestRows=s.guests.filter(x=>x.userId===userId);const guestGame=(gid:string)=>s.games.find(y=>y.id===gid);
  return {teams:publicTeams,members,mine:my,ownTeams,teamId:tid??"",role:team?.role??"",isOwner:owner,retired:owner?retiredPeople(s):[],
   myTotals:myTotals(s,userId),
-  rankPublic:s.users.find(x=>x.id===userId)?.rankPublic===true,national:nationalRanking(s,userId),
+  rankPublic:s.users.find(x=>x.id===userId)?.rankPublic===true,profilePublic:s.users.find(x=>x.id===userId)?.profilePublic===true,national:nationalRanking(s,userId),
   newsTeams:cleanNewsTeams(s.users.find(x=>x.id===userId)?.newsTeams),myRegion:String(teamOf(s,tid??"")?.region??""),regional:teamOf(s,tid??"")?.region?nationalRanking(s,userId,Date.now(),String(teamOf(s,tid??"")!.region)):null,regions:regionRankings(s,userId),
   // 문의는 본인 것만 본다. 운영자는 답변해야 하므로 전부 본다.
   inquiries:s.inquiries.filter(x=>owner||x.userId===userId).sort((x,y)=>String(y.at).localeCompare(String(x.at))).map(x=>({...x,mine:x.userId===userId})),

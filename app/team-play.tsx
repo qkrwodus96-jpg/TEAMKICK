@@ -123,6 +123,7 @@ export function Rankings({v,busy,run,onOpen}:{v:Row;busy:boolean;run:(c:Record<s
  const [period,setPeriod]=useState<string>("month");
  const [key,setKey]=useState<string>("goals");
  const [more,setMore]=useState(false);
+ const [peek,setPeek]=useState<Row|null>(null);
  const [area,setArea]=useState<string>(String(v.myRegion??""));
  // 모든 지역을 고를 수 있다(참여한 선수가 없는 지역은 빈 목록). 우리 팀 지역을 맨 앞에.
  const areas=[...new Set([String(v.myRegion??""),...REGIONS].filter(Boolean))];
@@ -137,21 +138,36 @@ export function Rankings({v,busy,run,onOpen}:{v:Row;busy:boolean;run:(c:Record<s
  const podium=rows.slice(0,3),rest=rows.slice(3),shown=more?rest:rest.filter(r=>rows.indexOf(r)<9);
  const label=(r:Row)=>r.value+tab.unit;
  const who=(r:Row)=>scope!=="team"?r.team:[backNo(r.number),r.position].filter(Boolean).join(" · ");
- const open=(r:Row)=>{if(scope==="team")onOpen(r)};
+ // 1.20: 지역·전국 랭킹에서 선수를 누르면 그 선수가 따로 공개한 프로필(포지션·주발·지역·인스타)만 보여준다.
+ const open=(r:Row)=>{if(scope==="team")onOpen(r);else setPeek(p=>p===r?null:r)};
  return <div className="rankings">
-  <div className="panel-title"><h2>랭킹</h2><div className="seg" role="tablist" aria-label="랭킹 범위">{[{k:"team",t:"팀 내"},...(v.myRegion?[{k:"region",t:"지역"}]:[]),{k:"national",t:"전국"}].map(x=><button key={x.k} role="tab" aria-selected={scope===x.k} className={scope===x.k?"on":""} onClick={()=>{setScope(x.k as "team"|"region"|"national");setMore(false)}}>{x.t}</button>)}</div></div>
+  <div className="panel-title"><h2>랭킹</h2><div className="seg" role="tablist" aria-label="랭킹 범위">{[{k:"team",t:"팀 내"},...(v.myRegion?[{k:"region",t:"지역"}]:[]),{k:"national",t:"전국"}].map(x=><button key={x.k} role="tab" aria-selected={scope===x.k} className={scope===x.k?"on":""} onClick={()=>{setScope(x.k as "team"|"region"|"national");setMore(false);setPeek(null)}}>{x.t}</button>)}</div></div>
   <div className="chip-row rank-periods">{PERIODS.map(x=><button key={x.key} className={"chip-mini"+(period===x.key?" on":"")} onClick={()=>{setPeriod(x.key);setMore(false)}}>{x.label}</button>)}<span className="rank-range">{rangeText(period)}</span></div>
   {scope==="region"&&<label className="rank-area">지역<select value={area} onChange={e=>{setArea(e.target.value);setMore(false)}}>{areas.map(r=><option key={r} value={r}>{r}{r===v.myRegion?" (우리 팀)":""}</option>)}</select></label>}
   <div className="rank-keys" role="tablist" aria-label="랭킹 항목">{RANK_TABS.map(x=><button key={x.key} role="tab" aria-selected={key===x.key} className={key===x.key?"on":""} onClick={()=>{setKey(x.key);setMore(false)}}><x.icon size={15}/>{x.label}왕</button>)}</div>
-  {scope!=="team"&&<div className="rank-optin">{v.rankPublic?<p className="small muted">지역·전국 랭킹에 참여 중이에요. <button className="text-link" disabled={busy} onClick={()=>run({type:"setRankPublic",on:false})}>빠지기</button></p>:<div className="task-box"><strong>지역·전국 랭킹은 참여를 켠 선수만 보여요</strong><p className="small muted">켜면 내 선수 이름·팀 이름·기록 숫자가 다른 팀 이용자에게도 보여요. 언제든 끌 수 있어요.</p><button className="btn btn-green" disabled={busy} onClick={()=>run({type:"setRankPublic",on:true})}>지역·전국 랭킹 참여하기</button></div>}</div>}
+  {scope!=="team"&&<div className="rank-optin">{v.rankPublic?<><p className="small muted">지역·전국 랭킹에 참여 중이에요. <button className="text-link" disabled={busy} onClick={()=>run({type:"setRankPublic",on:false})}>빠지기</button></p><label className="rank-profile-opt"><input type="checkbox" checked={!!v.profilePublic} disabled={busy} onChange={e=>run({type:"setProfilePublic",on:e.target.checked})}/><span>랭킹에서 내 프로필도 보여주기<small>포지션·주발·활동 지역·인스타그램 아이디가 다른 팀 이용자에게 보여요. 키·몸무게·나이·생일은 보이지 않아요.</small></span></label></>:<div className="task-box"><strong>지역·전국 랭킹은 참여를 켠 선수만 보여요</strong><p className="small muted">켜면 내 선수 이름·팀 이름·기록 숫자가 다른 팀 이용자에게도 보여요. 언제든 끌 수 있어요.</p><button className="btn btn-green" disabled={busy} onClick={()=>run({type:"setRankPublic",on:true})}>지역·전국 랭킹 참여하기</button></div>}</div>}
   {rows.length?<>
-   <div className="podium">{[1,0,2].map(i=>{const r=podium[i];return <div key={i} className={"podium-col place-"+(i+1)+(r?.me?" me":"")}>{r?<button className="podium-card" onClick={()=>open(r)} disabled={scope!=="team"}>
+   <div className="podium">{[1,0,2].map(i=>{const r=podium[i];return <div key={i} className={"podium-col place-"+(i+1)+(r?.me?" me":"")}>{r?<button className="podium-card" onClick={()=>open(r)}>
     <span className="podium-face" style={{["--medal" as string]:MEDAL[r.rank as number]??"#c9d3cd"}}><PlayerPhoto name={r.name} photo={r.photo}/></span><strong>{r.name}</strong><small>{who(r)||" "}</small><b className="podium-value">{r.value}<small>{tab.unit}</small></b></button>:<div className="podium-card empty"><small>—</small></div>}<div className="podium-step" style={{["--medal" as string]:r?MEDAL[r.rank as number]??"#c9d3cd":"#dfe5e1"}}><span>{r?r.rank:i+1}</span></div></div>})}</div>
-   {!!shown.length&&<ol className="rank-list">{shown.map(r=><li key={(r.id??"")+r.name} className={r.me?"me":""}><button onClick={()=>open(r)} disabled={scope!=="team"}><span className="rank-no">{r.rank}</span><PlayerPhoto name={r.name} photo={r.photo}/><span className="rank-who"><strong>{r.name}{r.me&&<em> 나</em>}</strong><small>{who(r)}</small></span><b>{label(r)}</b></button></li>)}</ol>}
+   {peek&&scope!=="team"&&<RankCard r={peek} onClose={()=>setPeek(null)}/>}
+   {!!shown.length&&<ol className="rank-list">{shown.map(r=><li key={(r.id??"")+r.name} className={r.me?"me":""}><button onClick={()=>open(r)} aria-expanded={scope!=="team"?peek===r:undefined}><span className="rank-no">{r.rank}</span><PlayerPhoto name={r.name} photo={r.photo}/><span className="rank-who"><strong>{r.name}{r.me&&<em> 나</em>}</strong><small>{who(r)}</small></span><b>{label(r)}</b></button></li>)}</ol>}
    {rest.length>shown.length&&<button className="btn rank-more" onClick={()=>setMore(true)}>더 보기 ({rest.length-shown.length}명)</button>}
    {more&&rest.length>6&&<button className="text-link rank-more" onClick={()=>setMore(false)}>접기</button>}
   </>:<p className="small muted rank-empty">{scope==="region"?"아직 "+area+" 지역에서 전국·지역 랭킹에 참여한 선수의 기록이 없어요.":scope!=="team"&&!v.rankPublic?"아직 참여한 선수가 없거나 이 기간 기록이 없어요.":"이 기간에 "+tab.label+" 기록이 없어요."}</p>}
   <p className="data-note">{scope==="team"?"우리 팀 기록 기준(자체전 포함). 골·도움은 결과가 확정된 경기, 출석은 출석 확정, MVP는 마감된 투표만 세요.":scope==="region"?"참여를 켠 선수가 "+area+" 지역 팀에서 남긴 기록만 합쳐요. 상위 50명까지 보여요.":"참여를 켠 선수의 모든 팀 기록을 합쳐요. 활동 중인 팀의 기록만 세고, 상위 50명까지 보여요."} 이번 주는 월요일부터 일요일까지예요.</p>
+ </div>;
+}
+
+function RankCard({r,onClose}:{r:Row;onClose:()=>void}){
+ const c=r.card as Row|null;
+ return <div className="rank-card" role="region" aria-label={r.name+" 프로필"}>
+  <div className="rank-card-head"><PlayerPhoto name={r.name} photo={r.photo}/><span><strong>{r.name}</strong><small>{r.team}</small></span><button type="button" className="text-link" onClick={onClose}>닫기</button></div>
+  {c?<dl className="rank-card-grid">
+   <div><dt>포지션</dt><dd>{[c.main,c.sub].filter(Boolean).join(" · ")||"–"}</dd></div>
+   <div><dt>주발</dt><dd>{c.foot||"–"}</dd></div>
+   <div><dt>활동 지역</dt><dd>{(c.regions??[]).join(", ")||"–"}</dd></div>
+   <div><dt>인스타그램</dt><dd>{c.instagram?<a href={"https://instagram.com/"+encodeURIComponent(c.instagram)} target="_blank" rel="noopener noreferrer">@{c.instagram}</a>:"–"}</dd></div>
+  </dl>:<p className="small muted">이 선수는 프로필을 공개하지 않았어요. 이름·팀·기록만 보여요.</p>}
  </div>;
 }
 

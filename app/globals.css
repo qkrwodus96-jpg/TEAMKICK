@@ -770,3 +770,51 @@ body{word-break:keep-all;overflow-wrap:break-word}
 .vm-pin span{position:absolute;top:100%;margin-top:2px;font-size:11px;font-weight:700;white-space:nowrap;color:#16181b;text-shadow:0 0 3px #fff,0 0 3px #fff}
 .vm-pin.on b{background:#168b53;border-color:#168b53;color:#fff;transform:scale(1.1)}.vm-pin.on::after{background:#168b53}
 .vm-pin.zero b{min-width:12px;width:12px;height:12px;padding:0;border:2px solid #fff;background:#9aa0a6;font-size:0}.vm-pin.zero::after{display:none}
+.roster-row{cursor:pointer}
+/* 1.22 메달·시상대(사장님 그림 느낌: 짙은 회색 단상 + 초록 줄, 금·은·동 동전) */
+.medal{display:block;flex:none;filter:drop-shadow(0 2px 2px rgba(0,0,0,.18))}
+.rank-number.medal-slot{width:28px;display:grid;place-items:center}
+.rt td.rt-no .medal{margin:0 auto}
+.podium{gap:6px}
+.podium-card{padding-bottom:30px}
+.podium-step{position:relative;display:block;padding:0;border:0;border-radius:8px 8px 0 0;background:linear-gradient(180deg,#4a4d53 0,#3a3d42 18%,#2e3135 100%);box-shadow:inset 0 2px 0 rgba(255,255,255,.08)}
+.podium-step::after{content:"";position:absolute;left:0;right:0;bottom:9px;height:4px;background:#7ad93a;box-shadow:0 1px 0 rgba(0,0,0,.25)}
+.podium-step .medal{position:absolute;left:50%;top:0;transform:translate(-50%,-62%)}
+.place-1 .podium-step,.place-2 .podium-step,.place-3 .podium-step{background:linear-gradient(180deg,#4a4d53 0,#3a3d42 18%,#2e3135 100%)}
+.place-1 .podium-step{height:70px}.place-2 .podium-step{height:52px}.place-3 .podium-step{height:42px}
+.podium-col .podium-card.empty+.podium-step .medal{opacity:.35}
+/* 1.22 홈 화면에 추가 단계 */
+.setup-steps{display:grid;gap:8px;margin-top:10px;padding:12px;border:1px dashed var(--border);border-radius:12px}
+.setup-steps strong{font-size:13.5px}
+.setup-steps ol{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+.setup-steps li{display:grid;grid-template-columns:22px 1fr;gap:8px;align-items:center;padding:8px 10px;border-radius:10px;background:var(--muted);font-size:13px;line-height:1.4}
+.setup-steps li>b{display:grid;place-items:center;width:22px;height:22px;border-radius:11px;background:var(--foreground);color:var(--background);font-size:12px}
+.setup-steps.strong{border-style:solid;border-color:var(--foreground)}
+/* ───── 1.22 디자인 다듬기(B안) ─────
+   색·배치·탭 구성은 그대로. 화면마다 제각각이던 모양 규칙만 하나로 맞춘다.
+   모서리: 카드 14px · 버튼/입력 10px · 배지/칩 둥글게. 높이: 버튼 40px · 입력 44px.
+   글자: 화면 제목 26/800 · 구역 제목 17/800 · 본문 14~15 · 안내 12.5. */
+:root{--r-card:14px;--r-ctl:10px;--h-ctl:44px;--h-btn:40px}
+.page-title h1{font-size:26px;font-weight:800;letter-spacing:-.035em;line-height:1.2}
+.page-title p{font-size:13px;color:var(--muted-foreground)}
+.panel-title h2,.view-heading{font-size:17px;font-weight:800;letter-spacing:-.02em}
+.btn{min-height:var(--h-btn);border-radius:var(--r-ctl);padding:0 14px;font-size:14px;font-weight:650}
+.badge{min-height:24px;padding:0 9px;border-radius:999px;font-size:12px;font-weight:700}
+.form-grid input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]),.form-grid select,.deadline-field input,.deadline-field select{min-height:var(--h-ctl);border:1px solid var(--border);border-radius:var(--r-ctl);padding:0 12px;background:var(--card);color:inherit;font:inherit;font-size:15px;width:100%}
+.form-grid textarea{border-radius:var(--r-ctl)}
+.deadline-field .two-col.fields{grid-template-columns:1.2fr 1fr;gap:8px}
+.vote-box,.mcard,.team-tile,.stat-card,.setup-card,.task-box,.ps-prof,.rank-card,.next-match,.guest-app,.wx-detail,.dues-head,.dues-sum>div{border-radius:var(--r-card)}
+.vote-option{min-height:40px;border-radius:var(--r-ctl);font-weight:600}
+.vote-close{min-height:40px;padding:0 16px;border-radius:var(--r-ctl);font-size:14px;font-weight:800}
+.vote-deadline{align-items:center}
+.fixture-row{padding:16px 0}
+.fixture-info strong{font-size:14.5px;font-weight:700;line-height:1.4}
+.fixture-info p{font-size:12.5px}
+.fixture-date{border-radius:var(--r-ctl)}
+.data-note{font-size:12.5px;line-height:1.55;color:var(--muted-foreground)}
+.empty{padding:34px 20px;gap:10px}.empty svg{width:30px;height:30px}.empty h3{font-size:16px;font-weight:700}.empty p{font-size:13.5px;line-height:1.6}
+.team-tile{min-height:76px}
+.team-tile span{font-size:13.5px;font-weight:650}
+.notice p{font-size:14px;font-weight:600}
+.rank-row{padding:10px 0}
+.as-photo{background:#e9ecef;object-position:center 22%}

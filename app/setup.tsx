@@ -5,7 +5,7 @@
 //
 // 카카오톡에서 링크를 누르면 카톡 안 브라우저로 열린다. 거기서는 홈 화면 추가도 알림도 되지 않으므로
 // 먼저 "다른 브라우저로 열기"를 권한다. 카톡은 kakaotalk://web/openExternal 로 기본 브라우저를 연다.
-import {useEffect,useState} from "react";
+import {useEffect,useState,type ReactNode} from "react";
 import {Bell,Check,ChevronDown,ChevronUp,Download,ExternalLink,LoaderCircle,Share} from "lucide-react";
 import {toast} from "sonner";
 import {installState,promptInstall} from "./install";
@@ -77,13 +77,13 @@ export function AppSetup({signedIn}:{signedIn:boolean}){
   catch(e){toast.error(e instanceof Error?e.message:"알림을 켜지 못했어요.");const why=await pushStatus().catch(()=>"" as const);setS(x=>({...x,pushWhy:why}));setHelp("push")}
   finally{setBusy("")}
  }
- const manual=s.how==="ios"
-  ?<>사파리 화면 아래 <Share size={13} style={{verticalAlign:"-2px"}}/> <b>공유</b> → <b>홈 화면에 추가</b> → <b>추가</b></>
-  :s.how==="samsung"
-  ?<>오른쪽 아래 <b>≡ 메뉴</b> → <b>현재 페이지 추가</b> → <b>홈 화면</b></>
-  :<>오른쪽 위 <b>⋮ 메뉴</b> → <b>홈 화면에 추가</b> 또는 <b>앱 설치</b></>;
 
- if(s.folded)return <button type="button" className="setup-fold" onClick={()=>fold(false)}><span>팀킥 준비하기 · {s.inApp?"다른 브라우저로 열기":left+"개 남음"}</span><ChevronDown size={16}/></button>;
+ const steps:ReactNode[]=s.how==="ios"
+  ?[<>화면 아래 <Share size={13} style={{verticalAlign:"-2px"}}/> <b>공유</b> 누르기</>,<><b>홈 화면에 추가</b> 고르기</>,<>오른쪽 위 <b>추가</b></>]
+  :s.how==="samsung"
+  ?[<>오른쪽 아래 <b>≡ 메뉴</b> 누르기</>,<><b>현재 페이지 추가</b> 고르기</>,<><b>홈 화면</b> 고르기</>]
+  :[<>오른쪽 위 <b>⋮ 메뉴</b> 누르기</>,<><b>홈 화면에 추가</b> 또는 <b>앱 설치</b> 고르기</>,<><b>설치</b>(또는 추가) 누르기</>];
+ if(s.folded)return <button type="button" className="setup-fold" onClick={()=>fold(false)}><span>팀킥 준비하기 · {s.inApp?"다른 브라우저로 열기":s.install==="todo"?"홈 화면에 추가하는 방법":left+"개 남음"}</span><ChevronDown size={16}/></button>;
 
  return <section className={"setup-card"+(s.handoff?" handoff":"")} aria-label="팀킥 준비하기">
   {s.handoff&&<p className="setup-handoff">브라우저로 잘 옮겨 왔어요. 이제 <b>홈 화면에 추가</b>를 누르면 앱처럼 쓸 수 있어요.</p>}
@@ -99,7 +99,11 @@ export function AppSetup({signedIn}:{signedIn:boolean}){
     {s.push!=="na"&&<button type="button" className={"setup-chip"+(s.push==="done"?" done":"")} disabled={s.push==="done"||busy==="push"} onClick={push}>{s.push==="done"?<Check size={16}/>:busy==="push"?<LoaderCircle className="loader" size={16}/>:<Bell size={16}/>}알림 켜기</button>}
    </div>
    {/* 1.21 설치가 안 된 사람에게는 직접 추가하는 방법을 늘 보여준다(사장님 메모 — 카톡에서 다른 브라우저로 넘어온 뒤 설치 창이 안 떠서 막힘). */}
-   {s.install==="todo"&&<p className={"setup-help"+(help==="install"?" strong":"")}>{help==="install"?"설치 창이 뜨지 않았어요. 이렇게 직접 추가해 주세요: ":"버튼이 안 되면 직접: "}{manual}</p>}
+   {/* 1.22 홈에 단계별 칸으로(사장님 메모 — "다른 브라우저 열기처럼 홈에 떴으면") */}
+   {s.install==="todo"&&<div className={"setup-steps"+(help==="install"?" strong":"")}>
+    <strong>{help==="install"?"설치 창이 뜨지 않았어요. 이렇게 직접 추가해 주세요":"버튼이 안 되면 직접 추가해요"}</strong>
+    <ol>{steps.map((x,i)=><li key={i}><b>{i+1}</b><span>{x}</span></li>)}</ol>
+   </div>}
    {help==="push"&&<p className="setup-help">{s.pushWhy==="ios-install"?<>아이폰은 <b>홈 화면에 추가</b>한 팀킥 아이콘으로 열어야 알림을 받을 수 있어요. 먼저 홈 화면에 추가해주세요.</>:s.pushWhy==="denied"?<>이 브라우저에서 알림을 막아두셨어요. 주소창 왼쪽 <b>자물쇠(또는 ⓘ)</b> → <b>권한</b> → <b>알림 허용</b>으로 바꾼 뒤 다시 눌러주세요.</>:<>다시 한 번 눌러주세요. 계속 안 되면 <b>MY → 기기 알림</b>에서 이유를 볼 수 있어요.</>}</p>}
   </>}
  </section>;

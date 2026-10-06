@@ -131,7 +131,8 @@ const DOW_EN=["SUN","MON","TUE","WED","THU","FRI","SAT"];
 function when(d:D){if(!d.start)return null;const k=new Date(Date.parse(d.start)+9*3600e3);
  return {md:(k.getUTCMonth()+1)+"."+String(k.getUTCDate()).padStart(2,"0"),dow:DOW_EN[k.getUTCDay()],hm:String(k.getUTCHours()).padStart(2,"0")+":"+String(k.getUTCMinutes()).padStart(2,"0"),y:k.getUTCFullYear()}}
 function brand(ctx:C,color:string,x=W-48,y=H-40){ctx.fillStyle=color;f(ctx,22,EN);ctx.textAlign="right";ctx.textBaseline="alphabetic";ctx.fillText("TEAMKICK",x,y)}
-const no=(p:P)=>p.number==null?"":String(p.number);
+// 등번호가 없거나 0(안 정함)이면 비운다(1.22 — 포스터에 "0" 이 찍히던 것).
+const no=(p:P)=>p.number==null||Number(p.number)===0?"":String(p.number);
 // 선수 사진 칸: 사진이 있으면 꽉 채우고, 없으면 팀 색 바탕에 유니폼 실루엣 + 등번호
 async function portrait(ctx:C,p:P,x:number,y:number,w:number,h:number,r:number,th:Theme,mode:Photos){
  const im=await pic(p,mode);ctx.save();rr(ctx,x,y,w,h,r);ctx.clip();
@@ -197,15 +198,16 @@ async function tplGrid(ctx:C,d:D){
  if(d.subs.length>room&&room>0){ctx.fillStyle="rgba(255,255,255,.6)";f(ctx,22,BODY,"700");ctx.textAlign="left";ctx.fillText("외 "+(d.subs.length-room)+"명",PX+92,y+30+room*44)}
  if(!d.subs.length){ctx.fillStyle="rgba(255,255,255,.5)";f(ctx,24,BODY,"600");ctx.textAlign="left";ctx.fillText("—",PX+28,y+40)}
  // 왼쪽 카드 3×4: 선발 11 + 팀 카드
- const GX=40,GY=234,GW=PX-GX-16,GH=PH,cols=3,rows=4,gap=10,cw=(GW-gap*(cols-1))/cols,ch=(GH-gap*(rows-1))/rows;
- const list=d.starters.slice(0,11);
- for(let i=0;i<12;i++){const x=GX+(i%cols)*(cw+gap),yy=GY+Math.floor(i/cols)*(ch+gap);
+ // 1.22 선발이 적으면 줄 수를 줄여 빈 칸을 없앤다(마지막 칸은 팀 카드).
+ const list=d.starters.slice(0,11),cols=3,rows=Math.max(2,Math.ceil((list.length+1)/cols)),total=rows*cols;
+ const GX=40,GY=234,GW=PX-GX-16,GH=PH,gap=10,cw=(GW-gap*(cols-1))/cols,ch=(GH-gap*(rows-1))/rows;
+ for(let i=0;i<total;i++){const x=GX+(i%cols)*(cw+gap),yy=GY+Math.floor(i/cols)*(ch+gap);
   if(i<list.length){const p=list[i];await portrait(ctx,p,x,yy,cw,ch,6,th,d.photos);
    ctx.fillStyle="#fff";ctx.textAlign="left";ctx.textBaseline="alphabetic";
    if(no(p)){ctx.save();ctx.translate(x+16,yy+ch-58);ctx.transform(1,0,-.12,1,0,0);f(ctx,58,EN);ctx.fillText(no(p),0,0);ctx.restore()}
    fit(ctx,short(p.name),cw-30,34,KO);ctx.fillText(short(p.name),x+16,yy+ch-16);
    if(p.captain)cBadge(ctx,x+cw-28,yy+28,18,th);}
-  else if(i===11){ctx.fillStyle="rgba(0,0,0,.35)";ctx.fillRect(x,yy,cw,ch);await crest(ctx,d.team,x+cw/2,yy+ch/2-22,52,th.accent);ctx.fillStyle="#fff";ctx.textAlign="center";fit(ctx,short(d.team.name),cw-24,26,KO);ctx.fillText(short(d.team.name),x+cw/2,yy+ch-30)}
+  else if(i===total-1){ctx.fillStyle="rgba(0,0,0,.35)";ctx.fillRect(x,yy,cw,ch);await crest(ctx,d.team,x+cw/2,yy+ch/2-22,Math.min(cw,ch)*.3,th.accent);ctx.fillStyle="#fff";ctx.textAlign="center";fit(ctx,short(d.team.name),cw-24,26,KO);ctx.fillText(short(d.team.name),x+cw/2,yy+ch-30)}
   else{ctx.fillStyle="rgba(0,0,0,.25)";ctx.fillRect(x,yy,cw,ch)}}
  grain(ctx);ctx.fillStyle="rgba(255,255,255,.75)";f(ctx,24,BODY,"700");ctx.textAlign="left";ctx.textBaseline="alphabetic";if(d.venue)ctx.fillText(d.venue,40,H-42);brand(ctx,"rgba(255,255,255,.75)");
 }

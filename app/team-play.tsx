@@ -7,6 +7,7 @@ import {Trophy,Shuffle,Minus,Plus,Check,Share2,Copy,Bell,Crown,Goal,Footprints,C
 import {toast} from "sonner";
 import {SQUAD_NAMES,summaries,periodRange,rankRows,REGIONS,type Row} from "@/lib/model";
 import {PlayerPhoto,koreanDate,time,backNo,opponent} from "./teamkick";
+import {Medal} from "./medal";
 
 // --- 공통: 숫자 올리고 내리기 ---
 // 휴대폰에서 작은 숫자 칸을 누르고 키보드를 띄우는 것보다 +/− 가 빠르다(골·도움 입력).
@@ -148,7 +149,7 @@ export function Rankings({v,busy,run,onOpen}:{v:Row;busy:boolean;run:(c:Record<s
   {scope!=="team"&&<div className="rank-optin">{v.rankPublic?<><p className="small muted">지역·전국 랭킹에 참여 중이에요. <button className="text-link" disabled={busy} onClick={()=>run({type:"setRankPublic",on:false})}>빠지기</button></p><label className="rank-profile-opt"><input type="checkbox" checked={!!v.profilePublic} disabled={busy} onChange={e=>run({type:"setProfilePublic",on:e.target.checked})}/><span>랭킹에서 내 프로필도 보여주기<small>포지션·주발·활동 지역·인스타그램 아이디가 다른 팀 이용자에게 보여요. 키·몸무게·나이·생일은 보이지 않아요.</small></span></label></>:<div className="task-box"><strong>지역·전국 랭킹은 참여를 켠 선수만 보여요</strong><p className="small muted">켜면 내 선수 이름·팀 이름·기록 숫자가 다른 팀 이용자에게도 보여요. 언제든 끌 수 있어요.</p><button className="btn btn-green" disabled={busy} onClick={()=>run({type:"setRankPublic",on:true})}>지역·전국 랭킹 참여하기</button></div>}</div>}
   {rows.length?<>
    <div className="podium">{[1,0,2].map(i=>{const r=podium[i];return <div key={i} className={"podium-col place-"+(i+1)+(r?.me?" me":"")}>{r?<button className="podium-card" onClick={()=>open(r)}>
-    <span className="podium-face" style={{["--medal" as string]:MEDAL[r.rank as number]??"#c9d3cd"}}><PlayerPhoto name={r.name} photo={r.photo}/></span><strong>{r.name}</strong><small>{who(r)||" "}</small><b className="podium-value">{r.value}<small>{tab.unit}</small></b></button>:<div className="podium-card empty"><small>—</small></div>}<div className="podium-step" style={{["--medal" as string]:r?MEDAL[r.rank as number]??"#c9d3cd":"#dfe5e1"}}><span>{r?r.rank:i+1}</span></div></div>})}</div>
+    <span className="podium-face" style={{["--medal" as string]:MEDAL[r.rank as number]??"#c9d3cd"}}><PlayerPhoto name={r.name} photo={r.photo}/></span><strong>{r.name}</strong><small>{who(r)||" "}</small><b className="podium-value">{r.value}<small>{tab.unit}</small></b></button>:<div className="podium-card empty"><small>—</small></div>}<div className="podium-step"><Medal n={Number(r?.rank??i+1)} size={i===0?54:46}/></div></div>})}</div>
    {peek&&scope!=="team"&&<RankCard r={peek} onClose={()=>setPeek(null)}/>}
    {!!shown.length&&<ol className="rank-list">{shown.map(r=><li key={(r.id??"")+r.name} className={r.me?"me":""}><button onClick={()=>open(r)} aria-expanded={scope!=="team"?peek===r:undefined}><span className="rank-no">{r.rank}</span><PlayerPhoto name={r.name} photo={r.photo}/><span className="rank-who"><strong>{r.name}{r.me&&<em> 나</em>}</strong><small>{who(r)}</small></span><b>{label(r)}</b></button></li>)}</ol>}
    {rest.length>shown.length&&<button className="btn rank-more" onClick={()=>setMore(true)}>더 보기 ({rest.length-shown.length}명)</button>}

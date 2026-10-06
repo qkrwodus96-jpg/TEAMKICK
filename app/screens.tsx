@@ -8,7 +8,7 @@ import {Table,TableHeader,TableHead,TableBody,TableRow,TableCell} from "@/compon
 import {toast} from "sonner";
 import {Upload,Plus,Search,MapPin,CalendarDays,Clock,Users,ShieldCheck,Copy,ExternalLink,Settings,CheckCircle2,X,ArrowLeft,LogOut,Download,LoaderCircle,Goal,Handshake,Bell,Navigation,Megaphone,MessageCircle,Home,BarChart3,Shield,Wallet,Image as ImageIcon} from "lucide-react";
 import {Picker,Crest,imageUrl,Empty,GameBadge,GuestBadge,PlayerPhoto,Vote,koreanDate,time,localDay,inputTime,fromInput,opponent,scoreText,IntraVersus,started,backNo,backNoOr,NoticeList,noticeTitle} from "./teamkick";
-import {currentVote,guestStatusOf,REGIONS,LEVELS,DAYS,levelOf,levelChip,formatLabel,isIntra,POSITION_GROUPS,FEET,positionName,SQUAD_NAMES,RULES_MAX,GUEST_POS,MIN_PLAY,type Row} from "@/lib/model";
+import {summaries,currentVote,guestStatusOf,REGIONS,LEVELS,DAYS,levelOf,levelChip,formatLabel,isIntra,POSITION_GROUPS,FEET,positionName,SQUAD_NAMES,RULES_MAX,GUEST_POS,MIN_PLAY,type Row} from "@/lib/model";
 import {Stepper,SquadBoard,MvpPanel,RulesPanel,RULE_TEMPLATES,InviteShare} from "./team-play";
 import {openWelcome} from "./welcome";
 import {TeamProfile} from "./team-profile";
@@ -506,7 +506,9 @@ export function Matching(p:any){
  const venueList=venues.find(x=>x.key===venueKey)?.list??[];
  // 같은 날 등록된 시간 사이가 비면 "등록된 모집 없음" 줄을 넣는다(구장 운영 시간은 계절마다 달라 미리 정한 칸은 쓰지 않는다).
  const venueLine:Row[]=[];venueList.forEach((g:Row,i:number)=>{const p=venueList[i-1];if(p&&localDay(p.start)===localDay(g.start)&&Date.parse(p.end)<Date.parse(g.start))venueLine.push({gap:true,id:"gap-"+g.id,start:p.end,end:g.start});venueLine.push(g)});
- const days=Array.from({length:7},(_,i)=>{const d=new Date(now+9*3600e3+i*864e5);return {key:d.toISOString().slice(0,10),d:d.getUTCDate(),w:d.getUTCDay(),i}});
+ // 1.22 날짜 줄은 이번 달 마지막 날까지(사장님 메모 — "10월 날짜까지 다"). 월말이 가까우면 최소 14일.
+ const kNow=new Date(now+9*3600e3),monthLeft=new Date(Date.UTC(kNow.getUTCFullYear(),kNow.getUTCMonth()+1,0)).getUTCDate()-kNow.getUTCDate()+1;
+ const days=Array.from({length:Math.max(14,monthLeft)},(_,i)=>{const d=new Date(now+9*3600e3+i*864e5);return {key:d.toISOString().slice(0,10),d:d.getUTCDate(),w:d.getUTCDay(),i}});
  const dayCount=(k:string)=>v.listings.filter((g:Row)=>localDay(g.start)===k&&hit(hay(g))).length;
  function resetFilters(){setDraft("");setQuery("");setDate("")}
  const dateText=date?(()=>{const d=new Date(date+"T00:00:00Z");return (d.getUTCMonth()+1)+"월 "+d.getUTCDate()+"일 ("+"일월화수목금토"[d.getUTCDay()]+")"})():"날짜 선택";
@@ -620,6 +622,8 @@ export function Management(p:any){
  const pending=v.members.filter((m:Row)=>m.status==="pending"),active=v.members.filter((m:Row)=>m.status==="active"),me=active.find((m:Row)=>m.userId===v.user.id);
  // 1.18: 스쿼디 팀 메인처럼 위에 메뉴 칸을 두고, 누른 칸의 내용만 아래에 보여준다(MY 가 너무 길어서).
  const staff=["captain","manager"].includes(v.role);
+ // 1.22 팀원 목록에서 선수를 누르면 프로필·기록(전체 기간)을 연다(사장님 메모).
+ const openPlayer=(m:Row)=>{const all=summaries({...v,games:v.games??[],members:v.members??[],sides:v.sides??[]},"2000-01-01T00:00:00.000Z","2100-01-01T00:00:00.000Z").players.find((x:Row)=>x.id===m.id);setModal({kind:"player",player:{...(all??{...m,attend:0,eligible:0,goals:0,assists:0,points:0,mvp:0,rate:null}),allTime:true}})};
  const tiles:{id:string;label:string;icon:typeof Home;go:()=>void;badge?:number;show?:boolean}[]=[
   {id:"next",label:"다음 경기",icon:Home,go:()=>setView("home")},
   {id:"records",label:"팀 기록",icon:BarChart3,go:()=>setView("records")},
@@ -640,7 +644,7 @@ export function Management(p:any){
  {myTab==="chat"&&<>{back} <section className="panel"><div className="panel-title"><h2 className="row" style={{gap:6}}><MessageCircle size={18}/>채팅</h2></div><ChatRooms demo={demo} onOpen={(room:string)=>setModal({kind:"chat",room})}/></section>
 </>}
  {myTab==="board"&&<>{back} <section className="panel"><div className="panel-title"><h2>팀 공지</h2>{captain&&<button className="btn" onClick={()=>setModal({kind:"notice"})}><Plus/>공지 작성</button>}</div><NoticeList notices={v.notices??[]} birthdays={v.birthdaysToday??[]} onOpen={(n:Row)=>setModal({kind:"noticeDetail",notice:n})}/></section></>}
- {myTab==="members"&&<>{back} <section className="panel"><div className="panel-title"><h2>함께 뛰는 선수들 <span className="small muted">{active.length}명</span></h2><button className="btn" onClick={()=>setModal({kind:"shareRoster"})}><ImageIcon size={16}/>명단 이미지</button></div><Table className="roster-table"><TableHeader><TableRow><TableHead>선수</TableHead><TableHead>등번호</TableHead><TableHead>포지션</TableHead><TableHead>역할</TableHead>{captain&&<TableHead>관리</TableHead>}</TableRow></TableHeader><TableBody>{active.map((m:Row)=><TableRow key={m.id}><TableCell><div className="row"><PlayerPhoto name={m.name} photo={m.photo}/><strong>{m.name}</strong></div></TableCell><TableCell>{backNo(m.number)||"—"}</TableCell><TableCell>{m.position}</TableCell><TableCell><span className="badge">{m.role==="captain"?"주장":m.role==="manager"?"운영진":"팀원"}</span></TableCell>{captain&&<TableCell>{m.role!=="captain"&&<button className="text-link" onClick={()=>setModal({kind:"member",member:m})}>관리</button>}</TableCell>}</TableRow>)}</TableBody></Table></section>
+ {myTab==="members"&&<>{back} <section className="panel"><div className="panel-title"><h2>함께 뛰는 선수들 <span className="small muted">{active.length}명</span></h2><button className="btn" onClick={()=>setModal({kind:"shareRoster"})}><ImageIcon size={16}/>명단 이미지</button></div><Table className="roster-table"><TableHeader><TableRow><TableHead>선수</TableHead><TableHead>등번호</TableHead><TableHead>포지션</TableHead><TableHead>역할</TableHead>{captain&&<TableHead>관리</TableHead>}</TableRow></TableHeader><TableBody>{active.map((m:Row)=><TableRow key={m.id} className="roster-row" onClick={()=>openPlayer(m)}><TableCell><div className="row"><PlayerPhoto name={m.name} photo={m.photo}/><strong>{m.name}</strong></div></TableCell><TableCell>{backNo(m.number)||"—"}</TableCell><TableCell>{m.position}</TableCell><TableCell><span className="badge">{m.role==="captain"?"주장":m.role==="manager"?"운영진":"팀원"}</span></TableCell>{captain&&<TableCell>{m.role!=="captain"&&<button className="text-link" onClick={e=>{e.stopPropagation();setModal({kind:"member",member:m})}}>관리</button>}</TableCell>}</TableRow>)}</TableBody></Table></section>
 </>}
  {myTab==="manage"&&<>{back} {captain&&pending.length>0&&<section className="panel"><h2 className="view-heading">가입 승인 대기 <span className="badge badge-orange">{pending.length}</span></h2>{pending.map((m:Row)=><div key={m.id} className="attendance-item"><div><strong>{m.name}</strong><p className="data-note">{m.position} · 희망 {backNoOr(m.number)}</p></div><div className="row"><button className="btn btn-green" disabled={busy} onClick={()=>run({type:"approveMember",teamId:v.teamId,memberId:m.id})}>승인</button><button className="btn" disabled={busy} onClick={()=>run({type:"rejectMember",teamId:v.teamId,memberId:m.id})}>거절</button></div></div>)}</section>}
  <RulesPanel team={team} manager={["captain","manager"].includes(v.role)} onEdit={()=>setModal({kind:"rules"})}/>
@@ -756,8 +760,8 @@ export function AppDialogs(p:any){
   const cur=String(form[key]??""),date=cur.slice(0,10),hour=cur.length>=13?Number(cur.slice(11,13)):"";
   const set=(d:string,h:number|string)=>field(key,d&&h!==""?d+"T"+String(h).padStart(2,"0")+":00":d?d+"T"+String(hour===""?20:hour).padStart(2,"0")+":00":"");
   return <div className="deadline-field"><span className="field-label">투표 마감</span><div className="two-col fields">
-   <label className="sr-label">날짜<input type="date" required={required} value={date} onChange={e=>set(e.target.value,hour)}/></label>
-   <label className="sr-label">시<select value={hour===""?"":String(hour)} required={required} disabled={!date} onChange={e=>set(date,e.target.value)}><option value="">시간</option>{Array.from({length:24},(_,h)=><option key={h} value={h}>{(h<12?"오전 ":"오후 ")+((h%12)||12)+"시"}</option>)}</select></label>
+   <input type="date" aria-label="투표 마감 날짜" required={required} value={date} onChange={e=>set(e.target.value,hour)}/>
+   <select aria-label="투표 마감 시각" value={hour===""?"":String(hour)} required={required} disabled={!date} onChange={e=>set(date,e.target.value)}><option value="">시각 선택</option>{Array.from({length:24},(_,h)=><option key={h} value={h}>{(h<12?"오전 ":"오후 ")+((h%12)||12)+"시"}</option>)}</select>
   </div></div>;
  }
  function startChanged(value:string){

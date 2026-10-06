@@ -83,5 +83,12 @@ const DICT=`다른 팀원이 공지를 올리거나 경기를 만들 때 옵니�
 배경 지우기	Remove background	背景を消す	去除背景	Xóa nền
 원본 그대로	Original	元のまま	保持原图	Giữ nguyên
 안 넣기	Leave out	入れない	不放入	Không thêm
+시각 선택	Select time	時刻を選択	选择时间	Chọn giờ
+홈 화면에 추가하는 방법	How to add to home screen	ホーム画面に追加する方法	如何添加到主屏幕	Cách thêm vào màn hình chính
+위 숫자는 전체 기간 기준이에요.	Numbers above cover all time.	上の数字は全期間の基準です。	以上数字为全部期间。	Số liệu trên tính cho toàn bộ thời gian.
+버튼이 안 되면 직접 추가해요	If the button does not work, add it manually	ボタンが使えない場合は手動で追加	按钮无效时请手动添加	Nếu nút không hoạt động, hãy thêm thủ công
+투표 마감 날짜	Voting deadline date	投票締切日	投票截止日期	Ngày hết hạn bình chọn
+투표 마감 시각	Voting deadline time	投票締切時刻	投票截止时间	Giờ hết hạn bình chọn
+설치 창이 뜨지 않았어요. 이렇게 직접 추가해 주세요	The install prompt did not appear. Add it like this	インストール画面が出ませんでした。次の手順で追加してください	未出现安装窗口，请按以下步骤添加	Không hiện hộp cài đặt. Hãy thêm theo cách này
 `;
 export default DICT;

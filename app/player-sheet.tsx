@@ -8,6 +8,7 @@ import {ChevronDown} from "lucide-react";
 import {isIntra,type Row} from "@/lib/model";
 import {dayText} from "@/lib/when";
 import {PlayerPhoto,backNo,opponent} from "./teamkick";
+import {Medal} from "./medal";
 
 export const RANK_COLS:{key:string;label:string;short:string}[]=[
  {key:"attend",label:"출석",short:"출석"},{key:"goals",label:"골",short:"골"},{key:"assists",label:"도움",short:"도움"},
@@ -31,7 +32,7 @@ export function RecordsTable({players,rank,setRank,onOpen}:{players:Row[];rank:s
     <button type="button" onClick={()=>setRank(c.key)} title={c.label+" 순으로 보기"}>{c.short}</button></th>)}
   </tr></thead>
   <tbody>{list.map((p,i)=>{const n=place(i),medal=val(p,rank)>0&&n<=3?" m"+n:"";return <tr key={p.id} onClick={()=>onOpen(p)} className={top>0&&val(p,rank)===top?"lead":""}>
-   <td className={"rt-no"+medal}><span>{n}</span></td>
+   <td className={"rt-no"+medal}>{medal?<Medal n={n} size={26}/>:<span>{n}</span>}</td>
    <th className="rt-player" scope="row"><span className="rt-name"><b>{p.name}</b><small>{[backNo(p.number),p.position].filter(Boolean).join(" ")}{p.status!=="active"?" 과거":""}</small></span></th>
    {RANK_COLS.map(c=><td key={c.key} className={rank===c.key?"on":""}>{c.key==="attend"?<>{p.attend}<small>/{p.eligible}</small></>:c.key==="rate"?(p.rate==null?"–":p.rate+"%"):p[c.key]??0}</td>)}
   </tr>})}</tbody>
@@ -70,7 +71,7 @@ export function PlayerSheet({v,player}:{v:Row;player:Row}){
    return shown.length?<dl className="ps-prof">{shown.map(([k,x])=><div key={k}><dt>{k}</dt><dd>{x}</dd></div>)}</dl>:<p className="small muted">프로필을 아직 적지 않았어요.</p>;
   })()}
   <div className="ps-kpi">{kpi.map(([k,x])=><div key={String(k)}><b>{x}</b><span>{k}</span></div>)}</div>
-  <p className="data-note">위 숫자는 기록 탭에서 고른 기간 기준이에요.</p>
+  <p className="data-note">{player.allTime?"위 숫자는 전체 기간 기준이에요.":"위 숫자는 기록 탭에서 고른 기간 기준이에요."}</p>
   <div className="ps-log-head"><strong>경기별 기록</strong>{form.length>0&&<span className="ps-wdl"><i className="w">{wdl.w}승</i><i className="d">{wdl.d}무</i><i className="l">{wdl.l}패</i><small>뛴 경기</small></span>}</div>
   {!rows.length&&<p className="small muted">아직 끝난 경기 기록이 없어요.</p>}
   <ul className="ps-log">{shown.map(({s,g})=>{const o=outcome(v,g!),r=s.records?.[player.id],here=!!s.attendance?.[player.id];

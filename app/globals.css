@@ -776,13 +776,20 @@ body{word-break:keep-all;overflow-wrap:break-word}
 .rank-number.medal-slot{width:28px;display:grid;place-items:center}
 .rt td.rt-no .medal{margin:0 auto}
 .podium{gap:6px}
-.podium-card{padding-bottom:30px}
-.podium-step{position:relative;display:block;padding:0;border:0;border-radius:8px 8px 0 0;background:linear-gradient(180deg,#4a4d53 0,#3a3d42 18%,#2e3135 100%);box-shadow:inset 0 2px 0 rgba(255,255,255,.08)}
-.podium-step::after{content:"";position:absolute;left:0;right:0;bottom:9px;height:4px;background:#7ad93a;box-shadow:0 1px 0 rgba(0,0,0,.25)}
-.podium-step .medal{position:absolute;left:50%;top:0;transform:translate(-50%,-62%)}
-.place-1 .podium-step,.place-2 .podium-step,.place-3 .podium-step{background:linear-gradient(180deg,#4a4d53 0,#3a3d42 18%,#2e3135 100%)}
-.place-1 .podium-step{height:70px}.place-2 .podium-step{height:52px}.place-3 .podium-step{height:42px}
+/* 1.23: 메달이 단 모서리에 걸쳐 떠 보이던 것을 단 앞면 가운데로. 밝은 화면은 연회색 단, 어두운 화면은 짙은 회색 단 + 위쪽 초록 줄. */
+.podium-card{padding-bottom:10px}
+.podium-step,.place-1 .podium-step,.place-2 .podium-step,.place-3 .podium-step{position:relative;display:grid;place-items:center;padding:0;border:0;border-top:3px solid #3fbf6a;border-radius:10px 10px 0 0;background:linear-gradient(180deg,#f1f3f4 0,#e5e8eb 100%);box-shadow:none}
+.podium-step .medal{position:static;transform:none}
+.place-1 .podium-step{height:86px}.place-2 .podium-step{height:68px}.place-3 .podium-step{height:58px}
 .podium-col .podium-card.empty+.podium-step .medal{opacity:.35}
+.podium-card .player-avatar{box-shadow:0 0 0 3px var(--medal,#c9d3cd)}
+/* 1.23 홈 다음 경기: 양 팀 엠블럼·이름 높이를 맞춘다(상대 쪽 "프로필 보기"·두 줄 이름 때문에 어긋나던 것) */
+.versus{align-items:start}
+.versus .club{justify-content:flex-start}
+.versus .versus-label{align-self:start;margin-top:22px}
+/* 1.23 기록 표 선수 사진 */
+.rt-who{display:flex;align-items:center;gap:7px;min-width:0}
+.rt .rt-avatar{width:28px;height:28px;flex:none;font-size:10.5px}
 /* 1.22 홈 화면에 추가 단계 */
 .setup-steps{display:grid;gap:8px;margin-top:10px;padding:12px;border:1px dashed var(--border);border-radius:12px}
 .setup-steps strong{font-size:13.5px}

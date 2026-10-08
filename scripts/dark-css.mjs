@@ -93,6 +93,7 @@ ${P} .main-column>section.panel,${P} .right-column>section.panel,${P} .two-col>s
 ${P} .rec-block+.rec-block{border-top:0;margin-inline:0;padding-inline:0}
 ${P} .rec-block>[data-slot=tabs]>[data-slot=tabs-content]>section.panel:first-child{padding:16px 12px;border-top:1px solid #3a3a41}
 ${P} .bottom-nav{border-top-color:#2c2c32}
+${P} .podium-step,${P} .place-1 .podium-step,${P} .place-2 .podium-step,${P} .place-3 .podium-step{background:linear-gradient(180deg,#3a3e44 0,#2c2f34 100%);border-top:3px solid #3fbf6a}
 `;
 
 const css=fs.readFileSync(SRC,"utf8");

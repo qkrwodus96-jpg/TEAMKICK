@@ -329,6 +329,20 @@ export function rankRows<T extends Record<string,unknown>>(rows:T[],key:string){
 // 전국 랭킹: **참여를 켠 사람만**(users[].rankPublic). 다른 사람의 계정 번호는 보내지 않고
 // 선수 이름·팀 이름·숫자만 보낸다. 한 사람이 여러 팀에서 뛰면 합산한다. 활동 중인 팀의 기록만 센다.
 // region 을 주면 "내 지역" 랭킹: 그 지역 팀에서 뛴 기록만 센다(참여 조건은 전국과 같다).
+// 1.23 랭킹 사진: 나 자신, 같은 팀 팀원, "랭킹에서 내 프로필도 보여주기"를 켠 사람만 사진을 보낸다.
+// 사진 주소는 /api/image 가 다시 같은 규칙(rankPhotoOpen)으로 확인한다.
+export function rankPhotoOpen(s:State,teamId:string,memberId:string){
+ const m=s.members.find(x=>x.id===memberId&&x.teamId===teamId&&x.status==="active");if(!m?.userId)return false;
+ const u=s.users.find(x=>x.id===m.userId);
+ return u?.rankPublic===true&&u?.profilePublic===true;
+}
+function rankPhoto(s:State,uid:string,viewer:string){
+ const mine=s.members.filter(x=>x.userId===uid&&x.photo&&x.status==="active");if(!mine.length)return "";
+ if(uid===viewer)return String(mine[0].photo);
+ const shared=mine.find(m=>s.members.some(v=>v.userId===viewer&&v.teamId===m.teamId&&v.status==="active"));
+ if(shared)return String(shared.photo);
+ return rankPhotoOpen(s,String(mine[0].teamId),String(mine[0].id))?String(mine[0].photo):"";
+}
 export const NATIONAL_LIMIT=50;
 export function nationalRanking(s:State,userId:string,now=Date.now(),region=""){
  const open=new Set(s.users.filter(u=>u.rankPublic===true).map(u=>u.id as string));
@@ -355,9 +369,9 @@ export function nationalRanking(s:State,userId:string,now=Date.now(),region=""){
    }
   }
   const cardOf=(uid:string)=>{if(s.users.find(x=>x.id===uid)?.profilePublic!==true)return null;const pv=profileView(s,uid,false);if(!pv)return null;return {main:pv.main,sub:pv.sub,foot:pv.foot,regions:pv.regions,instagram:pv.instagram}};
-  const rows=[...people.entries()].map(([uid,p])=>({name:p.name,team:[...p.teams.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]??"",goals:p.goals,assists:p.assists,points:p.goals+p.assists,mvp:p.mvp,attend:p.attend,me:uid===userId,card:cardOf(uid)}));
+  const rows=[...people.entries()].map(([uid,p])=>({name:p.name,team:[...p.teams.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]??"",goals:p.goals,assists:p.assists,points:p.goals+p.assists,mvp:p.mvp,attend:p.attend,me:uid===userId,card:cardOf(uid),photo:rankPhoto(s,uid,userId)}));
   out[period]={};
-  for(const key of RANK_KEYS)out[period][key]=rankRows(rows,key).map(({name,team,value,rank,me,card},i)=>({id:"n"+i,name,team,value,rank,me,card})).filter((r,i)=>i<NATIONAL_LIMIT||r.me);
+  for(const key of RANK_KEYS)out[period][key]=rankRows(rows,key).map(({name,team,value,rank,me,card,photo},i)=>({id:"n"+i,name,team,value,rank,me,card,photo})).filter((r,i)=>i<NATIONAL_LIMIT||r.me);
  }
  return out;
 }

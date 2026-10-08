@@ -36,7 +36,38 @@ export function PlayerPhoto({name="",photo="",className="player-avatar"}:{name?:
  const [bad,setBad]=useState("");
  return photo&&bad!==photo?<img className={className+" as-photo"} src={imageUrl(photo)} alt={name} loading="lazy" onError={()=>setBad(photo)}/>:<span className={className}>{name.slice(-2)}</span>;
 }
-export function Crest({name="",color="",logo=""}:any){const [bad,setBad]=useState("");if(logo&&bad!==logo)return <div className={"club-crest "+color}><img className="crest-photo" src={imageUrl(logo)} alt={name+" 로고"} loading="lazy" onError={()=>setBad(logo)}/></div>;return <div className={"club-crest "+color}><span>{name.includes("한강")?"HG":name.includes("서울")?"SU":name.replace(/\s|FC|유나이티드/g,"").slice(0,2)||"?"}</span></div>}
+// 1.23 엠블럼 여백 자르기(사장님 요청 — 원 안에 네모 흰 바탕이 보임). 흰색·투명 테두리를 잘라
+// 엠블럼이 원을 꽉 채우게 한다. 브라우저 안에서만 하고(원본은 그대로), 같은 그림은 한 번만 계산한다.
+const trimmed=new Map<string,string>();
+function useTrimmed(src:string){
+ const [,bump]=useState(0);
+ useEffect(()=>{
+  if(!src||trimmed.has(src))return;
+  let live=true;const img=new Image();
+  img.onload=()=>{
+   let res=src;
+   try{
+    const W=img.naturalWidth,H=img.naturalHeight,k=Math.min(1,160/Math.max(W,H)),w=Math.max(1,Math.round(W*k)),h=Math.max(1,Math.round(H*k));
+    const c=document.createElement("canvas");c.width=w;c.height=h;const x=c.getContext("2d",{willReadFrequently:true})!;x.drawImage(img,0,0,w,h);
+    const d=x.getImageData(0,0,w,h).data;let l=w,r=-1,tp=h,b=-1;
+    for(let y=0;y<h;y++)for(let i=0;i<w;i++){const p=(y*w+i)*4;if(d[p+3]>24&&!(d[p]>236&&d[p+1]>236&&d[p+2]>236)){if(i<l)l=i;if(i>r)r=i;if(y<tp)tp=y;if(y>b)b=y}}
+    if(r>=l&&b>=tp){
+     const bw=(r-l+1)/k,bh=(b-tp+1)/k;
+     if(bw<W*.92||bh<H*.92){
+      const side=Math.max(bw,bh)*1.02,cx=(l+r+1)/2/k,cy=(tp+b+1)/2/k,o=document.createElement("canvas");o.width=o.height=256;
+      o.getContext("2d")!.drawImage(img,cx-side/2,cy-side/2,side,side,0,0,256,256);res=o.toDataURL("image/png");
+     }
+    }
+   }catch{}
+   trimmed.set(src,res);if(live)bump(x=>x+1);
+  };
+  img.onerror=()=>{trimmed.set(src,src)};img.src=src;
+  return()=>{live=false};
+ },[src]);
+ return trimmed.get(src)??src;
+}
+function CrestImg({logo,name,onBad}:{logo:string;name:string;onBad:()=>void}){const src=useTrimmed(imageUrl(logo));return <img className="crest-photo" src={src} alt={name+" 로고"} loading="lazy" onError={onBad}/>}
+export function Crest({name="",color="",logo=""}:any){const [bad,setBad]=useState("");if(logo&&bad!==logo)return <div className={"club-crest "+color}><CrestImg logo={logo} name={name} onBad={()=>setBad(logo)}/></div>;return <div className={"club-crest "+color}><span>{name.includes("한강")?"HG":name.includes("서울")?"SU":name.replace(/\s|FC|유나이티드/g,"").slice(0,2)||"?"}</span></div>}
 export function Empty({title,description,action,onClick}:any){return <div className="empty"><CalendarDays/><h3>{title}</h3><p>{description}</p>{action&&<button className="btn btn-green" onClick={onClick}>{action}</button>}</div>}
 // 등번호는 "이명재 5번" 처럼 적는다(예전엔 "이명재 #0"). 가입할 때 번호를 안 고르면 0 으로
 // 남는데, 0번은 실제로 거의 안 쓰는 번호라 "안 정함" 으로 본다 — 그때는 번호를 빼고 이름만.

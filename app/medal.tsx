@@ -1,4 +1,5 @@
 // 1.22 1·2·3등 메달(사장님이 보낸 그림 느낌 — 금·은·동 동전, 두꺼운 테두리, 기울어진 검은 숫자).
+// 1.23: 기울인 숫자는 오른쪽으로 쏠려 보여서 x 를 1.9 왼쪽으로 옮겨 동전 가운데에 맞춘다(사장님 요청).
 // 그림 파일 없이 SVG 로 그린다(어느 크기에서도 선명, 저작권 걱정 없음). 4등부터는 쓰지 않는다.
 const TONE:Record<number,[string,string,string,string]>={ // 밝은 면, 어두운 면, 옆면(두께), 안쪽 테
  1:["#ffe27a","#f0b21f","#c48a10","#d99a16"],
@@ -13,6 +14,6 @@ export function Medal({n,size=40,title}:{n:number;size?:number;title?:string}){
   <circle cx="31.5" cy="31.5" r="27.5" fill={`url(#${id})`}/>
   <circle cx="31.5" cy="31.5" r="21" fill="none" stroke={t[3]} strokeWidth="2.6"/>
   <circle cx="31.5" cy="31.5" r="27" fill="none" stroke="#fff" strokeOpacity=".35" strokeWidth="1"/>
-  <text x="31.5" y="42" textAnchor="middle" fontSize="30" fontWeight="900" fontStyle="italic" fill="#1d1e21" fontFamily="'Anton','Pretendard Variable',system-ui,sans-serif">{n}</text>
+  <text x="29.6" y="42" textAnchor="middle" fontSize="30" fontWeight="900" fontStyle="italic" fill="#1d1e21" fontFamily="'Anton','Pretendard Variable',system-ui,sans-serif">{n}</text>
  </svg>;
 }

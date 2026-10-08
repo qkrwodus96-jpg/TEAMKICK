@@ -1,6 +1,6 @@
 import {currentUser} from "@/lib/auth";
 import {load} from "@/lib/store";
-import {AppError,ensure,membership,teamOf} from "@/lib/model";
+import {AppError,ensure,membership,teamOf,rankPhotoOpen} from "@/lib/model";
 import {getImage,putImage,pruneOthers,parseKey,teamLogoPrefix,memberPhotoPrefix,teamPhotoPrefix,removeImage,MAX_BYTES} from "@/lib/images";
 export const dynamic="force-dynamic";
 const json=(x:unknown,status=200)=>Response.json(x,{status,headers:{"Cache-Control":"no-store"}});
@@ -56,7 +56,8 @@ export async function GET(req:Request){
   const {state}=await load();
   // 팀 로고·팀 사진은 로그인한 이용자에게 보이지만(팀 찾기·팀 프로필)(팀 찾기·매칭 목록에 쓰인다)
   // 선수 사진은 그 팀의 활동 팀원에게만 보여준다.
-  if(where.kind==="memberPhoto")ensure(membership(state,where.teamId,user.userId),"이 사진을 볼 권한이 없어요.",403);
+  // 1.23: 랭킹에서 프로필 공개를 켠 선수의 사진은 다른 팀 이용자도 볼 수 있다(rankPhotoOpen).
+  if(where.kind==="memberPhoto")ensure(membership(state,where.teamId,user.userId)||rankPhotoOpen(state,where.teamId,where.memberId),"이 사진을 볼 권한이 없어요.",403);
   else ensure(teamOf(state,where.teamId),"팀을 찾을 수 없어요.",404);
   const image=await getImage(key);
   if(!image)return json({error:"이미지를 찾을 수 없어요."},404);

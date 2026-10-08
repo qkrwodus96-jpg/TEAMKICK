@@ -44,7 +44,9 @@ export function AppSetup({signedIn}:{signedIn:boolean}){
   (async()=>{
    const inApp=inAppBrowser();const st=installState();
    if(st.installed)write(DONE,true);
-   const install:Step=st.installed||read(DONE)?"done":"todo";
+   // 1.23: 예전에 설치했다는 기록(DONE)이 있어도, 지금 앱이 아니라 브라우저 탭으로 열었다면 홈 화면 추가 안내를 보여준다
+   // (사장님 요청 — 로그인된 채 다른 브라우저로 넘어와도 떠야 함). 기록이 있으면 접힌 한 줄로만.
+   const install:Step=st.installed?"done":"todo",before=read(DONE)&&!st.installed;
    const why=inApp?"":await pushStatus().catch(()=>"unsupported" as PushStatus);
    // 서버에 알림 키가 없거나 이 브라우저가 알림을 못 받으면 누를 것이 없다
    const push:Step=!signedIn?"na":inApp?"todo":why==="on"?"done":why==="server-off"||why==="unsupported"?"na":"todo";
@@ -52,7 +54,7 @@ export function AppSetup({signedIn}:{signedIn:boolean}){
    const url=new URL(location.href),handoff=!inApp&&url.searchParams.get(HANDOFF)==="1";
    if(url.searchParams.has(HANDOFF)){url.searchParams.delete(HANDOFF);history.replaceState(history.state,"",url.pathname+url.search+url.hash)}
    if(handoff)write(FOLD,false);
-   if(live)setS({ready:true,inApp,install,how:st.how,push,pushWhy:why,folded:handoff?false:read(FOLD),handoff:handoff&&install==="todo"});
+   if(live)setS({ready:true,inApp,install,how:st.how,push,pushWhy:why,folded:handoff?false:read(FOLD)||before,handoff:handoff&&install==="todo"});
   })();
   const on=()=>setS(x=>({...x,push:"done"}));const inst=()=>{write(DONE,true);setS(x=>({...x,install:"done"}))};
   window.addEventListener("teamkick-push-on",on);window.addEventListener("appinstalled",inst);

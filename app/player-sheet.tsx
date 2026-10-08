@@ -33,7 +33,7 @@ export function RecordsTable({players,rank,setRank,onOpen}:{players:Row[];rank:s
   </tr></thead>
   <tbody>{list.map((p,i)=>{const n=place(i),medal=val(p,rank)>0&&n<=3?" m"+n:"";return <tr key={p.id} onClick={()=>onOpen(p)} className={top>0&&val(p,rank)===top?"lead":""}>
    <td className={"rt-no"+medal}>{medal?<Medal n={n} size={26}/>:<span>{n}</span>}</td>
-   <th className="rt-player" scope="row"><span className="rt-name"><b>{p.name}</b><small>{[backNo(p.number),p.position].filter(Boolean).join(" ")}{p.status!=="active"?" 과거":""}</small></span></th>
+   <th className="rt-player" scope="row"><span className="rt-who"><PlayerPhoto name={p.name} photo={p.photo} className="player-avatar rt-avatar"/><span className="rt-name"><b>{p.name}</b><small>{[backNo(p.number),p.position].filter(Boolean).join(" ")}{p.status!=="active"?" 과거":""}</small></span></span></th>
    {RANK_COLS.map(c=><td key={c.key} className={rank===c.key?"on":""}>{c.key==="attend"?<>{p.attend}<small>/{p.eligible}</small></>:c.key==="rate"?(p.rate==null?"–":p.rate+"%"):p[c.key]??0}</td>)}
   </tr>})}</tbody>
  </table>;

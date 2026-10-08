@@ -54,7 +54,7 @@ compile('lib/cron.ts','cron.mjs',s=>s.replace('import {env} from "cloudflare:wor
 compile('app/api/cron/route.ts','cron-api.mjs',s=>s.replace('import {saveDueWeather} from "@/lib/weather-keep";','const saveDueWeather=async()=>globalThis.__teamkickTestWeather??{saved:0};').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {wakeDevices} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0,results:[]}};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/cron"','"./cron.mjs"'));
 compile('lib/close.ts','close.mjs',s=>s.replace('"./store"','"./store.mjs"').replace('"./model"','"./model.mjs"').replace('"./auth"','"./auth.mjs"').replace('"./unlink"','"./unlink.mjs"'));
 globalThis.__teamkickTestEnv={};
-const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp,mvpView,mvpWinners,periodRange,rankRows,nationalRanking,canSeeGame,gameTitle}=await import(path.join(runtime,'model.mjs'));
+const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp,mvpView,mvpWinners,periodRange,rankRows,nationalRanking,rankPhotoOpen,canSeeGame,gameTitle}=await import(path.join(runtime,'model.mjs'));
 const {whenText,whenRange}=await import(path.join(runtime,'when.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
 const auth=await import(path.join(runtime,'auth.mjs'));
@@ -3956,4 +3956,24 @@ test('1.21 예약 실행 날씨 저장 대상: 시작 3시간 전~1시간 뒤, �
   const state={games:[g('soon',T+2*3600e3),g('far',T+5*3600e3),g('justNow',T-30*60e3),g('over',T-2*3600e3),g('cancel',T+3600e3,{status:'cancelled'}),
     g('fresh',T+3600e3,{weather:{at:new Date(T-20*60e3).toISOString()}}),g('stale',T+3600e3,{weather:{at:new Date(T-2*3600e3).toISOString()}})]};
   assert.deepEqual(weatherDue(state,T).map(x=>x.id).sort(),['justNow','soon','stale']);
+});
+
+// --- 1.23: 랭킹 사진은 나·같은 팀·프로필 공개를 켠 사람만 ---
+test('지역·전국 랭킹 사진은 나, 같은 팀 팀원, 프로필 공개를 켠 사람에게만 간다',()=>{
+  const f=intraFixture();attendAll(f);
+  command(f.s,A,{type:'squads',teamId:f.a,gameId:f.gameId,assign:{[f.p1.id]:0}});
+  command(f.s,A,{type:'matchRecord',teamId:f.a,gameId:f.gameId,values:{[f.p1.id]:{goals:2,assists:0}},extra:[0,0]});
+  command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:true});
+  const m=f.s.members.find(x=>x.id===f.p1.id);m.photo='members/'+f.a+'/'+m.id+'/x.png';
+  const photoFor=uid=>nationalRanking(f.s,uid).year.attend[0].photo;
+  assert.equal(photoFor('p1'),m.photo,'내 사진은 나에게 보인다');
+  assert.equal(photoFor('p2'),m.photo,'같은 팀 팀원에게 보인다');
+  assert.equal(photoFor('stranger'),'','프로필 공개 전에는 다른 팀 이용자에게 안 보인다');
+  assert.equal(rankPhotoOpen(f.s,f.a,m.id),false);
+  command(f.s,{id:'p1',name:'선수1'},{type:'setProfilePublic',on:true});
+  assert.equal(photoFor('stranger'),m.photo,'프로필 공개를 켜면 보인다');
+  assert.equal(rankPhotoOpen(f.s,f.a,m.id),true,'이미지 주소도 같은 규칙으로 열린다');
+  assert.equal(rankPhotoOpen(f.s,'other-team',m.id),false,'다른 팀 주소로 꾸민 요청은 막는다');
+  command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:false});
+  assert.equal(rankPhotoOpen(f.s,f.a,m.id),false,'랭킹 참여를 끄면 다시 닫힌다');
 });

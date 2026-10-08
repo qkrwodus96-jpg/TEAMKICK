@@ -266,11 +266,11 @@ export function ImageField({title,current,kind,teamId,memberId,onSaved,disabled,
   setState({busy:false,error:""});
   setChosen(file);
  }
- async function upload(file:File){
+ async function upload(file:File,forceCut=false){
   setState({busy:true,error:""});
   try{
    let small:File=await shrink(file);
-   if(cut){setStep("배경 지우는 중… (처음 한 번은 몇 초 더 걸려요)");small=await removeBackground(small);setStep("")}
+   if(cut||forceCut){setStep("배경 지우는 중… (처음 한 번은 몇 초 더 걸려요)");small=await removeBackground(small);setStep("")}
    const body=new FormData();
    body.append("file",small,file.name);body.append("kind",kind);body.append("teamId",teamId);
    if(memberId)body.append("memberId",memberId);
@@ -298,8 +298,11 @@ export function ImageField({title,current,kind,teamId,memberId,onSaved,disabled,
     <input type="file" accept="image/png,image/jpeg,image/webp" disabled={disabled||state.busy} onChange={pick}/>
    </label>
    {current&&!state.busy&&<button type="button" className="btn" onClick={()=>onSaved("")}>삭제</button>}
+   {/* 1.23: 1.21 전에 올려 배경이 그대로인 사진도 다시 고르지 않고 배경만 지운다(사장님 요청 — 선수마다 사진 모양이 달라 보임). */}
+   {kind==="memberPhoto"&&current&&!state.busy&&<button type="button" className="btn" disabled={disabled} onClick={async()=>{try{setState({busy:true,error:""});const r=await fetch(imageUrl(current));if(!r.ok)throw new Error("사진을 불러오지 못했어요.");const blob=await r.blob();await upload(new File([blob],blob.type==="image/png"?"photo.png":"photo.jpg",{type:blob.type||"image/jpeg"}),true)}catch(err){setState({busy:false,error:err instanceof Error?err.message:"배경을 지우지 못했어요."})}}}>배경 지우기</button>}
   </div>
   <p className="data-note">PNG · JPG · WEBP, 2MB 이하. 고른 뒤 크기와 위치를 맞출 수 있어요.</p>
+  {step&&<p className="data-note" role="status">{step}</p>}
   {state.error&&<p className="error-bar" role="alert" style={{marginTop:10}}>{state.error}</p>}
  </div>;
 }

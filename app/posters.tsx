@@ -75,8 +75,9 @@ async function crest(ctx:C,t:Team,cx:number,cy:number,r:number,ring:string){
  // 귀퉁이가 비어 있는(둥근) 로고는 원을 꽉 채우고, 네모난 로고는 원 안에 다 들어가게 줄인다.
  const base=TEAM_HEX[String(t.color??"")]??"#2a2f2c";
  ctx.save();ctx.shadowColor="rgba(0,0,0,.35)";ctx.shadowBlur=14;ctx.shadowOffsetY=4;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fillStyle=im?"#ffffff":base;ctx.fill();ctx.restore();
- if(im){const w=im.naturalWidth||im.width,h=im.naturalHeight||im.height,k=roundish(im)?0.98:0.72,s=Math.min(2*r/w,2*r/h)*k;
-  ctx.save();ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.clip();ctx.drawImage(im,cx-w*s/2,cy-h*s/2,w*s,h*s);ctx.restore()}
+ // 1.23: 앱 화면처럼 흰색·투명 여백을 잘라 낸 뒤 원을 꽉 채운다(사장님 요청 — 원 안에 네모 사진이 보이던 것).
+ if(im){const b=contentBox(im),s=Math.max(2*r/b.w,2*r/b.h);
+  ctx.save();ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.clip();ctx.drawImage(im,b.x,b.y,b.w,b.h,cx-b.w*s/2,cy-b.h*s/2,b.w*s,b.h*s);ctx.restore()}
  else{ctx.save();ctx.fillStyle="#fff";f(ctx,r*0.78,EN);ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(initials(t.name),cx,cy+r*0.04);ctx.restore()}
  ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.lineWidth=Math.max(3,r*.05);ctx.strokeStyle=ring;ctx.stroke();
 }
@@ -85,10 +86,15 @@ function vsMark(ctx:C,x:number,y:number,th:Theme){
  ctx.save();ctx.translate(x,y);ctx.rotate(Math.PI/4);ctx.strokeStyle=th.accent;ctx.lineWidth=4;ctx.strokeRect(-34,-34,68,68);ctx.restore();
  ctx.save();ctx.fillStyle=th.accent;f(ctx,44,EN);ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("VS",x,y+2);ctx.restore();
 }
-// 네 귀퉁이가 투명하거나 흰색이면 둥근 로고로 본다.
-function roundish(im:HTMLImageElement){
- try{const c=document.createElement("canvas");c.width=20;c.height=20;const x=c.getContext("2d",{willReadFrequently:true})!;x.drawImage(im,0,0,20,20);const d=x.getImageData(0,0,20,20).data;
-  const empty=(i:number,j:number)=>{const k=(j*20+i)*4;return d[k+3]<30||(d[k]>235&&d[k+1]>235&&d[k+2]>235)};return empty(0,0)&&empty(19,0)&&empty(0,19)&&empty(19,19)}catch{return false}
+// 그림에서 흰색·투명이 아닌 부분의 상자(원본 좌표). 여백이 없으면 그림 전체.
+function contentBox(im:HTMLImageElement){
+ const W0=im.naturalWidth||im.width,H0=im.naturalHeight||im.height,all={x:0,y:0,w:W0,h:H0};
+ try{const k=Math.min(1,160/Math.max(W0,H0)),w=Math.max(1,Math.round(W0*k)),h=Math.max(1,Math.round(H0*k));const c=document.createElement("canvas");c.width=w;c.height=h;
+  const x=c.getContext("2d",{willReadFrequently:true})!;x.drawImage(im,0,0,w,h);const d=x.getImageData(0,0,w,h).data;let l=w,r=-1,t=h,b=-1;
+  for(let j=0;j<h;j++)for(let i=0;i<w;i++){const q=(j*w+i)*4;if(d[q+3]>24&&!(d[q]>236&&d[q+1]>236&&d[q+2]>236)){if(i<l)l=i;if(i>r)r=i;if(j<t)t=j;if(j>b)b=j}}
+  if(r<l||b<t)return all;const bw=(r-l+1)/k,bh=(b-t+1)/k;if(bw>=W0*.92&&bh>=H0*.92)return all;
+  const side=Math.max(bw,bh)*1.02,cx=(l+r+1)/2/k,cy=(t+b+1)/2/k;return {x:cx-side/2,y:cy-side/2,w:side,h:side};
+ }catch{return all}
 }
 // 바탕: 팀 색 그라데이션 + 비스듬한 가는 줄무늬 + 가장자리 어둡게
 function backdrop(ctx:C,th:Theme,angle=-0.5){

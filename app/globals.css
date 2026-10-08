@@ -787,6 +787,8 @@ body{word-break:keep-all;overflow-wrap:break-word}
 .versus{align-items:start}
 .versus .club{justify-content:flex-start}
 .versus .versus-label{align-self:start;margin-top:22px}
+/* 1.23 매칭 카드 팀 이미지도 동그라미로(사장님 요청 — 다른 화면과 통일) */
+.mc-top .club-crest{border-radius:50%}
 /* 1.23 기록 표 선수 사진 */
 .rt-who{display:flex;align-items:center;gap:7px;min-width:0}
 .rt .rt-avatar{width:28px;height:28px;flex:none;font-size:10.5px}

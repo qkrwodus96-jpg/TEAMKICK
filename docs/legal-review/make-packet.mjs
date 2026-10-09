@@ -9,7 +9,7 @@ const require=createRequire(import.meta.url);
 const {Document,Packer,Paragraph,TextRun,HeadingLevel,Table,TableRow,TableCell,WidthType,ShadingType,AlignmentType,LevelFormat,BorderStyle,PageBreak}=require("docx");
 
 const root=path.resolve(path.dirname(new URL(import.meta.url).pathname),"../..");
-const DATE="2026-10-09",VERSION="1.23.1";
+const DATE="2026-10-09",VERSION="1.23.2";
 // lib/legal.ts 는 문자열 상수뿐이라 타입 없이 그대로 계산할 수 있다.
 const src=fs.readFileSync(path.join(root,"lib/legal.ts"),"utf8").replace(/^export const /gm,"const ");
 const {LEGAL_VERSION,TERMS,PRIVACY}=new Function(src+"\nreturn {LEGAL_VERSION,TERMS,PRIVACY};")();
@@ -20,7 +20,6 @@ const run=(t,o={})=>new TextRun({text:t,font:FONT,...o});
 const rich=(t,o={})=>t.split(/(\*\*[^*]+\*\*)/).filter(Boolean).map(s=>s.startsWith("**")?run(s.slice(2,-2),{bold:true,...o}):run(s,o));
 const P=(t,o={})=>new Paragraph({children:rich(t,o.run),spacing:{after:120,line:300},...o.p});
 const H=(t)=>new Paragraph({heading:HeadingLevel.HEADING_1,children:[run(t,{bold:true,size:28})],spacing:{before:320,after:160}});
-const H2=(t)=>new Paragraph({heading:HeadingLevel.HEADING_2,children:[run(t,{bold:true,size:24})],spacing:{before:220,after:120}});
 const B=(t)=>new Paragraph({numbering:{reference:"bul",level:0},children:rich(t),spacing:{after:80,line:290}});
 const N=(t)=>new Paragraph({numbering:{reference:"num",level:0},children:rich(t),spacing:{after:100,line:290}});
 const W=9026; // A4 본문 폭(DXA)
@@ -60,6 +59,7 @@ const changes=[
  "**사진 배경 지우기**(10/5~10/9): 이용자 기기 안에서만 처리(공개 소프트웨어 MediaPipe). 원본은 서버로 보내지 않음.",
  "**매칭 지도**(10/6): 카카오 지도 SDK를 이용자 브라우저가 직접 불러옴. 내 위치(GPS)는 쓰지 않음.",
  "**다국어 화면**(9/30): 화면 글자만 번역. 약관·처리방침은 한국어 원문 기준.",
+ "**처리방침에 빠져 있던 4가지 보충**(10/9): 저장 테이블·필드·브라우저 저장소를 처리방침과 하나씩 대조해 로그인 실패 잠금 기록, 중복 요청 방지 기록, 채팅방 숨김 기록, 브라우저 저장소 항목을 처리방침 1항·11항에 적었습니다(새로 모은 정보는 아님).",
 ];
 
 const status=[
@@ -85,6 +85,10 @@ const status=[
  ["1:1 문의 내용·답변","문의","문의 처리","답변 후 1년, 탈퇴 시 삭제","본인, 운영자"],
  ["알림 구독 주소·기기 키, 마지막 전달 기록, 알림 설정","알림 켤 때","알림 전달","끄기·탈퇴 시 즉시 삭제","본인(주장에게는 숫자만)"],
  ["로그인 세션","로그인","로그인 유지","30일 또는 로그아웃","—"],
+ ["이메일 계정의 로그인 실패 횟수·잠금 해제 시각","로그인 실패","비밀번호 대입 방지(10번 실패 시 15분 잠금)","로그인 성공·잠금 해제 시 초기화, 탈퇴 시 삭제","—"],
+ ["중복 요청 방지 기록(계정 번호+요청 번호, 처리 결과)","모든 저장 요청","같은 요청이 두 번 처리되지 않게","7일","—"],
+ ["채팅방 숨김 기록(방·시각)","방 숨기기","목록 정리","탈퇴 시 삭제","본인"],
+ ["브라우저 저장소: 마지막 팀, 화면 모드·언어, 설치 안내, 초대 코드, 소식 읽은 위치 등","앱 사용","화면 편의","이 기기에만(서버로 안 보냄), 초대 코드는 가입 뒤 삭제","본인 기기"],
  ["접속 주소(IP)의 해시값, 초대 코드 시도 기록","가입·로그인·코드 입력","남용 방지","최대 1시간","—"],
  ["운영 이력, 알림함","서비스 이용","운영 기록","운영 이력 90일, 읽은 알림 30일, 안 읽은 알림 180일","운영자 / 본인"],
  ["소셜 가입 대기(식별자·이름)","소셜 첫 로그인","가입 동의 받기","최대 10분","—"],

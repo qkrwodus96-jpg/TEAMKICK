@@ -63,13 +63,17 @@ export const STATEMENTS=[
  // 신고. 운영자가 확인할 수 있게 메시지 내용을 신고 시점 그대로 남긴다(90일 뒤 삭제).
  `CREATE TABLE IF NOT EXISTS chat_reports (id text PRIMARY KEY NOT NULL, message_id text NOT NULL, room text NOT NULL, reporter text NOT NULL, author text NOT NULL, body text NOT NULL, reason text NOT NULL, at text NOT NULL)`,
  `CREATE INDEX IF NOT EXISTS idx_chat_reports_at ON chat_reports (at)`,
+ // 1.24 범위별 저장 번호(내 팀 t:팀, 나 u:계정, 공개 pub). 화면은 자기 범위 번호만 보고 바뀌면 다시 읽는다.
+ `CREATE TABLE IF NOT EXISTS scope_revisions (scope text PRIMARY KEY NOT NULL, version integer DEFAULT 0 NOT NULL)`,
+ // 1.24 스키마 준비 표시. 서버가 새로 뜰 때마다 위 문장을 하나씩(41번) 돌리던 것을 표시 한 번 읽기로 줄인다.
+ `CREATE TABLE IF NOT EXISTS schema_meta (id integer PRIMARY KEY NOT NULL, sig text NOT NULL)`,
 ];
 
 // 배포된 코드가 어느 시점 것인지 화면으로 확인하기 위한 표시.
 // 스키마나 진단에 영향을 주는 변경을 할 때 함께 올린다.
-export const BUILD="2026-10-09-1232";
+export const BUILD="2026-10-10-124";
 
-export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications","push_subs","closed_accounts","social_signups","chat_messages","chat_reads","chat_reports"];
+export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications","push_subs","closed_accounts","social_signups","chat_messages","chat_reads","chat_reports","scope_revisions","schema_meta"];
 
 // 카카오만 있던 시절의 계정을 새 열로 옮긴다. 여러 번 돌아도 안전하다.
 export async function backfillAccounts(){
@@ -80,9 +84,14 @@ export async function backfillAccounts(){
 }
 
 let prepared=false;
+// 문장 목록이 바뀌면 표시도 바뀐다. 같으면 이미 준비된 데이터베이스다.
+export const SCHEMA_SIG=(()=>{let h=5381;const t=STATEMENTS.join("\n");for(let i=0;i<t.length;i++)h=((h<<5)+h+t.charCodeAt(i))|0;return "s"+(h>>>0).toString(36)+"-"+STATEMENTS.length})();
 export async function ensureSchema(){
  if(prepared)return;
  if(!env.DB)throw new AppError("데이터 연결을 준비하고 있어요. 잠시 후 다시 시도해주세요.",503);
+ // 1.24: 서버가 새로 뜰 때마다 41개 문장을 차례로 돌리면(왕복 41번) 첫 화면이 몇 초씩 늦었다.
+ // 같은 문장 목록으로 이미 준비한 데이터베이스면 표시 한 줄만 읽고 끝낸다. 표가 없으면(처음) 아래로.
+ try{const r=await env.DB.prepare("SELECT sig FROM schema_meta WHERE id=1").first<{sig:string}>();if(r?.sig===SCHEMA_SIG){prepared=true;return}}catch{}
  for(const sql of STATEMENTS){
   try{await env.DB.prepare(sql).run()}
   catch(e){
@@ -94,6 +103,7 @@ export async function ensureSchema(){
  }
  // 표를 만든 뒤에 옮긴다. 열이 없는 상태에서 돌면 실패한다.
  try{await backfillAccounts()}catch(e){console.error("TeamKick schema backfill",e)}
+ try{await env.DB.prepare("INSERT INTO schema_meta(id,sig) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET sig=excluded.sig").bind(SCHEMA_SIG).run()}catch(e){console.error("TeamKick schema mark",e)}
  prepared=true;
 }
 

@@ -16,3 +16,7 @@ export const socialSignups=sqliteTable("social_signups",{id:text("id").primaryKe
 export const chatMessages=sqliteTable("chat_messages",{id:text("id").primaryKey(),room:text("room").notNull(),accountId:text("account_id").notNull(),name:text("name").notNull(),body:text("body").notNull(),at:text("at").notNull(),deleted:integer("deleted").notNull().default(0)},t=>[index("idx_chat_messages_room_at").on(t.room,t.at),index("idx_chat_messages_account").on(t.accountId)]);
 export const chatReads=sqliteTable("chat_reads",{id:text("id").primaryKey(),accountId:text("account_id").notNull(),room:text("room").notNull(),at:text("at").notNull()},t=>[index("idx_chat_reads_account").on(t.accountId)]);
 export const chatReports=sqliteTable("chat_reports",{id:text("id").primaryKey(),messageId:text("message_id").notNull(),room:text("room").notNull(),reporter:text("reporter").notNull(),author:text("author").notNull(),body:text("body").notNull(),reason:text("reason").notNull(),at:text("at").notNull()},t=>[index("idx_chat_reports_at").on(t.at)]);
+// 1.24 범위별 저장 번호. 화면은 자기와 관계있는 범위(내 팀 t:, 나 u:, 공개 pub)의 번호만 보고 바뀌었을 때만 다시 읽는다.
+export const scopeRevisions=sqliteTable("scope_revisions",{scope:text("scope").primaryKey(),version:integer("version").notNull().default(0)});
+// 1.24 스키마 준비 표시. 서버가 새로 뜰 때 표를 41번 확인하던 것을 한 번 읽기로 줄인다.
+export const schemaMeta=sqliteTable("schema_meta",{id:integer("id").primaryKey(),sig:text("sig").notNull()});

@@ -158,11 +158,24 @@ export async function signIn(input:Credentials,now=Date.now()){
  return {user:{userId:row.id,fullName:row.name},token:await startSession(row.id,now)};
 }
 
-export async function signOut(req:Request){
+export async function signOut(req:Request){forgetSessions();
  const token=cookieValue(req.headers.get("cookie"),COOKIE);
  if(token)await db().prepare("DELETE FROM sessions WHERE id=?").bind(await hashToken(token)).run();
 }
 
+// 1.24 읽기 전용 요청(화면 읽기·변경 확인)은 같은 서버 안에서 30초 동안 로그인 확인 결과를 다시 쓴다.
+// 7초마다 오는 변경 확인이 매번 데이터베이스를 한 번 더 왕복하던 것을 줄인다. 저장(POST)은 늘 새로 확인한다.
+// 로그아웃·탈퇴·비밀번호 변경 때는 이 서버의 기억을 비운다(다른 서버는 최대 30초 뒤 만료).
+const SESSION_TTL=30_000,sessionMemo=new Map<string,{at:number;user:Awaited<ReturnType<typeof currentUser>>}>();
+export function forgetSessions(){sessionMemo.clear()}
+export async function currentUserCached(req:Request,now=Date.now()){
+ const token=cookieValue(req.headers.get("cookie"),COOKIE);if(!token)return null;
+ const hit=sessionMemo.get(token);if(hit&&now-hit.at<SESSION_TTL)return hit.user;
+ const user=await currentUser(req,now);
+ if(sessionMemo.size>500)sessionMemo.clear();
+ if(user)sessionMemo.set(token,{at:now,user});else sessionMemo.delete(token);
+ return user;
+}
 export async function currentUser(req:Request,now=Date.now()){
  const token=cookieValue(req.headers.get("cookie"),COOKIE);
  if(!token)return null;
@@ -194,7 +207,7 @@ export async function accountExists(accountId:string){
 // 탈퇴. 로그인 수단과 세션을 지운다. 팀 활동 기록은 model 의 closeAccount 가 먼저 정리한다.
 // 탈퇴한 계정 번호는 1년 남긴다(백업 파일 최대 보관 기간). 복원이 그 사람을 되살리지 않게 한다.
 export const CLOSED_KEEP_DAYS=365;
-export async function closeAccount(accountId:string,now=Date.now()){
+export async function closeAccount(accountId:string,now=Date.now()){forgetSessions();
  await db().prepare("INSERT OR REPLACE INTO closed_accounts(id,at) VALUES(?,?)").bind(accountId,new Date(now).toISOString()).run();
  await db().prepare("DELETE FROM closed_accounts WHERE at<?").bind(new Date(now-CLOSED_KEEP_DAYS*864e5).toISOString()).run();
  await db().prepare("DELETE FROM sessions WHERE account_id=?").bind(accountId).run();
@@ -402,7 +415,7 @@ export async function resetPassword(input:{token?:unknown;password?:unknown},now
  ensure(account,expired,400);
  const passwordHash=await hashPassword(password);
  const session=toBase64(crypto.getRandomValues(new Uint8Array(32))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
- const sessionId=await hashToken(session),d=db(),guard="reset:"+crypto.randomUUID();
+ forgetSessions();const sessionId=await hashToken(session),d=db(),guard="reset:"+crypto.randomUUID();
  // D1 batch 는 한 트랜잭션이다. 조건 확인도 그 안에서 수행해 같은 링크의 동시 사용을 막는다.
  // 하나라도 실패하면 비밀번호·토큰·기존 세션·새 세션이 모두 원래 상태로 돌아간다.
  try{

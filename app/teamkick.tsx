@@ -15,7 +15,7 @@ import {Select,SelectTrigger,SelectValue,SelectContent,SelectItem} from "@/compo
 import {Toaster} from "@/components/ui/sonner";
 import {toast} from "sonner";
 import {demoState} from "@/lib/demo";
-import {applyCommand,visibleState,summaries,currentVote,isIntra,SQUAD_NAMES,type Row} from "@/lib/model";
+import {applyCommand,visibleState,summaries,currentVote,isIntra,SQUAD_NAMES,collections,type Row,type State} from "@/lib/model";
 import {AuthPanel,SocialConsent,Management,Matching,AppDialogs,MyHub} from "./screens";
 import {MvpPrompt,Rankings} from "./team-play";
 import {RecordsTable} from "./player-sheet";
@@ -111,6 +111,18 @@ export function Calendar({month,setMonth,selected,onSelect,games,large=false}:an
 export function Fixture({g,v,onClick}:any){const z=v.sides?.find((x:Row)=>x.gameId===g.id);return <div role="button" tabIndex={0} onKeyDown={e=>e.key==="Enter"&&onClick()} className="fixture-row" onClick={onClick}><div className="fixture-date"><b>{new Date(new Date(g.start).getTime()+9*3600e3).getUTCDate()}</b><span>{days[new Date(new Date(g.start).getTime()+9*3600e3).getUTCDay()]}요일</span></div><div className="fixture-info"><strong>{isIntra(g)?<>{v.teams.find((t:Row)=>t.id===v.teamId)?.name} <span className="muted" style={{fontWeight:400}}>자체전</span></>:<>{v.teams.find((t:Row)=>t.id===v.teamId)?.name} <span className="muted" style={{fontWeight:400}}>vs</span> {opponent(v,g)||"상대팀 미정"}</>}</strong><p>{rangeText(g.start,g.end)}</p><p className="keep-line">{g.venue}</p></div>{g.result?.status==="confirmed"&&<span className="mini-result">{scoreText(v,g)}</span>}<GameBadge g={g}/><GuestBadge z={z} g={g}/><ChevronRight/></div>}
 // 저장 응답의 껍데기. 화면 상태가 아니므로 남기지 않는다.
 const SAVE_META=new Set(["ok","output","closed","error","pushed"]);
+// 1.24 누르면 바로 보이기(사장님 — "버벅거린다"). 자주 누르는 단순한 동작은 서버 답을 기다리지 않고
+// 같은 규칙(applyCommand)으로 화면에 먼저 반영한다. 서버 답이 오면 그 값으로 바꾸고, 실패하면 되돌린다.
+// 다른 사람에게 가는 알림·새 행을 만드는 동작은 넣지 않는다(잠깐이라도 틀린 화면이 보이지 않게).
+const OPTIMISTIC=new Set(["vote","mvpVote","readNotifications","setNotifyPrefs","markDues","reportDues","hideChat","setRankPublic","setProfilePublic","setNewsTeams"]);
+function optimistic(real:Row|null,c:Row){
+ if(!OPTIMISTIC.has(c?.type)||!real?.user?.id)return null;
+ try{const o:Row=structuredClone(real);for(const k of collections)if(!Array.isArray(o[k]))o[k]=[];
+  applyCommand(o as unknown as State,{id:real.user.id,name:real.user.name??"팀원"},c);
+  o.notifications=(o.notifications??[]).filter((n:Row)=>n.userId===real.user.id);
+  const next:Row={...real};for(const k of Object.keys(real))if(k in o&&k!=="user")next[k]=o[k];return next}
+ catch{return null}
+}
 // 고른 팀을 기기에 적어 둔다. 예전에는 화면을 새로 열 때마다 서버가 "가장 먼저
 // 가입한 팀" 으로 되돌려서, 팀이 여러 개면 고른 팀이 자꾸 바뀌었다. 권한은 여기서
 // 정하지 않는다 — 서버가 이 값을 받아 내가 속한 팀인지 다시 확인한다.
@@ -147,16 +159,22 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  setDemo(false);if(r.user)clearInvite();if(r.invitedTeam&&!r.mine?.some((m:Row)=>m.teamId===r.invitedTeam&&["active","pending"].includes(m.status)))setModal({kind:"joinTeam",team:r.teams.find((t:Row)=>t.id===r.invitedTeam)})}).catch(e=>setError(e.message)).finally(()=>setLoading(false));if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{});},[]);
  // 1.19 실시간 반영: 화면이 보이는 동안 15초마다 저장 번호만 물어보고, 바뀌었으면 조용히 다시 읽는다.
  // 다른 팀원이 투표하거나 주장이 일정을 바꾸면 새로고침 없이 반영된다. 앱으로 돌아왔을 때도 바로 확인한다.
- const loggedIn=!!real?.user,viewTeamRef=useRef(""),revRef=useRef<number|null>(null);
- useEffect(()=>{viewTeamRef.current=String(real?.teamId??"");if(typeof real?.rev==="number")revRef.current=real.rev},[real]);
+ const loggedIn=!!real?.user,viewTeamRef=useRef(""),revRef=useRef<number|null>(null),scopesRef=useRef<string[]>([]),tokenRef=useRef<string|null>(null),changedRef=useRef(0);
+ useEffect(()=>{viewTeamRef.current=String(real?.teamId??"");if(typeof real?.rev==="number")revRef.current=real.rev;if(Array.isArray(real?.scopes))scopesRef.current=real.scopes;if(typeof real?.scopeToken==="string"&&real.scopeToken)tokenRef.current=real.scopeToken},[real]);
  useEffect(()=>{if(!loggedIn||demo)return;let live=true,running=false;
+  // 1.24: 내 범위(내 팀·나·공개)의 번호만 묻는다 — 다른 팀이 아무리 많이 저장해도 내 화면은 다시 읽지 않는다.
+  // 최근 2분 안에 바뀐 게 있으면 4초, 조용하면 10초마다. 화면이 안 보이면 묻지 않는다.
   const check=async()=>{if(running||document.visibilityState!=="visible")return;running=true;
-   try{const r=await fetch("/api/rev",{cache:"no-store"});if(!r.ok)return;const {rev}=await r.json() as {rev:number};
-    if(live&&revRef.current!==null&&rev!==revRef.current){revRef.current=rev;await refresh(viewTeamRef.current||undefined)}else if(revRef.current===null)revRef.current=rev;
+   try{const scopes=scopesRef.current;
+    if(scopes.length){const r=await fetch("/api/rev?s="+encodeURIComponent(scopes.join(",")),{cache:"no-store"});if(!r.ok)return;const {token}=await r.json() as {token:string};
+     if(live&&tokenRef.current!==null&&token!==tokenRef.current){tokenRef.current=token;changedRef.current=Date.now();await refresh(viewTeamRef.current||undefined)}else if(tokenRef.current===null)tokenRef.current=token;
+    }else{const r=await fetch("/api/rev",{cache:"no-store"});if(!r.ok)return;const {rev}=await r.json() as {rev:number};
+     if(live&&revRef.current!==null&&rev!==revRef.current){revRef.current=rev;changedRef.current=Date.now();await refresh(viewTeamRef.current||undefined)}else if(revRef.current===null)revRef.current=rev;}
    }catch{}finally{running=false}};
-  const timer=setInterval(check,7000);const vis=()=>{if(document.visibilityState==="visible")check()};
+  let timer:ReturnType<typeof setTimeout>;const loop=()=>{timer=setTimeout(async()=>{await check();if(live)loop()},Date.now()-changedRef.current<120000?4000:10000)};loop();
+  const vis=()=>{if(document.visibilityState==="visible")check()};
   document.addEventListener("visibilitychange",vis);window.addEventListener("focus",vis);
-  return()=>{live=false;clearInterval(timer);document.removeEventListener("visibilitychange",vis);window.removeEventListener("focus",vis)};
+  return()=>{live=false;clearTimeout(timer);document.removeEventListener("visibilitychange",vis);window.removeEventListener("focus",vis)};
  },[loggedIn,demo]);
  // 1.21 안 읽은 채팅 수(사장님 요청 — "채팅 온지 모를 수도"). 채팅은 저장 번호(rev)와 따로 저장돼서
  // 화면이 열려 있는 동안 20초마다, 그리고 화면으로 돌아오거나 채팅 창을 닫을 때 방 목록을 다시 센다.
@@ -213,7 +231,8 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  const needsReload=(type:string)=>type==="setupOwner"||type==="closeAccount";
  async function action(c:any){if(busy)return;setBusy(true);setError("");try{
    let output:any;if(demo){const copy=structuredClone(samples);output=applyCommand(copy,{id:demoActor,name:"샘플 주장"},c);setSamples(copy);toast.success("샘플에 반영했어요.");}
-   else{const r=await fetch("/api/app",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...c,viewTeam:v.teamId||"",mutationId:crypto.randomUUID()})});const data:any=await r.json();if(!r.ok)throw Error(data.error);output=data.output;
+   else{const undo=real,early=optimistic(real,c);if(early)setReal(early);
+    const r=await fetch("/api/app",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...c,viewTeam:v.teamId||"",mutationId:crypto.randomUUID()})}).catch(e=>{if(early)setReal(undo);throw e});const data:any=await r.json().catch(()=>({}));if(!r.ok){if(early)setReal(undo);throw Error(data.error||"저장하지 못했어요. 다시 시도해주세요.")}output=data.output;
     if(needsReload(c.type))await refresh(c.teamId||v.teamId);else applySaved(data);
     // 알림이 걸린 저장이면 몇 명에게 갔는지, 그중 폰으로도 간 사람이 몇 명인지 알려 준다.
     // 폰 알림을 켠 팀원이 없으면 알림함에만 쌓인다 — 주장이 그걸 알아야 팀원에게 권할 수 있다.

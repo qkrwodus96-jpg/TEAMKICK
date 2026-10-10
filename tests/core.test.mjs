@@ -46,7 +46,7 @@ compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {cronReady} 
 compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./schema"','"./schema.mjs"').replace('"./store"','"./store.mjs"'));
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
 compile('app/api/auth/route.ts','auth-api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword,limit,clientKey,verifyEmail,resendVerification,currentUser,completeSocialSignup,cancelSocialSignup,clearedSignupCookie} from "@/lib/auth";','const completeSocialSignup=async()=>({user:{userId:"u",fullName:"새 사람"},token:"t"});const cancelSocialSignup=async()=>{};const clearedSignupCookie=()=>"";const signUp=async()=>{(globalThis.__teamkickSignups??=[]).push(1);return {user:{userId:"u",fullName:"새 사람"},token:"t",verificationSent:false}};const signIn=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const signOut=async()=>{};const sessionCookie=()=>"";const clearedCookie=()=>"";const requestPasswordReset=async()=>{};const resetPassword=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const limit=async()=>{};const clientKey=()=>"k";const verifyEmail=async()=>{};const resendVerification=async()=>true;const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>!!globalThis.__teamkickSocial;').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>false;').replace('"@/lib/model"','"./model.mjs"'));
-compile('app/api/app/route.ts','api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices,devicesAmong,pushReady} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);const hook=globalThis.__teamkickTestWake;if(hook)return hook(ids);return {sent:ids.length,failed:0,results:[]}};const devicesAmong=async(ids)=>ids.filter(x=>(globalThis.__teamkickTestDevices??[]).includes(x)).length;const pushReady=()=>true;').replace('import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady,mapJsKey} from "@/lib/places";','const placeSearchReady=()=>true;const mapJsKey=()=>"";').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
+compile('app/api/app/route.ts','api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices,devicesAmong,pushReady} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);const hook=globalThis.__teamkickTestWake;if(hook)return hook(ids);return {sent:ids.length,failed:0,results:[]}};const devicesAmong=async(ids)=>ids.filter(x=>(globalThis.__teamkickTestDevices??[]).includes(x)).length;const pushReady=()=>true;').replace('import {currentUser,currentUserCached,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const currentUserCached=currentUser;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady,mapJsKey} from "@/lib/places";','const placeSearchReady=()=>true;const mapJsKey=()=>"";').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 compile('lib/unlink.ts','unlink.mjs',s=>s.replace('"./social"','"./social.mjs"'));
 compile('lib/store-some.ts','store-some.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/chat-server.ts','chat-server.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
@@ -3976,4 +3976,40 @@ test('지역·전국 랭킹 사진은 나, 같은 팀 팀원, 프로필 공개�
   assert.equal(rankPhotoOpen(f.s,'other-team',m.id),false,'다른 팀 주소로 꾸민 요청은 막는다');
   command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:false});
   assert.equal(rankPhotoOpen(f.s,f.a,m.id),false,'랭킹 참여를 끄면 다시 닫힌다');
+});
+
+// --- 1.24: 범위별 저장 번호 — 다른 팀의 투표·읽음 처리 때문에 내 화면이 다시 읽지 않게 ---
+test('저장하면 바뀐 행이 보이는 범위의 번호만 오른다(투표는 그 팀, 알림 읽음은 그 사람)',async()=>{
+  const db=localDatabase(),{s,a,b}=fixture();
+  const start=NOW+3*DAY;
+  const {gameId}=command(s,A,{type:'createGame',teamId:a,start:iso(start),end:iso(start+7200e3),venue:'난지천',address:'서울'},NOW);
+  await repository.commit(blank(),s,0);
+  const all=['pub','t:'+a,'t:'+b,'u:a','u:b'];
+  const before=await repository.scopeToken(all);
+  // A 팀 투표 → t:a 만 오른다. B 팀·공개 번호는 그대로.
+  let cur=await repository.load();let next=structuredClone(cur.state);
+  command(next,A,{type:'vote',teamId:a,gameId,value:'yes'},NOW+1000);
+  await repository.commit(cur.state,next,cur.version);
+  const afterVote=await repository.scopeToken(all);
+  const pick=(t,k)=>t.split('|').find(x=>x.startsWith(k+'='));
+  assert.notEqual(pick(afterVote,'t:'+a),pick(before,'t:'+a),'투표한 팀은 번호가 오른다');
+  assert.equal(pick(afterVote,'t:'+b),pick(before,'t:'+b),'다른 팀은 그대로');
+  assert.equal(pick(afterVote,'pub'),pick(before,'pub'),'공개 범위도 그대로');
+  // 알림 읽음 → 그 사람(u:)만. 팀 번호는 그대로.
+  cur=await repository.load();next=structuredClone(cur.state);
+  assert.ok(next.notifications.some(x=>x.userId==='a'&&!x.read)||next.notifications.some(x=>x.userId==='a'),'읽을 알림이 있어야 시험이 의미 있다');
+  for(const x of next.notifications)if(x.userId==='a')x.read=true;
+  await repository.commit(cur.state,next,cur.version);
+  const afterRead=await repository.scopeToken(all);
+  assert.equal(pick(afterRead,'t:'+a),pick(afterVote,'t:'+a),'알림 읽음은 팀 번호를 올리지 않는다');
+  // 계정의 알림 설정만 바꾸면 본인 범위만, 공개 범위는 그대로.
+  cur=await repository.load();next=structuredClone(cur.state);
+  next.users.find(x=>x.id==='b').notify={off:['vote']};
+  await repository.commit(cur.state,next,cur.version);
+  const afterPref=await repository.scopeToken(all);
+  assert.equal(pick(afterPref,'pub'),pick(afterRead,'pub'),'개인 설정은 공개 번호를 올리지 않는다');
+  assert.notEqual(pick(afterPref,'u:b'),pick(afterRead,'u:b'),'본인 번호는 오른다');
+  // 범위 이름은 정해진 모양만 받는다.
+  assert.equal(await repository.scopeToken(['x; DROP TABLE entities','t:'+a]),'t:'+a+'='+pick(afterPref,'t:'+a).split('=')[1]);
+  db.close();
 });

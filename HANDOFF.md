@@ -20,6 +20,7 @@ PR #21 은 2026-09-18 병합 완료(T39-T62), PR #20 은 2026-09-17 병합 완�
 
 - 첫 자동 배포: R2 를 켠 뒤 다시 돌려 성공. 시험 주소 https://teamkick.qkrwodus96.workers.dev (사장님이 health 1.27.0 확인). 이 환경에서는 workers.dev 접속이 막혀 직접 못 본다.
 - 비밀값: 사장님이 Cloudflare 에 넣는 중. OWNER_SETUP_CODE 는 안 넣음. VAPID 는 새 키(New push keys 버튼). Brevo 는 2단계 인증 뒤 새 키 `teamkick-cloudflare`. MAIL_FROM 은 지금 gmail 발신 그대로(이전 뒤 팀킥 도메인 발신으로 바꾸기 — 네이버 수신 문제의 원인).
+- 2026-10-11 비밀값 입력 완료. 대시보드 저장이 옛 버전(1.27.0)을 되살리고 VAPID 를 빼먹음 → Deploy 수동 실행 + New push keys 다시 실행으로 복구. 사장님 health 캡처: 1.27.1, 모든 *Ready true, mailAccount ok, kakaoSecret set, newsSource hub.
 - 사장님이 Brevo 백업 코드를 캡처로 보냈음 → 새 코드 재발급 권고함(값은 어디에도 옮기지 않음).
 
 ### 2026-10-11 (40) 1.27.0 Cloudflare 이전 준비 (TASKS T92)

@@ -6,7 +6,7 @@ import {Tabs,TabsList,TabsTrigger,TabsContent} from "@/components/ui/tabs";
 import {Checkbox} from "@/components/ui/checkbox";
 import {Table,TableHeader,TableHead,TableBody,TableRow,TableCell} from "@/components/ui/table";
 import {toast} from "sonner";
-import {Upload,Plus,Search,MapPin,CalendarDays,Clock,Users,ShieldCheck,Copy,ExternalLink,Settings,CheckCircle2,X,ArrowLeft,LogOut,Download,LoaderCircle,Goal,Handshake,Bell,Navigation,Megaphone,MessageCircle,Home,BarChart3,Shield,Wallet,Image as ImageIcon} from "lucide-react";
+import {Upload,Plus,Search,MapPin,CalendarDays,Clock,Users,ShieldCheck,Copy,ExternalLink,Settings,CheckCircle2,X,ArrowLeft,LogOut,Download,LoaderCircle,Goal,Handshake,Bell,Navigation,Megaphone,MessageCircle,Home,BarChart3,Shield,Wallet,Image as ImageIcon,ChevronRight} from "lucide-react";
 import {Picker,Crest,imageUrl,Empty,GameBadge,GuestBadge,PlayerPhoto,Vote,koreanDate,time,localDay,inputTime,fromInput,opponent,scoreText,IntraVersus,started,backNo,backNoOr,NoticeList,noticeTitle} from "./teamkick";
 import {summaries,currentVote,guestStatusOf,REGIONS,LEVELS,DAYS,levelOf,levelChip,formatLabel,isIntra,POSITION_GROUPS,FEET,positionName,SQUAD_NAMES,RULES_MAX,GUEST_POS,MIN_PLAY,type Row} from "@/lib/model";
 import {Stepper,SquadBoard,MvpPanel,RulesPanel,RULE_TEMPLATES,InviteShare} from "./team-play";
@@ -1060,7 +1060,7 @@ export function AppDialogs(p:any){
   <p className="data-note">{(form.rules??"").length}/{RULES_MAX}자 · 가입을 신청하려는 사람도 가입 전에 읽을 수 있어요. 연락처 같은 개인정보는 적지 마세요.</p>
   <label className="row"><Checkbox checked={!!form.notify} onCheckedChange={x=>field("notify",x===true)}/>팀원에게 바뀐 것을 알리기</label>
   {submit("회칙 저장")}</form>}
- {modal?.kind==="notifications"&&<>{v.notifications.length?[...v.notifications].reverse().map((n:Row)=><div className="notification-item notification-go" key={n.id}
+ {modal?.kind==="notifications"&&<>{(p.otherUnread??[]).map((o:Row)=><button key={o.teamId} type="button" className="other-team-alert" onClick={()=>p.openTeamNotifications?.(o.teamId)}><span><b>{o.name}</b> 새 알림 {o.count}개</span><ChevronRight size={16}/></button>)}{v.notifications.filter((n:Row)=>!n.teamId||n.teamId===v.teamId).length?[...v.notifications.filter((n:Row)=>!n.teamId||n.teamId===v.teamId)].reverse().map((n:Row)=><div className="notification-item notification-go" key={n.id}
    role="button" tabIndex={0} onClick={()=>openNotification(n)} onKeyDown={e=>e.key==="Enter"&&openNotification(n)}>
    <strong className="small">{n.title}</strong><p>{n.body}</p><small>{koreanDate(n.at)} {time(n.at)}</small>
    <span className="text-link" aria-hidden>{targetOf(n).view==="schedule"&&n.gameId&&v.games.some((g:Row)=>g.id===n.gameId)?"경기 보기":viewLabel(n)+" 보기"}</span></div>):<Empty title="새로운 알림이 없어요" description="팀 가입과 경기 변경 소식을 이곳에서 확인할 수 있어요."/>}</>}

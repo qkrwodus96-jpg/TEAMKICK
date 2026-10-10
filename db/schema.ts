@@ -20,3 +20,5 @@ export const chatReports=sqliteTable("chat_reports",{id:text("id").primaryKey(),
 export const scopeRevisions=sqliteTable("scope_revisions",{scope:text("scope").primaryKey(),version:integer("version").notNull().default(0)});
 // 1.24 스키마 준비 표시. 서버가 새로 뜰 때 표를 41번 확인하던 것을 한 번 읽기로 줄인다.
 export const schemaMeta=sqliteTable("schema_meta",{id:integer("id").primaryKey(),sig:text("sig").notNull()});
+// 1.25 알림은 한 사람 것이고 가장 빨리 쌓인다(저장 데이터의 절반). 전체 상태(entities)에서 빼서 받는 사람별로 읽는다.
+export const userNotifications=sqliteTable("user_notifications",{id:text("id").primaryKey(),userId:text("user_id").notNull(),teamId:text("team_id"),dest:text("dest"),read:integer("read").notNull().default(0),at:text("at").notNull(),body:text("body").notNull()},t=>[index("idx_user_notifications_user_at").on(t.userId,t.at),index("idx_user_notifications_dest").on(t.dest)]);

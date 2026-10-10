@@ -193,12 +193,15 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  const VIEWS=["home","schedule","matching","records","team","admin"];
  useEffect(()=>{
   const go=(name?:string|null)=>{if(name?.startsWith("chat:")){setActualView("team");setModal({kind:"chat",room:name.slice(5)});return}if(name?.startsWith("modal:")){setActualView("team");setModal({kind:name.slice(6)});return}if(name&&VIEWS.includes(name))setActualView(name)};
+  // 1.25 다른 팀 소식이면 그 팀으로 바꾼 뒤 연다.
+  const teamOf=(q:URLSearchParams)=>{const tm=q.get("team");if(tm&&tm!==viewTeamRef.current)refresh(tm).catch(()=>{})};
+  teamOf(new URLSearchParams(window.location.search));
   go(new URLSearchParams(window.location.search).get("to"));
   if(window.location.search.includes("to="))window.history.replaceState(null,"","/");
   const onMessage=(e:MessageEvent)=>{
    const data=e.data as {type?:string;url?:string}|undefined;
    if(data?.type!=="teamkick-open"||!data.url)return;
-   try{go(new URL(data.url,window.location.origin).searchParams.get("to"))}catch{}
+   try{const q=new URL(data.url,window.location.origin).searchParams;teamOf(q);go(q.get("to"))}catch{}
   };
   navigator.serviceWorker?.addEventListener?.("message",onMessage);
   return()=>navigator.serviceWorker?.removeEventListener?.("message",onMessage);
@@ -264,16 +267,24 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  const scope=useMemo(()=>{const y=today.slice(0,4);if(period==="all")return ["1970-01-01","2100-01-01"];if(period==="custom"){const start=fromCustom||today,end=toCustom||today;return [isoDay(start),new Date(Date.parse(isoDay(end))+864e5).toISOString()]};const start=period==="year"?y+"-01-01":today.slice(0,7)+"-01";const date=new Date(start+"T00:00:00+09:00");const end=period==="year"?Number(y)+1+"-01-01T00:00:00+09:00":new Date(Date.UTC(Number(y),Number(today.slice(5,7)),1)-9*3600e3).toISOString();return [date.toISOString(),new Date(end).toISOString()]},[period,fromCustom,toCustom,today]);
  const stats=summaries({...v,games:v.games??[],members:v.members??[],sides:v.sides??[]},scope[0],scope[1]);
  const monthStats=summaries({...v,games:v.games??[],members:v.members??[],sides:v.sides??[]},isoDay(today.slice(0,7)+"-01"),new Date(Date.UTC(Number(today.slice(0,4)),Number(today.slice(5,7)),1)-9*3600e3).toISOString());
- const teamPicker=<Picker value={v.teamId||"none"} onChange={switchTeam} options={(demo?v.teams.filter((t:Row)=>["team-a","team-b"].includes(t.id)):v.teams.filter((t:Row)=>v.mine?.some((m:Row)=>m.teamId===t.id&&m.status==="active"))).map((t:Row)=>({value:t.id,label:t.name})).concat(v.teamId?[]:[{value:"none",label:"소속 팀 없음"}])}/>;
+ const teamPickerBase=<Picker value={v.teamId||"none"} onChange={switchTeam} options={(demo?v.teams.filter((t:Row)=>["team-a","team-b"].includes(t.id)):v.teams.filter((t:Row)=>v.mine?.some((m:Row)=>m.teamId===t.id&&m.status==="active"))).map((t:Row)=>({value:t.id,label:t.name})).concat(v.teamId?[]:[{value:"none",label:"소속 팀 없음"}])}/>;
  const [jumpTab,setJumpTab]=useState("");
  const common={v,team,demo,busy,action,run,setModal,setView,toActual,manager,captain,setJumpTab,chatUnread};
  const goDate=(day:string)=>{setSelected(day);setMonth(day.slice(0,7));setDateFilter(true);setView("schedule")};
  // 빨간 점만으로는 몇 건인지, 무슨 일인지 알 수 없었다. 개수와 가장 최근 소식을 함께 보여준다.
- const unreadList=(v.notifications??[]).filter((n:Row)=>!n.read);
+ // 1.25 팀별 알림 보기(사장님 요청): 지금 고른 팀 알림과 팀 없는 개인 알림만 이 팀 화면에 보인다.
+ // 받기는 모든 팀 알림을 그대로 받는다(폰 알림도). 다른 팀의 안 읽은 알림은 숫자로만 알려 주고 누르면 그 팀으로 간다.
+ const inTeam=(n:Row)=>!n.teamId||n.teamId===v.teamId;
+ const myTeamIds=new Set((v.mine??[]).filter((m:Row)=>m.status==="active").map((m:Row)=>m.teamId));
+ const otherUnread=Object.entries((v.notifications??[]).filter((n:Row)=>!n.read&&n.teamId&&n.teamId!==v.teamId&&myTeamIds.has(n.teamId)).reduce((o:Record<string,number>,n:Row)=>{o[n.teamId]=(o[n.teamId]??0)+1;return o},{})).map(([teamId,count])=>({teamId,count:Number(count),name:String(v.teams?.find((x:Row)=>x.id===teamId)?.name??"다른 팀")}));
+ const otherTotal=otherUnread.reduce((x,y)=>x+y.count,0);
+ const teamPicker=<span className="team-picker-wrap">{teamPickerBase}{otherTotal>0&&<span className="team-alert" title="다른 팀 새 알림" aria-label={"다른 팀 새 알림 "+otherTotal+"개"}>{otherTotal>99?"99+":otherTotal}</span>}</span>;
+ const openTeamNotifications=(t:string)=>{refresh(t).then(()=>{setModal({kind:"notifications"});run({type:"readNotifications",teamId:t})}).catch(e=>setError(e.message))};
+ const unreadList=(v.notifications??[]).filter((n:Row)=>!n.read&&inTeam(n));
  const unread=unreadList.length;
  // 알림 목록은 오래된 것부터 쌓이므로 마지막이 가장 최근이다.
  const latestUnread=unreadList[unreadList.length-1];
- const openNotifications=()=>{setModal({kind:"notifications"});if(unread)run({type:"readNotifications"})};
+ const openNotifications=()=>{setModal({kind:"notifications"});if(unread)run({type:"readNotifications",teamId:v.teamId||undefined})};
  // 홈 화면 아이콘에 읽지 않은 개수를 붙인다. 지원하지 않는 브라우저는 조용히 넘어간다.
  useEffect(()=>{
   const nav=navigator as Navigator&{setAppBadge?:(n?:number)=>Promise<void>;clearAppBadge?:()=>Promise<void>};
@@ -312,7 +323,7 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  </>}
  <footer className="footer-note"><span>TEAMKICK · 함께 뛰고, 함께 기록하다.</span><span>우리 팀의 모든 경기</span></footer>
  </main><nav className="bottom-nav">{nav.map(n=><button key={n.id} className={(view===n.id?"active":"")+" dot-host"} onClick={()=>setView(n.id)}><n.icon/>{n.label}{n.id==="matching"&&inbox>0&&<i className="red-dot nav-dot">{inbox}</i>}{n.id==="team"&&chatUnread>0&&<i className="red-dot nav-dot" aria-label={"안 읽은 채팅 "+chatUnread+"개"}>{chatUnread>99?"99+":chatUnread}</i>}</button>)}</nav></div>
- <AppDialogs {...common} modal={modal} real={real} setDemo={setDemo} samples={samples} refresh={refresh}/>
+ <AppDialogs {...common} modal={modal} real={real} setDemo={setDemo} samples={samples} refresh={refresh} otherUnread={otherUnread} openTeamNotifications={openTeamNotifications}/>
  <WelcomeGuide ready={!demo&&!!real?.user} hasTeam={!!team} onCreateTeam={()=>setModal({kind:"createTeam"})} onFindTeam={()=>setModal({kind:"findTeam"})}/>
  <Toaster position="top-center" richColors/>
  </SidebarProvider></>

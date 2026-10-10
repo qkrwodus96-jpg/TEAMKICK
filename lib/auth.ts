@@ -217,6 +217,8 @@ export async function closeAccount(accountId:string,now=Date.now()){forgetSessio
  // 채팅: 그 사람이 보낸 메시지와 읽음 기록도 지운다(1.16).
  await db().prepare("DELETE FROM chat_messages WHERE account_id=?").bind(accountId).run();
  await db().prepare("DELETE FROM chat_reads WHERE account_id=?").bind(accountId).run();
+ // 1.25 알림함도 지운다(받는 사람별 표).
+ await db().prepare("DELETE FROM user_notifications WHERE user_id=?").bind(accountId).run();
  await db().prepare("DELETE FROM accounts WHERE id=?").bind(accountId).run();
 }
 

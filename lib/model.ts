@@ -344,19 +344,29 @@ function rankPhoto(s:State,uid:string,viewer:string){
  return rankPhotoOpen(s,String(mine[0].teamId),String(mine[0].id))?String(mine[0].photo):"";
 }
 export const NATIONAL_LIMIT=50;
-export function nationalRanking(s:State,userId:string,now=Date.now(),region=""){
+// 1.25 랭킹 미리 계산: 무거운 집계(모든 경기·명단을 도는 부분)는 저장 번호마다 한 번만 하고,
+// 사람마다 다른 부분(내 줄 표시·사진)만 요청마다 붙인다. 예전에는 화면을 열 때마다 전국 + 내 지역 + 다른 지역(최대 18곳)을
+// 처음부터 다시 셌다. 저장 번호(__rev)가 없는 상태(시험·샘플)는 기억하지 않고 바로 센다.
+// MVP 는 시간이 지나 마감되므로 10분 단위로도 새로 센다.
+type RankBase=Record<string,{uid:string;name:string;team:string;goals:number;assists:number;points:number;mvp:number;attend:number;card:Record<string,unknown>|null}[]>;
+const rankMemo=new Map<string,RankBase>();
+function rankingBase(s:State,now:number,region:string):RankBase{
+ const rev=(s as unknown as {__rev?:number}).__rev;
+ const key=rev==null?"":rev+"|"+region+"|"+RANK_PERIODS.map(p=>periodRange(p,now).from).join(",")+"|"+Math.floor(now/600e3);
+ if(key){const hit=rankMemo.get(key);if(hit)return hit}
  const open=new Set(s.users.filter(u=>u.rankPublic===true).map(u=>u.id as string));
- const out:Record<string,Record<string,Row[]>>={};
+ const games=new Map(s.games.map(g=>[g.id,g])),members=new Map(s.members.map(m=>[m.id,m])),teams=new Map(s.teams.map(t=>[t.id,t]));
+ const out:RankBase={};
  for(const period of RANK_PERIODS){
   const {from,to}=periodRange(period,now);
   const people=new Map<string,{name:string;teams:Map<string,number>;goals:number;assists:number;mvp:number;attend:number}>();
   for(const side of s.sides){
-   const g=s.games.find(x=>x.id===side.gameId);
+   const g=games.get(side.gameId);
    if(!g||g.status!=="completed"||g.start<from||g.start>=to)continue;
-   const team=teamOf(s,side.teamId);if(team?.status!=="active"||(region&&team.region!==region))continue;
+   const team=teams.get(side.teamId);if(team?.status!=="active"||(region&&team.region!==region))continue;
    const winners=mvpWinners(side,now);
    for(const r of (side.roster??[]) as Row[]){
-    const m=s.members.find(x=>x.id===r.id);if(!m?.userId||!open.has(m.userId))continue;
+    const m=members.get(r.id);if(!m?.userId||!open.has(m.userId))continue;
     const p=people.get(m.userId)??{name:String(m.name??""),teams:new Map(),goals:0,assists:0,mvp:0,attend:0};
     const came=side.attendanceFinal&&side.attendance?.[r.id]===true;
     if(came){p.attend++;p.teams.set(team.name,(p.teams.get(team.name)??0)+1)}
@@ -369,9 +379,19 @@ export function nationalRanking(s:State,userId:string,now=Date.now(),region=""){
    }
   }
   const cardOf=(uid:string)=>{if(s.users.find(x=>x.id===uid)?.profilePublic!==true)return null;const pv=profileView(s,uid,false);if(!pv)return null;return {main:pv.main,sub:pv.sub,foot:pv.foot,regions:pv.regions,instagram:pv.instagram}};
-  const rows=[...people.entries()].map(([uid,p])=>({name:p.name,team:[...p.teams.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]??"",goals:p.goals,assists:p.assists,points:p.goals+p.assists,mvp:p.mvp,attend:p.attend,me:uid===userId,card:cardOf(uid),photo:rankPhoto(s,uid,userId)}));
+  out[period]=[...people.entries()].map(([uid,p])=>({uid,name:p.name,team:[...p.teams.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]??"",goals:p.goals,assists:p.assists,points:p.goals+p.assists,mvp:p.mvp,attend:p.attend,card:cardOf(uid)}));
+ }
+ if(key){if(rankMemo.size>200)rankMemo.clear();rankMemo.set(key,out)}
+ return out;
+}
+export function nationalRanking(s:State,userId:string,now=Date.now(),region=""){
+ const base=rankingBase(s,now,region);
+ const out:Record<string,Record<string,Row[]>>={};
+ for(const period of RANK_PERIODS){
+  const rows=(base[period]??[]).map(r=>({...r,me:r.uid===userId}));
   out[period]={};
-  for(const key of RANK_KEYS)out[period][key]=rankRows(rows,key).map(({name,team,value,rank,me,card,photo},i)=>({id:"n"+i,name,team,value,rank,me,card,photo})).filter((r,i)=>i<NATIONAL_LIMIT||r.me);
+  // 사진은 보여 줄 줄(상위 50명 + 나)에만 붙인다. 계정 번호(uid)는 내보내지 않는다.
+  for(const key of RANK_KEYS)out[period][key]=rankRows(rows,key).filter((r,i)=>i<NATIONAL_LIMIT||r.me).map(({uid,name,team,value,rank,me,card},i)=>({id:"n"+i,name,team,value,rank,me,card,photo:rankPhoto(s,uid,userId)}));
  }
  return out;
 }
@@ -897,7 +917,8 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  else if(type==="setProfilePublic"){const u=s.users.find(x=>x.id===a.id)!;ensure(c.on!==true||u.rankPublic===true,"먼저 지역·전국 랭킹에 참여해 주세요.");u.profilePublic=c.on===true;u.profilePublicAt=stamp;}
  // 축구 소식에서 고른 좋아하는 팀(선택). 목록에 있는 것만, 최대 NEWS_TEAMS_MAX 개.
  else if(type==="setNewsTeams"){const teams=cleanNewsTeams(c.teams);ensure(teams.length<=NEWS_TEAMS_MAX,"좋아하는 팀은 "+NEWS_TEAMS_MAX+"개까지 고를 수 있어요.");const u=s.users.find(x=>x.id===a.id)!;u.newsTeams=teams;}
- else if(type==="readNotifications"){for(const n of s.notifications.filter(x=>x.userId===a.id))n.read=true;}
+ // 1.25 팀별 알림 보기: 팀을 주면 그 팀 알림과 팀 없는 개인 알림만 읽음 처리한다(다른 팀 알림은 그 팀 화면에서).
+ else if(type==="readNotifications"){const tid=typeof c.teamId==="string"&&c.teamId?c.teamId:"";for(const n of s.notifications.filter(x=>x.userId===a.id&&(!tid||!x.teamId||x.teamId===tid)))n.read=true;}
  else if(type==="correctRequest"){requireTeam(s,t,a.id);for(const m of s.members.filter(x=>x.teamId===t&&["captain","manager"].includes(x.role)&&x.status==="active"))userNotice(s,m.userId,"기록 정정 요청",a.name+": "+textValue(c.message,500),t,"records");}
  // 채팅 메시지를 보낸 뒤 화면이 부른다. 방 사람들에게 "새 메시지" 알림을 남긴다(내용은 싣지 않는다 — 잠금화면에 계좌 같은 게 뜨지 않게).
  // 읽지 않은 같은 방 알림이 10분 안에 이미 있으면 또 만들지 않는다(대화가 오갈 때 알림 폭탄 방지).

@@ -16,6 +16,13 @@ PR #21 은 2026-09-18 병합 완료(T39-T62), PR #20 은 2026-09-17 병합 완�
 - **팀이 수천 개가 되기 전에 "팀별로 나눠 읽기"를 한다.** 지금은 요청마다 공용 문서 전체를 한 번에 읽는다(1.24·1.25 로 줄였을 뿐). Cloudflare 로 옮길 때 팀별 SELECT 로 바꾼다 — 자세한 내용은 `ARCHITECTURE.md` "저장과 동시성".
 - 차단/신고는 1.26.0 에서 넣었다(TASKS T90). 두 기기 확인은 기기가 생기면.
 
+### 2026-10-11 (42) 시험 복사 성공 · 네임서버 Cloudflare 로 변경
+
+- 사장님이 Workers 유료($5) 이미 신청. MIGRATE_SECRET 을 Cloudflare·GPT Sites 양쪽에 넣고 GPT 가 옛 서버를 1.27.1 로 배포.
+- 시험 복사(② 처음부터 복사): 표 14개·사진 4개 모두 일치(entities 545, accounts 12, sessions 18, chat_messages 13, user_notifications 469, push_subs 6). 옛 서버 잠금은 풀린 상태 그대로.
+- DNS: Cloudflare 에 teamkick.co.kr(Free) 추가, 가비아 레코드 12개 모두 옮기고 **전부 DNS 전용(회색)**(A 2개는 GPT Sites 의 Cloudflare for SaaS 주소, CNAME 5개는 Brevo 메일 인증). 가비아 네임서버 → nova.ns.cloudflare.com / wilson.ns.cloudflare.com "설정 완료". DNSSEC 없음. 가비아 안전잠금이 풀렸으니 며칠 뒤 다시 켜기.
+- 남은 것: Cloudflare "활성" 메일 → 사이트 정상 확인 → 이전하는 날(③ 마지막 복사 → teamkick 사용자 지정 도메인 연결 → 확인 → MIGRATE_SECRET 삭제 → 처리방침 OpenAI 줄 삭제).
+
 ### 2026-10-11 (41) 1.27.1 첫 Cloudflare 배포 성공 · 비밀값 옮기는 중 (TASKS T93)
 
 - 첫 자동 배포: R2 를 켠 뒤 다시 돌려 성공. 시험 주소 https://teamkick.qkrwodus96.workers.dev (사장님이 health 1.27.0 확인). 이 환경에서는 workers.dev 접속이 막혀 직접 못 본다.

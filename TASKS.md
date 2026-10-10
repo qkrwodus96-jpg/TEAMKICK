@@ -6,6 +6,15 @@
 `BLOCKED` / `DONE`(실제 실행 결과로 확인). 요구사항 본문은
 `PROJECT_CONTEXT.md`, 구조는 `ARCHITECTURE.md`를 본다.
 
+## T92 1.27.0 — Cloudflare 이전 준비: 자동 배포 + 데이터·사진 복사 도구(2026-10-11)
+
+- [x] GitHub Actions `Deploy to Cloudflare`: main 에 합치면 테스트 → 빌드 → 사장님 계정에 배포(`scripts/cloudflare-deploy.mjs` 가 D1 `teamkick-db`·R2 `teamkick-images` 를 없으면 만들고 설정을 바꿔 넣음). 예약 실행은 지금처럼 cron-job.org → `/api/cron`(주소가 같아서 그대로).
+- [x] 이전 도구 `/api/migrate`(`lib/migrate.ts`): `MIGRATE_SECRET` 이 있을 때만 열림. 옛 서버는 표 14개·사진 파일을 조금씩 내주고, 새 서버(*.workers.dev 에서만)는 끌어와 넣고 개수를 비교. 마지막 복사 때 옛 서버 저장 잠금(저장 경로 6곳 + 예약 실행이 멈춤). 세션도 옮겨서 도메인을 바꾼 뒤 다시 로그인하지 않아도 됨.
+- [x] 절차서 `docs/cloudflare-migration.md`(메뉴 이름 한국어, 비밀값 이름 표, 가비아 네임서버, 되돌리기).
+- [x] 1.25.1 때 잘못 올라간 확인용 캡처 `pick.png` 삭제.
+- 검증: 테스트 226/226(이전 도구 3개 — 두 개의 로컬 DB·사진 저장소 사이 전체 복사·개수 일치·운영 주소 거절·잠금), tsc, lint 74/21, `wrangler deploy --dry-run` 으로 바뀐 설정 확인(묶음 568KB gzip).
+- 미검증: 실제 Cloudflare 배포(첫 자동 배포에서 확인), 실제 옛 서버(GPT Sites)에서 내보내기.
+
 ## T91 1.26.1 — 팀 칩 숫자와 목록 숫자가 다르던 문제(2026-10-10)
 
 - [x] 원인(추정): 칩 숫자는 "활동 중인 팀원 기록이 있는 모든 팀" 알림을 셌고, 목록은 실제로 고를 수 있는 팀만 보여 줬다. 고를 수 없는 팀(나간 팀·해산·정지 등)의 알림은 어디서도 열 수 없어 칩 숫자만 남았다(사장님 캡처: 칩 1, 목록에 숫자 없음).

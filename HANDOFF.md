@@ -7,7 +7,7 @@
 PR #21 은 2026-09-18 병합 완료(T39-T62), PR #20 은 2026-09-17 병합 완료.
 **`main` 은 1.8.0 까지 들어가 있다. 1.8.1·1.9.0 은 이 브랜치에만 있다.**
 미커밋 변경: 없음
-버전: `APP_VERSION=1.26.1`, `BUILD=2026-10-10-1261`
+버전: `APP_VERSION=1.27.0`, `BUILD=2026-10-11-127`
 **다음 세션이 가장 먼저 할 일: 1.9.0 배포를 GPT 에게 맡기고 사용자 확인을 받는다.**
 현재 작업 ID: **사용자 요청 5가지 처리 완료(로컬 검증). 배포가 남았다.**
 
@@ -15,6 +15,13 @@ PR #21 은 2026-09-18 병합 완료(T39-T62), PR #20 은 2026-09-17 병합 완�
 
 - **팀이 수천 개가 되기 전에 "팀별로 나눠 읽기"를 한다.** 지금은 요청마다 공용 문서 전체를 한 번에 읽는다(1.24·1.25 로 줄였을 뿐). Cloudflare 로 옮길 때 팀별 SELECT 로 바꾼다 — 자세한 내용은 `ARCHITECTURE.md` "저장과 동시성".
 - 차단/신고는 1.26.0 에서 넣었다(TASKS T90). 두 기기 확인은 기기가 생기면.
+
+### 2026-10-11 (40) 1.27.0 Cloudflare 이전 준비 (TASKS T92)
+
+- 사장님이 Cloudflare 가입, GitHub 비밀값(`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) 넣음(값은 모름).
+- main 에 합치면 `.github/workflows/deploy-cloudflare.yml` 이 사장님 계정에 배포한다. 결과는 GitHub Actions 에서 확인(이 환경은 api.cloudflare.com·workers.dev 접속이 막혀 있음 — 상태는 Actions 로그로만 본다).
+- 다음 순서는 `docs/cloudflare-migration.md` 1~7. Workers 유료($5/월)는 사장님 결정 대기(무료는 요청당 CPU 10ms 라 저장이 실패할 수 있음).
+- Play Console: 개인 계정, 팀킥 전용 구글 계정으로 가입 중. 주소 확인 서류(국민카드 우편 명세서 또는 SKT 청구서)는 평일에.
 
 ### 2026-10-10 (39) 1.26.1 팀 칩 숫자 수정 · 다음은 Cloudflare 이전 (TASKS T91)
 

@@ -1,4 +1,5 @@
 import {currentUser,currentUserCached,accountExists,closeAccount,clearedCookie} from "@/lib/auth";
+import {assertWritable} from "@/lib/migrate";
 import {storageReady} from "@/lib/images";
 import {placeSearchReady,mapJsKey} from "@/lib/places";
 import {mailReady} from "@/lib/mail";
@@ -27,7 +28,7 @@ export async function GET(req:Request){try{const t0=performance.now();await ensu
  const scopes=myScopes(state,user.userId);let tView=0;return json({rev:version,scopes,scopeToken:await scopeToken(scopes),storageReady:storageReady(),ownerMissing,placeSearchReady:placeSearchReady(),mapKey:mapJsKey(),mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver"),needsVerification:mailReady()&&!user.verified,invitedTeam:invite?.teamId??null,user:{id:user.userId,name:state.users.find(x=>x.id===user.userId)?.name??user.fullName??"팀원",provider:user.provider??"local"},...(()=>{const t2=performance.now();const out=visibleState(state,user.userId,teamId);tView=since(t2);return out})()},200,undefined,`schema;dur=${tSchema}, load;dur=${tLoad}, view;dur=${tView}, total;dur=${since(t0)}`);}catch(e){console.error("TeamKick load",e);return json({error:e instanceof AppError?e.message:setupIncomplete(e)?SETUP_MESSAGE:"데이터를 불러오지 못했어요. 다시 시도해주세요."},e instanceof AppError?e.status:503)}}
 export async function POST(req:Request){
  try{
-  await ensureSchema();
+  await ensureSchema();await assertWritable();
   const user=await currentUser(req);if(!user)throw new AppError("먼저 로그인해주세요.",401);
   const origin=req.headers.get("origin");if(origin&&origin!==new URL(req.url).origin)throw new AppError("요청 출처를 확인할 수 없어요.",403);
   if(req.headers.get("sec-fetch-site")==="cross-site")throw new AppError("허용되지 않은 요청이에요.",403);

@@ -1,4 +1,5 @@
 import {currentUser} from "@/lib/auth";
+import {assertWritable} from "@/lib/migrate";
 import {load} from "@/lib/store";
 import {AppError,ensure,membership,teamOf,rankPhotoOpen} from "@/lib/model";
 import {getImage,putImage,pruneOthers,parseKey,teamLogoPrefix,memberPhotoPrefix,teamPhotoPrefix,removeImage,MAX_BYTES} from "@/lib/images";
@@ -11,6 +12,7 @@ const failed=(e:unknown)=>{
 
 export async function POST(req:Request){
  try{
+  await assertWritable();
   const user=await currentUser(req);if(!user)throw new AppError("먼저 로그인해주세요.",401);
   const origin=req.headers.get("origin");if(origin&&origin!==new URL(req.url).origin)throw new AppError("요청 출처를 확인할 수 없어요.",403);
   if(req.headers.get("sec-fetch-site")==="cross-site")throw new AppError("허용되지 않은 요청이에요.",403);

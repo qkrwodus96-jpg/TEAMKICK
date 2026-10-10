@@ -2,7 +2,7 @@ import {currentUser,currentUserCached,accountExists,closeAccount,clearedCookie} 
 import {storageReady} from "@/lib/images";
 import {placeSearchReady,mapJsKey} from "@/lib/places";
 import {mailReady} from "@/lib/mail";
-import {load,commit,scopeToken} from "@/lib/store";
+import {load,commit,scopeToken,stamp} from "@/lib/store";
 import {applyCommand,visibleState,AppError,iso,prune,setupIncomplete,SETUP_MESSAGE,pushTargets,type State} from "@/lib/model";
 import {checkOwnerCode} from "@/lib/owner-config";
 import {ensureSchema} from "@/lib/schema";
@@ -19,7 +19,7 @@ const since=(t:number)=>Math.round(performance.now()-t);
 export async function GET(req:Request){try{const t0=performance.now();await ensureSchema();const tSchema=since(t0);const user=await currentUserCached(req);
  // 로그인 전이라도 초대 링크로 왔으면 어느 팀 초대인지(팀 이름만) 알려 준다. 가입 화면에 "OO 팀 초대"를 띄운다.
  if(!user){const token=new URL(req.url).searchParams.get("invite");let invitedTeamName:string|null=null;if(token){const {state}=await load();const inv=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());const team=inv?state.teams.find(t=>t.id===inv.teamId&&t.status==="active"):null;invitedTeamName=team?.name??null}
-  return json({user:null,invitedTeamName,mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver")});}const t1=performance.now();const {state,version}=await load();const tLoad=since(t1);const teamId=new URL(req.url).searchParams.get("team")??undefined;const token=new URL(req.url).searchParams.get("invite");const invite=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());
+  return json({user:null,invitedTeamName,mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver")});}const t1=performance.now();const {state,version}=await load({notify:[user.userId]});const tLoad=since(t1);const teamId=new URL(req.url).searchParams.get("team")??undefined;const token=new URL(req.url).searchParams.get("invite");const invite=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());
  // 기록된 운영자의 계정이 사라졌으면 다시 등록할 수 있어야 한다. 그렇지 않으면 아무도 운영자가 될 수 없다.
  const ownerId=state.settings.find(x=>x.id==="owner")?.userId;
  const ownerMissing=!!ownerId&&ownerId!==user.userId&&!(await accountExists(ownerId));
@@ -39,14 +39,14 @@ export async function POST(req:Request){
   // visibleState 가 그 팀에 속하지 않은 사용자에게는 어차피 아무것도 주지 않는다.
   const seen=c.teamId||(typeof c.viewTeam==="string"&&c.viewTeam?c.viewTeam:undefined);
   for(let attempt=0;attempt<4;attempt++){
-   const {state,version}=await load();const previous=state.receipts.find(x=>x.id===user.userId+":"+c.mutationId);if(previous)return json({ok:true,output:previous.output,...visibleState(state,user.userId,seen)});
+   const {state,version}=await load({notify:[user.userId],chatRoom:c.type==="chatPing"&&typeof c.room==="string"?c.room:undefined});const previous=state.receipts.find(x=>x.id===user.userId+":"+c.mutationId);if(previous)return json({ok:true,output:previous.output,...visibleState(state,user.userId,seen)});
    if(state.audit.filter(x=>x.actor===user.userId&&Date.parse(x.at)>Date.now()-60000).length>=40)throw new AppError("잠시 후 다시 시도해주세요.",429);
    const ownerId=state.settings.find(x=>x.id==="owner")?.userId;
    const ownerReset=c.type==="setupOwner"&&!!ownerId&&ownerId!==user.userId&&!(await accountExists(ownerId));
    const after=structuredClone(state);const output=applyCommand(after,{id:user.userId,name:user.fullName??state.users.find(x=>x.id===user.userId)?.name??"팀원",ownerSetup:setup,ownerReset,verified:!mailReady()||!!user.verified},c);
    after.receipts.push({id:user.userId+":"+c.mutationId,output,at:iso()});prune(after);
    try{
-    await commit(state,after,version);
+    await commit(state,after,version);stamp(after,version+1);
     if(c.type==="closeAccount"){await closeAccount(user.userId);return json({ok:true,closed:true},200,clearedCookie())}
     // 저장이 끝난 뒤에만 기기를 깨운다. 실패해도 저장을 되돌리지 않는다.
     // 이번 저장으로 새로 생긴 알림을 받은 사람만 대상이다.

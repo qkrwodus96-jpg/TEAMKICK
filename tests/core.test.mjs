@@ -3607,7 +3607,7 @@ test('경기 3시간 전 알림: 3시간 안에 시작하는 경기만, 팀마�
 });
 
 test('예약 실행(/api/cron): 비밀값이 맞을 때만, 알림은 한 번만, 응답에는 숫자만',async()=>{
-  localDatabase();const {s,a}=fixture();addPlayer(s,a);game(s,a,{start:Date.now()+2*3600e3});
+  const db=localDatabase();const {s,a}=fixture();addPlayer(s,a);game(s,a,{start:Date.now()+2*3600e3});
   await repository.commit(blank(),s,0);
   const call=(auth)=>cronApi.GET(new Request('https://teamkick.test/api/cron',{headers:auth?{authorization:auth}:{}}));
   const secret='test-cron-secret-0123456789';
@@ -3623,7 +3623,8 @@ test('예약 실행(/api/cron): 비밀값이 맞을 때만, 알림은 한 번만
   const body=await first.json();assert.equal(body.reminded,1);assert.equal(body.people,2);
   assert.deepEqual(Object.keys(body).sort(),['at','birthdays','failed','ok','people','reminded','sent','weather'],'누구에게 보냈는지는 담지 않는다');
   assert.deepEqual([...globalThis.__teamkickTestWoken].sort(),['a','player'],'저장 뒤 기기를 깨운다');
-  const {state}=await repository.load();assert.equal(state.notifications.filter(x=>/^오늘/.test(x.title)).length,2,'DB에 저장된다');
+  // 1.25 알림은 받는 사람별 표(user_notifications)에 저장된다.
+  assert.equal(db.prepare("SELECT body FROM user_notifications").all().map(r=>JSON.parse(r.body)).filter(x=>/^오늘/.test(x.title)).length,2,'DB에 저장된다');
   const again=await (await call('Bearer '+secret)).json();assert.equal(again.reminded,0,'다음 실행에서 다시 보내지 않는다');
   delete globalThis.__teamkickTestEnv.CRON_SECRET;
 });
@@ -3996,8 +3997,8 @@ test('저장하면 바뀐 행이 보이는 범위의 번호만 오른다(투표�
   assert.equal(pick(afterVote,'t:'+b),pick(before,'t:'+b),'다른 팀은 그대로');
   assert.equal(pick(afterVote,'pub'),pick(before,'pub'),'공개 범위도 그대로');
   // 알림 읽음 → 그 사람(u:)만. 팀 번호는 그대로.
-  cur=await repository.load();next=structuredClone(cur.state);
-  assert.ok(next.notifications.some(x=>x.userId==='a'&&!x.read)||next.notifications.some(x=>x.userId==='a'),'읽을 알림이 있어야 시험이 의미 있다');
+  cur=await repository.load({notify:['a']});next=structuredClone(cur.state);
+  assert.ok(next.notifications.some(x=>x.userId==='a'),'읽을 알림이 있어야 시험이 의미 있다');
   for(const x of next.notifications)if(x.userId==='a')x.read=true;
   await repository.commit(cur.state,next,cur.version);
   const afterRead=await repository.scopeToken(all);
@@ -4012,4 +4013,75 @@ test('저장하면 바뀐 행이 보이는 범위의 번호만 오른다(투표�
   // 범위 이름은 정해진 모양만 받는다.
   assert.equal(await repository.scopeToken(['x; DROP TABLE entities','t:'+a]),'t:'+a+'='+pick(afterPref,'t:'+a).split('=')[1]);
   db.close();
+});
+
+// --- 1.25: 알림은 받는 사람별 표로 — 전체 상태에 넣지 않는다 ---
+test('알림은 user_notifications 에 저장되고, 읽을 때는 부탁한 사람 몫만 온다',async()=>{
+  const db=localDatabase(),{s,a}=fixture();
+  const start=NOW+3*DAY;
+  command(s,A,{type:'createGame',teamId:a,start:iso(start),end:iso(start+7200e3),venue:'난지천',address:'서울'},NOW);
+  const mine=s.notifications.filter(x=>x.userId==='a').length,others=s.notifications.filter(x=>x.userId!=='a').length;
+  assert.ok(mine>0&&others>0,'두 사람 이상의 알림이 있어야 의미 있다');
+  await repository.commit(blank(),s,0);
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM entities WHERE kind='notifications'").get().n,0,'전체 상태(entities)에는 알림이 없다');
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM user_notifications").get().n,mine+others);
+  assert.equal((await repository.load()).state.notifications.length,0,'부탁하지 않으면 알림을 읽지 않는다');
+  const forA=await repository.load({notify:['a']});
+  assert.equal(forA.state.notifications.length,mine);assert.ok(forA.state.notifications.every(x=>x.userId==='a'));
+  // 기억해 둔 상태에 알림이 섞이지 않는다(다른 사람 요청에 a 의 알림이 보이면 안 된다).
+  const forOwner=await repository.load({notify:['owner']});
+  assert.ok(forOwner.state.notifications.every(x=>x.userId==='owner'));
+  // 읽음 처리는 표에 반영된다.
+  const next=structuredClone(forA.state);command(next,A,{type:'readNotifications'},NOW+1000);
+  await repository.commit(forA.state,next,forA.version);
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM user_notifications WHERE user_id='a' AND read=0").get().n,0);
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM user_notifications WHERE user_id<>'a' AND read=0").get().n,others,'다른 사람 알림은 그대로');
+  // 오래된 알림 정리: 읽은 것 30일, 안 읽은 것 180일.
+  db.prepare("UPDATE user_notifications SET at=? WHERE user_id='a'").run(new Date(Date.now()-31*DAY).toISOString());
+  await repository.cleanupNotifications();
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM user_notifications WHERE user_id='a'").get().n,0,'읽은 지 30일 넘은 알림은 지운다');
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM user_notifications").get().n,others,'안 읽은 최근 알림은 남는다');
+  db.close();
+});
+
+test('예전 알림(entities 안)은 새 표로 한 번에 옮겨진다',async()=>{
+  const db=localDatabase();
+  const n={id:'n1',userId:'u1',teamId:'t1',title:'옛 알림',body:'',to:'chat:team:t1',read:true,at:'2026-10-01T00:00:00.000Z'};
+  db.prepare("INSERT INTO entities(id,kind,scope,body) VALUES(?,?,?,?)").run('notifications:n1','notifications','t1',JSON.stringify(n));
+  db.prepare("INSERT INTO entities(id,kind,scope,body) VALUES(?,?,?,?)").run('notifications:bad','notifications','t1',JSON.stringify({id:'bad',title:'받는 사람 없음'}));
+  await schema.moveNotifications();
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM entities WHERE kind='notifications'").get().n,0);
+  const row=db.prepare("SELECT * FROM user_notifications WHERE id='n1'").get();
+  assert.equal(row.user_id,'u1');assert.equal(row.team_id,'t1');assert.equal(row.dest,'chat:team:t1');assert.equal(row.read,1);assert.equal(JSON.parse(row.body).title,'옛 알림');
+  await schema.moveNotifications();// 다시 돌아도 안전
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM user_notifications").get().n,1);
+  db.close();
+});
+
+test('1.25 알림 읽음은 팀을 주면 그 팀 알림과 개인 알림만, 다른 팀 알림은 그대로 둔다',()=>{
+  const {s,a,b}=fixture();
+  s.notifications.push({id:'x1',userId:'a',teamId:a,title:'A팀',body:'',read:false,at:iso(NOW)},{id:'x2',userId:'a',teamId:b,title:'B팀',body:'',read:false,at:iso(NOW)},{id:'x3',userId:'a',title:'개인',body:'',read:false,at:iso(NOW)});
+  command(s,A,{type:'readNotifications',teamId:a},NOW+1);
+  const read=id=>s.notifications.find(x=>x.id===id).read;
+  assert.equal(read('x1'),true);assert.equal(read('x3'),true,'팀 없는 개인 알림도 읽음');
+  assert.equal(read('x2'),false,'다른 팀 알림은 그 팀 화면에서 읽을 때까지 남는다');
+  command(s,A,{type:'readNotifications'},NOW+2);
+  assert.equal(read('x2'),true,'팀 없이 부르면 예전처럼 전부');
+});
+
+test('1.25 랭킹은 저장 번호마다 한 번만 세고, 사람마다 내 줄·사진만 다르게 붙인다',()=>{
+  const f=intraFixture();attendAll(f);
+  command(f.s,A,{type:'squads',teamId:f.a,gameId:f.gameId,assign:{[f.p1.id]:0}});
+  command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:true});
+  const plain=nationalRanking(f.s,'p1');
+  Object.defineProperty(f.s,'__rev',{value:7,enumerable:false,configurable:true,writable:true});
+  const cached1=nationalRanking(f.s,'p1'),cached2=nationalRanking(f.s,'stranger');
+  assert.deepEqual(cached1,plain,'기억한 값과 바로 센 값이 같다');
+  assert.equal(cached1.year.attend[0].me,true);assert.equal(cached2.year.attend[0].me,false,'내 줄 표시는 보는 사람마다 다르다');
+  assert.ok(!JSON.stringify(cached2).includes('"uid"'),'계정 번호는 내보내지 않는다');
+  // 같은 번호에서 데이터가 바뀌어도(있을 수 없는 일) 기억한 값을 쓰고, 번호가 바뀌면 새로 센다.
+  command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:false});
+  assert.equal(nationalRanking(f.s,'p1').year.attend.length,1,'같은 번호면 기억한 값');
+  f.s.__rev=8;
+  assert.equal(nationalRanking(f.s,'p1').year.attend.length,0,'번호가 바뀌면 새로 센다');
 });

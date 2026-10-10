@@ -20,7 +20,8 @@ async function showLatest(){
     title=latest.title||title;
     body=unread.length>1?(latest.body||"")+" 외 "+(unread.length-1)+"건":(latest.body||body);
     // 눌렀을 때 그 소식이 있는 화면으로 바로 가도록 주소에 실어 둔다.
-    if(latest.to)url="/?to="+encodeURIComponent(latest.to);
+    // 1.25 어느 팀 소식인지도 실어 둔다. 앱이 그 팀으로 바꿔서 연다.
+    const q=new URLSearchParams();if(latest.to)q.set("to",latest.to);if(latest.teamId)q.set("team",latest.teamId);if([...q].length)url="/?"+q.toString();
    }else if(data.user){
     // 읽지 않은 알림이 없다면 다른 기기에서 이미 확인한 것이다. 조용히 넘어간다.
     title="팀킥";body="확인할 소식이 있어요.";

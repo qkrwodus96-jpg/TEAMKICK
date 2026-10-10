@@ -67,13 +67,17 @@ export const STATEMENTS=[
  `CREATE TABLE IF NOT EXISTS scope_revisions (scope text PRIMARY KEY NOT NULL, version integer DEFAULT 0 NOT NULL)`,
  // 1.24 스키마 준비 표시. 서버가 새로 뜰 때마다 위 문장을 하나씩(41번) 돌리던 것을 표시 한 번 읽기로 줄인다.
  `CREATE TABLE IF NOT EXISTS schema_meta (id integer PRIMARY KEY NOT NULL, sig text NOT NULL)`,
+ // 1.25 알림을 받는 사람별 표로. 화면은 내 알림만 읽는다.
+ `CREATE TABLE IF NOT EXISTS user_notifications (id text PRIMARY KEY NOT NULL, user_id text NOT NULL, team_id text, dest text, read integer DEFAULT 0 NOT NULL, at text NOT NULL, body text NOT NULL)`,
+ `CREATE INDEX IF NOT EXISTS idx_user_notifications_user_at ON user_notifications (user_id, at)`,
+ `CREATE INDEX IF NOT EXISTS idx_user_notifications_dest ON user_notifications (dest)`,
 ];
 
 // 배포된 코드가 어느 시점 것인지 화면으로 확인하기 위한 표시.
 // 스키마나 진단에 영향을 주는 변경을 할 때 함께 올린다.
-export const BUILD="2026-10-10-124";
+export const BUILD="2026-10-10-125";
 
-export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications","push_subs","closed_accounts","social_signups","chat_messages","chat_reads","chat_reports","scope_revisions","schema_meta"];
+export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications","push_subs","closed_accounts","social_signups","chat_messages","chat_reads","chat_reports","scope_revisions","schema_meta","user_notifications"];
 
 // 카카오만 있던 시절의 계정을 새 열로 옮긴다. 여러 번 돌아도 안전하다.
 export async function backfillAccounts(){
@@ -81,6 +85,14 @@ export async function backfillAccounts(){
  await env.DB.prepare(
   `UPDATE accounts SET provider_id=kakao_id WHERE provider='kakao' AND kakao_id IS NOT NULL AND provider_id IS NULL`
  ).run();
+}
+
+export async function moveNotifications(){
+ if(!env.DB)return;
+ await env.DB.batch([
+  env.DB.prepare("INSERT OR IGNORE INTO user_notifications(id,user_id,team_id,dest,read,at,body) SELECT substr(id,15),json_extract(body,'$.userId'),json_extract(body,'$.teamId'),json_extract(body,'$.to'),CASE WHEN json_extract(body,'$.read') THEN 1 ELSE 0 END,json_extract(body,'$.at'),body FROM entities WHERE kind='notifications' AND json_extract(body,'$.userId') IS NOT NULL"),
+  env.DB.prepare("DELETE FROM entities WHERE kind='notifications'"),
+ ]);
 }
 
 let prepared=false;
@@ -103,6 +115,8 @@ export async function ensureSchema(){
  }
  // 표를 만든 뒤에 옮긴다. 열이 없는 상태에서 돌면 실패한다.
  try{await backfillAccounts()}catch(e){console.error("TeamKick schema backfill",e)}
+ // 1.25 예전 알림(entities 안)을 새 표로 옮긴다. 한 번에(batch) 옮기고 지워서 중간 상태가 남지 않는다. 여러 번 돌아도 안전하다.
+ try{await moveNotifications()}catch(e){console.error("TeamKick schema notifications",e)}
  try{await env.DB.prepare("INSERT INTO schema_meta(id,sig) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET sig=excluded.sig").bind(SCHEMA_SIG).run()}catch(e){console.error("TeamKick schema mark",e)}
  prepared=true;
 }

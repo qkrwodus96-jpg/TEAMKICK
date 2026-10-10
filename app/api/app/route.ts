@@ -5,6 +5,7 @@ import {mailReady} from "@/lib/mail";
 import {load,commit,scopeToken,stamp} from "@/lib/store";
 import {applyCommand,visibleState,AppError,iso,prune,setupIncomplete,SETUP_MESSAGE,pushTargets,type State} from "@/lib/model";
 import {checkOwnerCode} from "@/lib/owner-config";
+import {findMessage} from "@/lib/chat-server";
 import {ensureSchema} from "@/lib/schema";
 import {kakaoReady} from "@/lib/kakao";
 import {socialReady} from "@/lib/social";
@@ -32,6 +33,15 @@ export async function POST(req:Request){
   if(req.headers.get("sec-fetch-site")==="cross-site")throw new AppError("허용되지 않은 요청이에요.",403);
   const raw=await req.text();if(raw.length>30000)throw new AppError("입력 내용이 너무 커요.",413);let c:any;try{c=JSON.parse(raw)}catch{throw new AppError("입력 형식을 확인해주세요.")}if(!c||typeof c!=="object"||!c.mutationId||typeof c.mutationId!=="string"||c.mutationId.length>100)throw new AppError("요청 정보를 확인해주세요.");
   const setup=c.type==="setupOwner"?await checkOwnerCode(c.code):false;
+  // 1.26 채팅 메시지로 차단·신고할 때: 보낸 사람·원문 일부·방은 화면이 보낸 값이 아니라 서버가 메시지 표에서 찾아 넣는다.
+  delete c.viaRoom;delete c.authorId;delete c.authorName;
+  if(c.type==="chatReported")delete c.excerpt;
+  if(typeof c.messageId==="string"&&c.messageId&&["blockUser","report","chatReported"].includes(c.type)){
+   const msg=await findMessage(c.messageId.slice(0,80));if(!msg)throw new AppError("메시지를 찾을 수 없어요.",404);
+   delete c.memberId;delete c.guestId;
+   c.userId=msg.account_id;c.viaRoom=msg.room;c.name=String(msg.name).split(" · ")[0];
+   if(c.type==="chatReported"){c.room=msg.room;c.excerpt=msg.deleted?"(삭제된 메시지)":msg.body.slice(0,120);c.authorId=msg.account_id;c.authorName=c.name}
+  }
   // 저장 응답에 새 화면 상태를 함께 실어 보낸다. 그래야 화면이 저장 뒤에 다시
   // 읽어올 필요가 없다(왕복 두 번 -> 한 번). 명령에 팀이 없는 경우
   // (알림 읽음 처리 등) 화면이 보고 있던 팀을 viewTeam 으로 알려준다.

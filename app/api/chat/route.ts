@@ -1,6 +1,6 @@
 import {currentUser} from "@/lib/auth";
 import {load} from "@/lib/store";
-import {loadRoomState} from "@/lib/store-some";
+import {loadRoomState,loadSome} from "@/lib/store-some";
 import {AppError,chatRoom,chatRooms,ensure,type State} from "@/lib/model";
 import {ensureSchema} from "@/lib/schema";
 import {listMessages,sendMessage,deleteMessage,findMessage,reportMessage,markRead,roomSummaries} from "@/lib/chat-server";
@@ -31,7 +31,7 @@ export async function GET(req:Request){
   const url=new URL(req.url),name=url.searchParams.get("room")??"";
   if(!name){
    const {state}=await load();const rooms=chatRooms(state,user.userId);
-   const sums=await roomSummaries(user.userId,rooms.map(x=>x.room));
+   const sums=await roomSummaries(user.userId,rooms.map(x=>x.room),(state.users.find(x=>x.id===user.userId)?.blocked?.users??{}) as Record<string,unknown>);
    const list=rooms.map(x=>{
     const sm=sums[x.room]??{unread:0,last:null,readAt:""};let {unread,last}=sm;
     // 매칭 신청 메시지는 채팅 글이 아니라 신청에 들어 있다. 대화가 아직 없으면 그것을 마지막 글로 보여주고,
@@ -48,11 +48,13 @@ export async function GET(req:Request){
    return json({rooms:list.map(x=>({room:x.room,kind:x.kind,title:x.title,sub:x.sub,unread:x.unread,last:x.last,pending:x.pending}))});
   }
   const {r}=await room(user.userId,name);
-  const rows=await listMessages(r.room,url.searchParams.get("after")??"");
+  const [rows,me]=await Promise.all([listMessages(r.room,url.searchParams.get("after")??""),loadSome([{kind:"users",ids:[user.userId]}])]);
+  // 1.26 내가 차단한 사람의 메시지는 내용을 보내지 않는다(화면에는 "차단한 사용자의 메시지"로 접힌다).
+  const hid=(me.users[0]?.blocked?.users??{}) as Record<string,unknown>;
   const readTo=[rows.at(-1)?.at??"","request" in r&&r.request?String(r.request.at):""].sort().at(-1)!;
   if(readTo)await markRead(user.userId,r.room,readTo);
   return json({room:info(r),
-   messages:rows.map(x=>({id:x.id,name:x.name,body:x.deleted?"":x.body,deleted:!!x.deleted,at:x.at,mine:x.account_id===user.userId}))});
+   messages:rows.map(x=>{const blocked=x.account_id!==user.userId&&!!hid[x.account_id];return {id:x.id,name:x.name,body:x.deleted||blocked?"":x.body,deleted:!!x.deleted,blocked,at:x.at,mine:x.account_id===user.userId}})});
  }catch(e){return failed(e)}
 }
 
@@ -68,6 +70,10 @@ export async function POST(req:Request){
   const action=String(c.action??"");
   if(action==="send"){
    const {state,r}=await room(user.userId,String(c.room??""));
+   // 1.26 경기·용병 대화방(다른 팀과의 대화)에서 상대가 나(또는 우리 팀)를 차단했으면 보내지 못한다. 차단 사실은 알리지 않는다.
+   if(r.kind!=="team"){const others=r.members.filter(u=>u!==user.userId),mine=r.teamOf(user.userId);
+    const rows=others.length?(await loadSome([{kind:"users",ids:others}])).users:[];
+    if(rows.some(u=>u.blocked?.users?.[user.userId]||(mine&&u.blocked?.teams?.[mine])))throw new AppError("지금은 이 대화방에 메시지를 보낼 수 없어요.",403);}
    // 이름은 그 팀에서 쓰는 선수 이름으로(없으면 계정 이름). 상대 팀과의 대화에는 팀 이름을 붙인다.
    const tid=r.teamOf(user.userId);const member=state.members.find(x=>x.teamId===tid&&x.userId===user.userId&&x.status==="active");
    const team=state.teams.find(x=>x.id===tid);

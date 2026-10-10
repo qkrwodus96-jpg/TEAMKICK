@@ -4,10 +4,10 @@
 // 1.17: 방 목록은 3개까지 보이고 [더보기], 왼쪽으로 밀면 [삭제](내 목록에서만 숨김), 경기 대화 맨 위에 매칭 신청 카드
 // (신청 메시지 · 상대 프로필 · 모집 팀 주장에게 수락/거절), 보낸 글은 바로 보이고 서버 응답으로 바꾼다.
 import {useEffect,useRef,useState,type PointerEvent as RPointerEvent} from "react";
-import {Send,MessageCircle,Flag,Trash2,LoaderCircle,ChevronDown,Shield,Handshake} from "lucide-react";
+import {Send,MessageCircle,Flag,Trash2,LoaderCircle,ChevronDown,Shield,Handshake,Ban} from "lucide-react";
 import {toast} from "sonner";
 
-type Msg={id:string;name:string;body:string;deleted:boolean;at:string;mine:boolean;sending?:boolean};
+type Msg={id:string;name:string;body:string;deleted:boolean;at:string;mine:boolean;sending?:boolean;blocked?:boolean};
 type Req={id:string;status:string;message:string;at:string;teamId:string;teamName:string;matched:boolean};
 type RoomInfo={room:string;kind:string;title:string;sub:string;unread?:number;pending?:boolean;last?:{name:string;body:string;at:string}|null;
  request?:Req|null;otherTeamId?:string;homeTeamId?:string;canDecide?:boolean;gameId?:string};
@@ -76,7 +76,7 @@ export function ChatRooms({demo,onOpen}:{demo:boolean;onOpen:(room:string)=>void
 type Run=(c:Record<string,unknown>)=>Promise<unknown>;
 export function ChatRoom({room,viewTeam,demo,run,onProfile}:{room:string;viewTeam:string;demo:boolean;run?:Run;onProfile?:(teamId:string)=>void}){
  const memo=roomMemo.get(room);
- const [info,setInfo]=useState<RoomInfo|null>(memo?.info??null),[msgs,setMsgs]=useState<Msg[]>(memo?.msgs??[]),[err,setErr]=useState(""),[text,setText]=useState(""),[menu,setMenu]=useState(""),[deciding,setDeciding]=useState("");
+ const [info,setInfo]=useState<RoomInfo|null>(memo?.info??null),[msgs,setMsgs]=useState<Msg[]>(memo?.msgs??[]),[err,setErr]=useState(""),[text,setText]=useState(""),[menu,setMenu]=useState(""),[deciding,setDeciding]=useState(""),[blocking,setBlocking]=useState("");
  const last=useRef(""),box=useRef<HTMLDivElement>(null),pullRef=useRef<()=>Promise<void>>(async()=>{});
  useEffect(()=>{
   if(demo)return;let live=true,busy=false;last.current=roomMemo.get(room)?.last??"";
@@ -116,8 +116,20 @@ export function ChatRoom({room,viewTeam,demo,run,onProfile}:{room:string;viewTea
   setMenu("");const r=await post("/api/chat",{action:"report",id:m.id,reason:"부적절한 메시지"});
   const b=await r.json().catch(()=>({})) as Resp&{room?:string};
   if(!r.ok){toast.error(b.error||"신고하지 못했어요.");return}
-  post("/api/app",{type:"chatReported",room:b.room,excerpt:b.excerpt,viewTeam,mutationId:crypto.randomUUID()}).catch(()=>null);
+  // 1.26 보낸 사람·원문 일부는 서버가 메시지 번호로 찾는다(운영자 신고 목록에 남는다).
+  post("/api/app",{type:"chatReported",messageId:m.id,viewTeam,mutationId:crypto.randomUUID()}).catch(()=>null);
   toast.success("신고했어요. 운영자가 확인해요.");
+ }
+ // 1.26 차단: 이 사람의 메시지를 접고, 경기·용병 대화에서는 나에게 보내지 못하게 한다. 상대에게 알리지 않는다.
+ async function block(m:Msg){
+  setMenu("");setBlocking("");
+  try{
+   if(run)await run({type:"blockUser",messageId:m.id});
+   else{const r=await post("/api/app",{type:"blockUser",messageId:m.id,viewTeam,mutationId:crypto.randomUUID()});if(!r.ok){const b=await r.json().catch(()=>({})) as Resp;throw new Error(b.error||"차단하지 못했어요.")}}
+   // 지금 보이는 같은 이름의 글도 바로 접는다(다시 열면 서버 기준으로 접힌다).
+   setMsgs(x=>x.map(y=>!y.mine&&y.name===m.name?{...y,blocked:true,body:""}:y));
+   toast.success(m.name.split(" · ")[0]+"님을 차단했어요. MY → 설정 → 차단 목록에서 해제할 수 있어요.");
+  }catch(e){if(!run)toast.error(e instanceof Error?e.message:"차단하지 못했어요.")}
  }
  // 채팅 안에서 매칭 수락·거절(모집 팀 주장). 앱 상태도 함께 새로 받아 홈·일정에 상대가 바로 들어간다.
  async function decide(accept:boolean){
@@ -151,10 +163,10 @@ export function ChatRoom({room,viewTeam,demo,run,onProfile}:{room:string;viewTea
     <div className={"chat-msg"+(m.mine?" mine":"")+(m.sending?" sending":"")}>
      {!m.mine&&<span className="chat-name">{m.name}</span>}
      <div className="chat-line">
-      <button type="button" className={"chat-bubble"+(m.deleted?" gone":"")} onClick={()=>!m.deleted&&!m.sending&&setMenu(menu===m.id?"":m.id)}>{m.deleted?"삭제된 메시지예요":m.body}</button>
+      <button type="button" className={"chat-bubble"+(m.deleted||m.blocked?" gone":"")+(m.blocked?" chat-blocked":"")} onClick={()=>!m.deleted&&!m.blocked&&!m.sending&&setMenu(menu===m.id?"":m.id)}>{m.deleted?"삭제된 메시지예요":m.blocked?"차단한 사용자의 메시지예요":m.body}</button>
       <small>{m.sending?"보내는 중":hm(m.at)}</small>
      </div>
-     {menu===m.id&&<div className="chat-menu">{m.mine?<button type="button" onClick={()=>remove(m)}><Trash2 size={14}/>지우기</button>:<button type="button" onClick={()=>report(m)}><Flag size={14}/>신고</button>}</div>}
+     {menu===m.id&&<div className="chat-menu">{m.mine?<button type="button" onClick={()=>remove(m)}><Trash2 size={14}/>지우기</button>:blocking===m.id?<><span className="chat-menu-ask">차단할까요?</span><button type="button" onClick={()=>block(m)}><Ban size={14}/>차단</button><button type="button" onClick={()=>setBlocking("")}>취소</button></>:<><button type="button" onClick={()=>report(m)}><Flag size={14}/>신고</button><button type="button" onClick={()=>setBlocking(m.id)}><Ban size={14}/>차단</button></>}</div>}
     </div>
    </div>})}
   </div>

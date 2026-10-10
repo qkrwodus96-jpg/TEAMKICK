@@ -212,6 +212,8 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
   navigator.serviceWorker?.addEventListener?.("message",onMessage);
   return()=>navigator.serviceWorker?.removeEventListener?.("message",onMessage);
  },[]);
+ // 1.26 랭킹 카드처럼 창을 직접 못 여는 곳에서 차단·신고 창을 연다(app/safety.openSafety).
+ useEffect(()=>{const on=(e:Event)=>setModal({kind:"safety",target:(e as CustomEvent).detail});window.addEventListener("teamkick:safety",on);return()=>window.removeEventListener("teamkick:safety",on)},[]);
  // 카카오 로그인이 실패하면 그 이유가 주소에 실려 돌아온다. 보여주고 주소는 정리한다.
  useEffect(()=>{if(kakaoNote||socialSignup)window.history.replaceState(null,"","/")},[kakaoNote,socialSignup]);
  // 메일의 확인 링크로 들어온 경우. 링크는 한 번만 쓰이므로 주소에서 바로 지운다.

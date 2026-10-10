@@ -46,7 +46,7 @@ compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {cronReady} 
 compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./schema"','"./schema.mjs"').replace('"./store"','"./store.mjs"'));
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
 compile('app/api/auth/route.ts','auth-api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword,limit,clientKey,verifyEmail,resendVerification,currentUser,completeSocialSignup,cancelSocialSignup,clearedSignupCookie} from "@/lib/auth";','const completeSocialSignup=async()=>({user:{userId:"u",fullName:"새 사람"},token:"t"});const cancelSocialSignup=async()=>{};const clearedSignupCookie=()=>"";const signUp=async()=>{(globalThis.__teamkickSignups??=[]).push(1);return {user:{userId:"u",fullName:"새 사람"},token:"t",verificationSent:false}};const signIn=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const signOut=async()=>{};const sessionCookie=()=>"";const clearedCookie=()=>"";const requestPasswordReset=async()=>{};const resetPassword=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const limit=async()=>{};const clientKey=()=>"k";const verifyEmail=async()=>{};const resendVerification=async()=>true;const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>!!globalThis.__teamkickSocial;').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>false;').replace('"@/lib/model"','"./model.mjs"'));
-compile('app/api/app/route.ts','api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices,devicesAmong,pushReady} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);const hook=globalThis.__teamkickTestWake;if(hook)return hook(ids);return {sent:ids.length,failed:0,results:[]}};const devicesAmong=async(ids)=>ids.filter(x=>(globalThis.__teamkickTestDevices??[]).includes(x)).length;const pushReady=()=>true;').replace('import {currentUser,currentUserCached,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const currentUserCached=currentUser;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady,mapJsKey} from "@/lib/places";','const placeSearchReady=()=>true;const mapJsKey=()=>"";').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
+compile('app/api/app/route.ts','api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('"@/lib/chat-server"','"./chat-server.mjs"').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices,devicesAmong,pushReady} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);const hook=globalThis.__teamkickTestWake;if(hook)return hook(ids);return {sent:ids.length,failed:0,results:[]}};const devicesAmong=async(ids)=>ids.filter(x=>(globalThis.__teamkickTestDevices??[]).includes(x)).length;const pushReady=()=>true;').replace('import {currentUser,currentUserCached,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const currentUserCached=currentUser;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady,mapJsKey} from "@/lib/places";','const placeSearchReady=()=>true;const mapJsKey=()=>"";').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 compile('lib/unlink.ts','unlink.mjs',s=>s.replace('"./social"','"./social.mjs"'));
 compile('lib/store-some.ts','store-some.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/chat-server.ts','chat-server.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
@@ -1479,7 +1479,7 @@ test('정리는 운영 이력과 알림만 건드리고 경기 기록은 한 건
     {id:'unread-ancient',at:old,read:false});
 
   // 기준 값이 바뀌면 이 테스트가 먼저 알려주도록 묶어 둔다.
-  assert.deepEqual(KEEP,{receipts:7,audit:90,readNotice:30,unreadNotice:180,inquiry:365},
+  assert.deepEqual(KEEP,{receipts:7,audit:90,readNotice:30,unreadNotice:180,inquiry:365,report:365},
     '보관 기간을 바꾸려면 이 기대값과 안내 문구도 함께 고쳐야 한다');
 
   const removed=prune(s,NOW);
@@ -4084,4 +4084,120 @@ test('1.25 랭킹은 저장 번호마다 한 번만 세고, 사람마다 내 줄
   assert.equal(nationalRanking(f.s,'p1').year.attend.length,1,'같은 번호면 기억한 값');
   f.s.__rev=8;
   assert.equal(nationalRanking(f.s,'p1').year.attend.length,0,'번호가 바뀌면 새로 센다');
+});
+
+// --- 1.26 차단·신고 ---
+test('1.26 개인 차단: 팀원 번호로 막고, 나 자신·운영자는 못 막고, 목록에서 해제한다',()=>{
+  const f=fixture();const m=addPlayer(f.s,f.a);
+  assert.throws(()=>command(f.s,A,{type:'blockUser',memberId:f.s.members.find(x=>x.userId==='a').id}),/나 자신/);
+  command(f.s,A,{type:'blockUser',memberId:m.id});
+  const v=visibleState(f.s,'a',f.a);
+  assert.deepEqual(v.blocked.users.map(x=>[x.id,x.name]),[['player','선수']]);
+  assert.equal(visibleState(f.s,'player',f.a).blocked.users.length,0,'차단당한 사람은 모른다');
+  // 계정 번호만으로는 못 막는다(채팅 메시지로 서버가 찾은 경우만)
+  assert.throws(()=>command(f.s,A,{type:'blockUser',userId:'b'}),/찾을 수 없어요/);
+  command(f.s,A,{type:'unblockUser',userId:'player'});
+  assert.equal(visibleState(f.s,'a',f.a).blocked.users.length,0);
+});
+
+test('1.26 운영진이 차단한 사람은 그 팀 용병 모집에 신청할 수 없고, 대기 중인 신청은 차단한 사람 화면에서 가린다',()=>{
+  const f=guestFixture();
+  const gid=applyGuest(f.s,f.a,f.gameId,C);
+  command(f.s,A,{type:'blockUser',guestId:gid});
+  assert.equal(visibleState(f.s,'a',f.a).guests.filter(x=>x.status==='pending').length,0,'대기 중 신청은 가린다');
+  command(f.s,C,{type:'withdrawGuest',teamId:f.a,gameId:f.gameId,guestId:gid});
+  assert.throws(()=>applyGuest(f.s,f.a,f.gameId,C),/신청할 수 없어요/);
+  assert.doesNotMatch(String((()=>{try{applyGuest(f.s,f.a,f.gameId,C)}catch(e){return e.message}})()),/차단/,'차단 사실은 알리지 않는다');
+  applyGuest(f.s,f.a,f.gameId,B);
+  command(f.s,A,{type:'unblockUser',userId:'c'});
+  applyGuest(f.s,f.a,f.gameId,C);
+});
+
+test('1.26 팀 차단: 그 팀 모집글·받은 신청이 내 화면에서 빠지고, 그 팀은 우리 경기에 매칭 신청을 못 한다',()=>{
+  const f=fixture();
+  const bGame=command(f.s,B,{type:'createGame',teamId:f.b,start:iso(NOW+5*DAY),end:iso(NOW+5*DAY+7200e3),venue:'B 구장',address:'서울',listing:true},NOW).gameId;
+  assert.ok(visibleState(f.s,'a',f.a).listings.some(g=>g.id===bGame));
+  assert.throws(()=>command(f.s,A,{type:'blockTeam',teamId:f.a}),/내가 속한 팀/);
+  command(f.s,A,{type:'blockTeam',teamId:f.b});
+  assert.ok(!visibleState(f.s,'a',f.a).listings.some(g=>g.id===bGame),'차단한 팀 모집글은 안 보인다');
+  assert.ok(visibleState(f.s,'c',f.c).listings.some(g=>g.id===bGame),'다른 사람에게는 그대로');
+  const mine=command(f.s,A,{type:'createGame',teamId:f.a,start:iso(NOW+6*DAY),end:iso(NOW+6*DAY+7200e3),venue:'A 구장',address:'서울',listing:true},NOW).gameId;
+  assert.throws(()=>command(f.s,B,{type:'applyMatch',teamId:f.b,gameId:mine}),/신청할 수 없는 경기/);
+  command(f.s,C,{type:'applyMatch',teamId:f.c,gameId:mine});
+  command(f.s,A,{type:'unblockTeam',teamId:f.b});
+  command(f.s,B,{type:'applyMatch',teamId:f.b,gameId:mine});
+  // 신청이 들어온 뒤 차단하면 받은 신청 목록에서 가린다
+  command(f.s,A,{type:'blockTeam',teamId:f.b});
+  const reqs=visibleState(f.s,'a',f.a).requests.filter(r=>r.gameId===mine);
+  assert.deepEqual(reqs.map(r=>r.teamId),[f.c]);
+});
+
+test('1.26 나를 차단한 사람에게는 채팅 알림을 보내지 않는다',()=>{
+  const f=fixture();const m=addPlayer(f.s,f.a);
+  command(f.s,member,{type:'blockUser',memberId:f.s.members.find(x=>x.userId==='a'&&x.teamId===f.a).id});
+  assert.equal(command(f.s,A,{type:'chatPing',room:'team:'+f.a}).notified,0);
+  assert.equal(command(f.s,member,{type:'chatPing',room:'team:'+f.a}).notified,1,'반대 방향은 그대로');
+  void m;
+});
+
+test('1.26 신고: 운영자에게 알리고, 운영자만 전부 보고, 신고한 사람은 자기 것과 처리 결과만 본다',()=>{
+  const f=fixture();const m=addPlayer(f.s,f.a);
+  const gameId=command(f.s,B,{type:'createGame',teamId:f.b,start:iso(NOW+5*DAY),end:iso(NOW+5*DAY+7200e3),venue:'B 구장',address:'서울',listing:true},NOW).gameId;
+  assert.throws(()=>command(f.s,A,{type:'report',target:'user',memberId:m.id,reason:'아무거나'}),/신고 사유/);
+  const {reportId}=command(f.s,A,{type:'report',target:'user',memberId:m.id,reason:'욕설·비하',detail:'단톡에서 욕설'});
+  assert.throws(()=>command(f.s,A,{type:'report',target:'user',memberId:m.id,reason:'기타'}),/이미 신고/);
+  command(f.s,C,{type:'report',target:'listing',gameId,reason:'허위 모집·기록',block:true});
+  command(f.s,C,{type:'report',target:'team',teamId:f.b,reason:'노쇼·약속 불이행'});
+  assert.ok(f.s.notifications.some(n=>n.userId==='owner'&&n.title==='새 신고'&&n.to==='modal:reports'));
+  assert.ok(!f.s.notifications.some(n=>n.userId==='player'&&/신고/.test(n.title)),'신고 대상에게는 알리지 않는다');
+  assert.equal(visibleState(f.s,'owner').reports.length,3);
+  const mineA=visibleState(f.s,'a',f.a).reports;assert.equal(mineA.length,1);assert.equal(mineA[0].targetName,'선수');assert.equal(mineA[0].userId,undefined,'신고자 번호를 다시 싣지 않는다');
+  assert.equal(visibleState(f.s,'player',f.a).reports.length,0);
+  assert.ok(visibleState(f.s,'c',f.c).blocked.teams.some(x=>x.id===f.b),'신고하면서 차단도');
+  assert.throws(()=>command(f.s,A,{type:'resolveReport',reportId,result:'처리'}),/운영자/);
+  command(f.s,owner,{type:'resolveReport',reportId,result:'경고 조치했어요.'});
+  assert.equal(visibleState(f.s,'a',f.a).reports[0].status,'closed');
+  assert.ok(f.s.notifications.some(n=>n.userId==='a'&&n.title==='신고 처리 결과'&&n.body.includes('경고')));
+  assert.throws(()=>command(f.s,owner,{type:'resolveReport',reportId,result:'또'}),/이미 처리/);
+  // 채팅 신고도 신고 목록에 남는다
+  command(f.s,member,{type:'chatReported',room:'team:'+f.a,excerpt:'나쁜 말',messageId:'msg1',authorId:'a',authorName:'A 주장'});
+  const chat=f.s.reports.find(r=>r.kind==='chat');assert.equal(chat.detail,'나쁜 말');assert.equal(chat.targetUserId,'a');
+});
+
+test('1.26 탈퇴: 다른 사람 차단 목록에서 빠지고, 낸 신고는 신고자만 지운 채 남는다. 처리한 신고는 1년 뒤 지운다',()=>{
+  const f=fixture();const m=addPlayer(f.s,f.a);
+  command(f.s,A,{type:'blockUser',memberId:m.id});
+  command(f.s,member,{type:'report',target:'team',teamId:f.b,reason:'기타'});
+  modelLib.forgetAccount(f.s,'player',iso(NOW));
+  assert.equal(visibleState(f.s,'a',f.a).blocked.users.length,0);
+  const r=f.s.reports[0];assert.equal(r.userId,'');assert.equal(r.reporterName,'탈퇴한 사용자');assert.equal(r.status,'open');
+  command(f.s,owner,{type:'resolveReport',reportId:r.id,result:'확인'});
+  r.at=iso(NOW-(KEEP.report+1)*DAY);prune(f.s,NOW);
+  assert.equal(f.s.reports.length,0);
+});
+
+test('1.26 차단 목록 저장은 본인 화면 번호만 올린다',()=>{
+  const out=new Set();repository.scopesOf('users',{id:'a',name:'A',blocked:{users:{x:{}}}},out,{id:'a',name:'A'});
+  assert.deepEqual([...out],['u:a']);
+  const out2=new Set();repository.scopesOf('reports',{id:'r1',userId:'a',targetTeamId:'t1'},out2);
+  assert.deepEqual([...out2],['u:a'],'신고는 신고한 사람에게만');
+});
+
+test('1.26 채팅 메시지로 차단·신고: 보낸 사람과 원문은 서버가 메시지 표에서 찾는다',async()=>{
+  localDatabase();const f=fixture();addPlayer(f.s,f.a);await repository.commit(blank(),f.s,0);
+  const msg=await chatServer.sendMessage('team:'+f.a,'player','선수','진짜 내용',NOW);
+  globalThis.__teamkickTestIdentity={userId:A.id,fullName:A.name};
+  const send=body=>api.POST(new Request('https://example.test/api/app',{method:'POST',
+    headers:{'content-type':'application/json',origin:'https://example.test'},body:JSON.stringify(body)}));
+  let res=await send({type:'chatReported',messageId:msg.id,excerpt:'꾸며낸 내용',authorId:'b',room:'team:'+f.a,mutationId:'r-1'});
+  assert.equal(res.status,200);
+  res=await send({type:'blockUser',messageId:msg.id,mutationId:'r-2'});assert.equal(res.status,200);
+  const body=await res.json();assert.deepEqual(body.blocked.users.map(x=>x.id),['player']);
+  const {state}=await repository.load();
+  const rep=state.reports.find(r=>r.kind==='chat');assert.equal(rep.detail,'진짜 내용','화면이 보낸 원문은 쓰지 않는다');assert.equal(rep.targetUserId,'player');
+  // 들어갈 수 없는 방의 메시지로는 못 막는다
+  globalThis.__teamkickTestIdentity={userId:C.id,fullName:C.name};
+  res=await send({type:'blockUser',messageId:msg.id,mutationId:'r-3'});assert.equal(res.status,403);
+  // 화면이 직접 viaRoom 을 붙여도 무시한다
+  res=await send({type:'blockUser',userId:'player',viaRoom:'team:'+f.c,mutationId:'r-4'});assert.equal(res.status,404);
 });

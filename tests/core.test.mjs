@@ -4283,3 +4283,18 @@ test('1.27 이전 도구: 옛 서버의 표·사진을 새 서버로 그대로 �
     assert.equal(await onOld(()=>migrateLib.frozen()),true);
   }finally{globalThis.fetch=realFetch;delete E.MIGRATE_SECRET;delete E.BUCKET}
 });
+
+test('1.27 새 알림 키 버튼이 만드는 키로 앱이 푸시 서명을 만든다(lib/push.ts 형식)',async()=>{
+  const {makeVapidKeys}=await import(path.resolve('scripts/vapid-keys.mjs'));
+  const k=makeVapidKeys();const E=globalThis.__teamkickTestEnv;const before={pub:E.VAPID_PUBLIC_KEY,priv:E.VAPID_PRIVATE_KEY};
+  E.VAPID_PUBLIC_KEY=k.VAPID_PUBLIC_KEY;E.VAPID_PRIVATE_KEY=k.VAPID_PRIVATE_KEY;
+  try{
+    assert.equal(push.pushReady(),true);
+    const token=await push.vapidToken('https://fcm.googleapis.com');
+    const [h,b,sig]=token.split('.');assert.ok(h&&b&&sig,'JWT 세 조각');
+    // 공개키로 서명 확인(ES256, raw r||s)
+    const pubRaw=Buffer.from(k.VAPID_PUBLIC_KEY,'base64url');
+    const key=await crypto.subtle.importKey('raw',pubRaw,{name:'ECDSA',namedCurve:'P-256'},false,['verify']);
+    assert.equal(await crypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},key,Buffer.from(sig,'base64url'),new TextEncoder().encode(h+'.'+b)),true);
+  }finally{E.VAPID_PUBLIC_KEY=before.pub;E.VAPID_PRIVATE_KEY=before.priv;if(before.pub===undefined)delete E.VAPID_PUBLIC_KEY;if(before.priv===undefined)delete E.VAPID_PRIVATE_KEY}
+});

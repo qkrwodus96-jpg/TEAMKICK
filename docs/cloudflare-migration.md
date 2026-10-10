@@ -1,6 +1,6 @@
 # 팀킥 서버 이전 절차서 (GPT Sites → 사장님 Cloudflare)
 
-작성: 2026-10-11 · 대상 버전: 1.27.0 이상
+작성: 2026-10-11 · 대상 버전: 1.27.1 이상
 메뉴 이름은 **한국어(영어)** 순서로 적었습니다. 화면 번역이 조금 다를 수 있습니다.
 **비밀값·토큰은 채팅이나 이 문서에 적지 않습니다.**
 
@@ -30,14 +30,19 @@ Cloudflare → **Workers 및 Pages** → **teamkick** → **설정(Settings)** �
 | 네이버 로그인·뉴스 | `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `NAVER_API_HUB_KEY_ID`, `NAVER_API_HUB_KEY` |
 | 구글 로그인 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
 | 메일 | `BREVO_API_KEY`(또는 `RESEND_API_KEY`), `MAIL_FROM` |
-| 휴대폰 알림 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` — **반드시 지금과 같은 값** (다르면 지금 켜 둔 알림이 끊깁니다) |
+| 휴대폰 알림 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` — 아래 **New push keys** 버튼으로 새로 넣습니다 |
 | 예약 실행 | `CRON_SECRET` — 같은 값이어야 cron-job.org 설정을 안 바꿔도 됩니다 |
 | 날씨 | `DATA_GO_KR_KEY` |
 | 기타(넣어 둔 경우만) | `OWNER_SETUP_CODE`, `EMAIL_SIGNUP_ENABLED` |
 | **이전용(새로 만들기)** | `MIGRATE_SECRET` — 아래 3번 참고 |
 
 GPT Sites에서 값을 다시 볼 수 없으면 원래 발급한 곳(카카오·네이버·구글 개발자 콘솔 등)에서 확인합니다.
-VAPID 개인키를 찾을 수 없으면 알려 주세요 — 새 키로 바꾸고, 팀원들이 알림을 한 번씩 다시 켜게 안내합니다.
+`OWNER_SETUP_CODE` 는 넣지 않아도 됩니다(운영자 정보는 데이터와 함께 옮겨짐).
+
+**VAPID(알림 키)**: 옛 서버의 개인키는 꺼낼 수 없어서(2026-10-11 GPT 확인) **새 키**로 바꿉니다.
+GitHub → Actions → **New push keys** → **Run workflow** → 칸에 `NEW` → 실행. 두 값이 Cloudflare에 바로 들어가고 로그에는 나오지 않습니다.
+(그래서 `VAPID_PUBLIC_KEY`·`VAPID_PRIVATE_KEY` 는 직접 넣지 않습니다. `VAPID_SUBJECT` 는 GPT 값 그대로 넣어도 되고 빼도 됩니다.)
+이전한 뒤 이미 알림을 켠 기기는 **앱을 한 번 열면** 새 키로 자동 재등록됩니다. 열기 전까지는 그 기기에 알림이 가지 않습니다.
 
 ## 3. 이전용 비밀값 만들기 (사장님)
 - 32자 이상 무작위 문자열을 하나 만듭니다(휴대폰 비밀번호 관리자의 "강력한 비밀번호 만들기" 등).
@@ -63,7 +68,7 @@ VAPID 개인키를 찾을 수 없으면 알려 주세요 — 새 키로 바꾸�
    (이때부터 옛 서버는 보기만 되고 저장은 "잠깐 저장할 수 없어요"로 막힙니다.)
 2. Cloudflare → **teamkick** → **설정** → **도메인 및 경로(Domains & Routes)** → **추가(Add)** → **사용자 지정 도메인(Custom domain)** → `teamkick.co.kr`
    이미 있는 레코드와 겹친다고 나오면, DNS 화면에서 지금 사이트로 가던 `teamkick.co.kr` 레코드를 지우고 다시 추가합니다.
-3. 몇 분 뒤 `https://teamkick.co.kr/api/health` → `"version"` 이 보이고, 앱에서 **로그인이 유지되는지·사진이 보이는지·저장되는지** 확인.
+3. 몇 분 뒤 `https://teamkick.co.kr/api/health` → `"version"` 이 보이고, 앱에서 **로그인이 유지되는지·사진이 보이는지·저장되는지·설정에 "서비스 관리"가 보이는지(운영자)** 확인. 앱을 열면 알림도 새 키로 다시 등록됩니다.
 4. 이상하면: 도메인 연결을 빼고(2번 되돌리기) 복사 화면에서 **옛 서버 잠금 풀기** → 원래대로 돌아갑니다.
 
 ## 7. 끝난 뒤 정리

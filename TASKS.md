@@ -6,6 +6,12 @@
 `BLOCKED` / `DONE`(실제 실행 결과로 확인). 요구사항 본문은
 `PROJECT_CONTEXT.md`, 구조는 `ARCHITECTURE.md`를 본다.
 
+## T93 1.27.1 — 새 알림 키 버튼(2026-10-11)
+
+- [x] GPT Sites 의 VAPID 개인키를 꺼낼 수 없어(GPT 확인) GitHub Actions **New push keys**(수동 실행, `NEW` 확인) 추가. `scripts/vapid-keys.mjs` 로 만들고 `wrangler secret bulk` 로 Cloudflare teamkick 에 바로 넣음(값 출력 없음).
+- [x] 기존 기기는 앱을 열 때 `KeepSubscription`(app/notify.tsx)이 서버 키와 비교해 다시 등록 — 새 코드 필요 없음을 확인.
+- 검증: 테스트 227/227(새 키로 lib/push.ts 가 만든 서명을 공개키로 검증), lint 74/21. 실제 실행은 Actions 에서.
+
 ## T92 1.27.0 — Cloudflare 이전 준비: 자동 배포 + 데이터·사진 복사 도구(2026-10-11)
 
 - [x] GitHub Actions `Deploy to Cloudflare`: main 에 합치면 테스트 → 빌드 → 사장님 계정에 배포(`scripts/cloudflare-deploy.mjs` 가 D1 `teamkick-db`·R2 `teamkick-images` 를 없으면 만들고 설정을 바꿔 넣음). 예약 실행은 지금처럼 cron-job.org → `/api/cron`(주소가 같아서 그대로).

@@ -628,6 +628,7 @@ html[data-theme="dark"] .data-note{color:var(--muted-foreground)}
 html[data-theme="dark"] .as-photo{background:#2e2e2e}
 html[data-theme="dark"] .team-alert{background:#e5484d;color:#fff}
 html[data-theme="dark"] .other-team-alert{border:1px solid #563c3c;background:#281616;color:#de928c}
+html[data-theme="dark"] .opt-alert{background:#e5484d;color:#fff}
 html[data-theme="dark"]{--band:#08080a}
 html[data-theme="dark"] .switch::after{background:#ececee}
 html[data-theme="dark"] .seg{background:#232328}

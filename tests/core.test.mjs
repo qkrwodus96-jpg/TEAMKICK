@@ -10,12 +10,13 @@ import {DatabaseSync} from 'node:sqlite';
 const runtime=path.resolve('.sites-runtime/tests');
 fs.mkdirSync(runtime,{recursive:true});
 function compile(file,name,replace=s=>s){
-  fs.writeFileSync(path.join(runtime,name),ts.transpileModule(replace(fs.readFileSync(file,'utf8')),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText);
+  fs.writeFileSync(path.join(runtime,name),ts.transpileModule(replace(fs.readFileSync(file,'utf8')).replaceAll('"@/lib/migrate"','"./migrate.mjs"'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText);
 }
 compile('lib/formations.ts','formations.mjs');
 compile('lib/when.ts','when.mjs');
 compile('lib/weather-keep.ts','weather-keep.mjs',s=>s.replace('import {load,commit} from "./store";','const load=null,commit=null;').replace('import {gameWeather,weatherReady} from "./weather-server";','const gameWeather=null,weatherReady=()=>false;').replace('import {searchPlaces} from "./places";','const searchPlaces=null;').replace('"./weather"','"./weather.mjs"'));
 for(const n of ['d1','d2','d3','d4','d5'])compile('lib/i18n/'+n+'.ts','i18n-'+n+'.mjs');
+compile('lib/migrate.ts','migrate.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/model.ts','model.mjs',s=>s.replace('"./news"','"./news.mjs"').replace('"./formations"','"./formations.mjs"').replace('"./when"','"./when.mjs"'));
 compile('lib/store.ts','store.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/owner-config.ts','owner-config.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;'));
@@ -52,6 +53,7 @@ compile('lib/store-some.ts','store-some.mjs',s=>s.replace('import {env} from "cl
 compile('lib/chat-server.ts','chat-server.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/cron.ts','cron.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;'));
 compile('app/api/cron/route.ts','cron-api.mjs',s=>s.replace('import {saveDueWeather} from "@/lib/weather-keep";','const saveDueWeather=async()=>globalThis.__teamkickTestWeather??{saved:0};').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {wakeDevices} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0,results:[]}};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/cron"','"./cron.mjs"'));
+compile('app/api/migrate/route.ts','migrate-api.mjs',s=>s.replace('"@/lib/model"','"./model.mjs"').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};'));
 compile('lib/close.ts','close.mjs',s=>s.replace('"./store"','"./store.mjs"').replace('"./model"','"./model.mjs"').replace('"./auth"','"./auth.mjs"').replace('"./unlink"','"./unlink.mjs"'));
 globalThis.__teamkickTestEnv={};
 const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp,mvpView,mvpWinners,periodRange,rankRows,nationalRanking,rankPhotoOpen,canSeeGame,gameTitle}=await import(path.join(runtime,'model.mjs'));
@@ -82,6 +84,8 @@ const modelLib=await import(path.join(runtime,'model.mjs'));
 const authApi=await import(path.join(runtime,'auth-api.mjs'));
 const cronApi=await import(path.join(runtime,'cron-api.mjs'));
 const storeSome=await import(path.join(runtime,'store-some.mjs'));
+const migrateApi=await import(path.join(runtime,'migrate-api.mjs'));
+const migrateLib=await import(path.join(runtime,'migrate.mjs'));
 const NOW=Date.now(),DAY=864e5;
 const owner={id:'owner',name:'운영자',ownerSetup:true},A={id:'a',name:'A 주장'},B={id:'b',name:'B 주장'},C={id:'c',name:'C 주장'},member={id:'player',name:'선수'};
 function command(s,a,c,when=NOW){return applyCommand(s,a,c,when)}
@@ -4215,4 +4219,67 @@ test('1.26.1 나간 팀의 알림은 지금 팀 알림을 읽을 때 함께 읽�
   command(f.s,member,{type:'readNotifications',teamId:f.a});
   assert.equal(f.s.notifications.find(n=>n.id==='old1').read,true,'나간 팀 알림은 읽음');
   assert.equal(f.s.notifications.find(n=>n.id==='other').read,false,'활동 중인 다른 팀 알림은 그대로');
+});
+
+
+// --- 1.27 서버 이전 도구 ---
+function memBucket(){const m=new Map();return {m,
+  async list({cursor,limit=1000}={}){const keys=[...m.keys()].sort();const start=cursor?Number(cursor):0;const page=keys.slice(start,start+limit);const more=start+limit<keys.length;return {objects:page.map(key=>({key})),truncated:more,cursor:more?String(start+limit):undefined}},
+  async get(key){const o=m.get(key);return o?{body:o.data,httpMetadata:{contentType:o.type},customMetadata:o.custom}:null},
+  async put(key,data,opt={}){m.set(key,{data:new Uint8Array(data),type:opt.httpMetadata?.contentType,custom:opt.customMetadata??{}})},
+  async delete(keys){for(const k of [].concat(keys))m.delete(k)}}}
+const SECRET='m'.repeat(32);
+test('1.27 이전 도구: 비밀값이 없으면 없는 주소처럼, 틀리면 거절',async()=>{
+  localDatabase();delete globalThis.__teamkickTestEnv.MIGRATE_SECRET;
+  assert.equal((await migrateApi.GET(new Request('https://teamkick.co.kr/api/migrate?op=counts'))).status,404);
+  globalThis.__teamkickTestEnv.MIGRATE_SECRET=SECRET;
+  assert.equal((await migrateApi.GET(new Request('https://teamkick.co.kr/api/migrate?op=counts',{headers:{'x-migrate-secret':'wrong-secret'}}))).status,401);
+  assert.equal((await migrateApi.GET(new Request('https://teamkick.co.kr/api/migrate?op=counts',{headers:{'x-migrate-secret':SECRET}}))).status,200);
+  delete globalThis.__teamkickTestEnv.MIGRATE_SECRET;
+});
+test('1.27 저장 잠금: 잠그면 저장·예약 실행이 멈추고, 풀면 다시 된다',async()=>{
+  localDatabase();globalThis.__teamkickTestEnv.MIGRATE_SECRET=SECRET;
+  const f=fixture();await repository.commit(blank(),f.s,0);
+  const freeze=on=>migrateApi.POST(new Request('https://teamkick.co.kr/api/migrate',{method:'POST',headers:{'x-migrate-secret':SECRET,'content-type':'application/json'},body:JSON.stringify({op:'freeze',on})}));
+  assert.equal((await freeze(true)).status,200);
+  await assert.rejects(migrateLib.assertWritable(),/옮기는 중/);
+  globalThis.__teamkickTestIdentity={userId:A.id,fullName:A.name};
+  const res=await api.POST(new Request('https://teamkick.co.kr/api/app',{method:'POST',headers:{'content-type':'application/json',origin:'https://teamkick.co.kr'},body:JSON.stringify({type:'readNotifications',mutationId:'fz-1'})}));
+  assert.equal(res.status,503,'잠긴 동안 저장은 막힌다');
+  await freeze(false);await migrateLib.assertWritable();
+  delete globalThis.__teamkickTestEnv.MIGRATE_SECRET;
+});
+test('1.27 이전 도구: 옛 서버의 표·사진을 새 서버로 그대로 옮기고, 운영 주소에서는 가져오기를 거절한다',async()=>{
+  const E=globalThis.__teamkickTestEnv;E.MIGRATE_SECRET=SECRET;
+  // 옛 서버
+  localDatabase();const oldDb=E.DB,oldBucket=memBucket();E.BUCKET=oldBucket;
+  const f=fixture();addPlayer(f.s,f.a);await repository.commit(blank(),f.s,0);
+  await chatServer.sendMessage('team:'+f.a,'player','선수','안녕하세요',NOW);
+  await oldDb.prepare("INSERT INTO sessions (id,account_id,expires,at) VALUES ('s1','player','2099-01-01','2026-01-01')").run();
+  await oldBucket.put('logos/a.png',new Uint8Array([1,2,3]),{httpMetadata:{contentType:'image/png'},customMetadata:{by:'a'}});
+  await oldBucket.put('photos/b.webp',new Uint8Array([9]),{httpMetadata:{contentType:'image/webp'}});
+  // 새 서버(빈 DB)
+  localDatabase();const newDb=E.DB,newBucket=memBucket();
+  const onOld=async fn=>{const d=E.DB,b=E.BUCKET;E.DB=oldDb;E.BUCKET=oldBucket;try{return await fn()}finally{E.DB=d;E.BUCKET=b}};
+  const realFetch=globalThis.fetch;
+  globalThis.fetch=async(u,init={})=>onOld(()=>{const req=new Request(String(u),init);return req.method==='POST'?migrateApi.POST(req):migrateApi.GET(req)});
+  E.DB=newDb;E.BUCKET=newBucket;
+  try{
+    const call=(host,body)=>migrateApi.POST(new Request('https://'+host+'/api/migrate',{method:'POST',headers:{'x-migrate-secret':SECRET,'content-type':'application/json'},body:JSON.stringify({op:'remote',from:'https://teamkick.co.kr',...body})}));
+    assert.equal((await call('teamkick.co.kr',{action:'wipe',confirm:'WIPE'})).status,403,'운영 주소에서는 지우기 금지');
+    const host='teamkick.owner.workers.dev';
+    assert.equal((await call(host,{action:'wipe'})).status,400,'확인 문구 없이 지우지 않는다');
+    assert.equal((await call(host,{action:'wipe',confirm:'WIPE'})).status,200);
+    for(const t of migrateLib.COPY_TABLES){let step={phase:'rows',table:t,offset:0};for(;;){const j=await (await call(host,{action:'step',step})).json();if(j.done)break;step=j.next}}
+    let step={phase:'objects',cursor:''};for(;;){const j=await (await call(host,{action:'step',step})).json();if(j.done)break;step=j.next}
+    const cmp=await (await call(host,{action:'compare'})).json();
+    assert.deepEqual(cmp.now.tables,cmp.old.tables,'표마다 줄 수가 같아야 한다');
+    assert.equal(cmp.now.objects,2);assert.equal(cmp.old.objects,2);
+    assert.ok(cmp.old.tables.entities>0&&cmp.old.tables.chat_messages===1&&cmp.old.tables.sessions===1);
+    const o=await newBucket.get('logos/a.png');assert.equal(o.httpMetadata.contentType,'image/png');assert.deepEqual([...o.body],[1,2,3]);assert.equal(o.customMetadata.by,'a');
+    const {state}=await repository.load();assert.equal(state.teams.length,f.s.teams.length,'새 서버에서 상태가 그대로 읽힌다');
+    // 옛 서버 잠금은 새 서버를 거쳐서도 걸 수 있다
+    assert.equal((await (await call(host,{action:'freeze',on:true})).json()).frozen,true);
+    assert.equal(await onOld(()=>migrateLib.frozen()),true);
+  }finally{globalThis.fetch=realFetch;delete E.MIGRATE_SECRET;delete E.BUCKET}
 });

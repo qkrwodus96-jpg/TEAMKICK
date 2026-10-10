@@ -1,4 +1,5 @@
 import {load,commit,cleanupNotifications} from "@/lib/store";
+import {frozen} from "@/lib/migrate";
 import {gameReminders,birthdayNotices,iso,pushTargets} from "@/lib/model";
 import {ensureSchema} from "@/lib/schema";
 import {wakeDevices} from "@/lib/push";
@@ -17,6 +18,8 @@ async function run(req:Request){
   await ensureSchema();
   if(!cronReady())return json({ok:false,error:"CRON_SECRET 이 없거나 16자보다 짧아요."},503);
   if(!await cronAuthorized(req))return json({ok:false,error:"unauthorized"},401);
+  // 1.27 서버 이전 중(저장 잠금)에는 쉬어 간다. 잠금이 풀리거나 새 서버로 바뀌면 다음 10분에 다시 돈다.
+  if(await frozen())return json({ok:true,skipped:"migrating"});
   // 1.25 오래된 알림 정리(받는 사람별 표). 실패해도 예약 실행은 계속한다.
   await cleanupNotifications().catch(e=>console.error("TeamKick cron notifications",e));
   const wx=await saveDueWeather().catch(e=>{console.error("TeamKick cron weather",e);return {saved:0,reason:"error"}});

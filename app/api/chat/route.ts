@@ -1,4 +1,5 @@
 import {currentUser} from "@/lib/auth";
+import {assertWritable} from "@/lib/migrate";
 import {load} from "@/lib/store";
 import {loadRoomState,loadSome} from "@/lib/store-some";
 import {AppError,chatRoom,chatRooms,ensure,type State} from "@/lib/model";
@@ -61,7 +62,7 @@ export async function GET(req:Request){
 // POST {action:"send",room,body} · {action:"delete",id} · {action:"report",id,reason}
 export async function POST(req:Request){
  try{
-  await ensureSchema();
+  await ensureSchema();await assertWritable();
   const user=await currentUser(req);if(!user)throw new AppError("먼저 로그인해주세요.",401);
   const origin=req.headers.get("origin");if(origin&&origin!==new URL(req.url).origin)throw new AppError("요청 출처를 확인할 수 없어요.",403);
   if(req.headers.get("sec-fetch-site")==="cross-site")throw new AppError("허용되지 않은 요청이에요.",403);

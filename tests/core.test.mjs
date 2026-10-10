@@ -4060,6 +4060,8 @@ test('예전 알림(entities 안)은 새 표로 한 번에 옮겨진다',async()
 
 test('1.25 알림 읽음은 팀을 주면 그 팀 알림과 개인 알림만, 다른 팀 알림은 그대로 둔다',()=>{
   const {s,a,b}=fixture();
+  // A 주장이 B 팀에도 활동 중인 팀원이어야 "다른 팀 알림"이다(1.26.1: 나간 팀 알림은 함께 읽음)
+  s.members.push({id:'ab',teamId:b,userId:'a',name:'A',role:'player',status:'active',number:8,position:'MF',periods:[{start:iso(NOW-DAY)}],at:iso(NOW-DAY)});
   s.notifications.push({id:'x1',userId:'a',teamId:a,title:'A팀',body:'',read:false,at:iso(NOW)},{id:'x2',userId:'a',teamId:b,title:'B팀',body:'',read:false,at:iso(NOW)},{id:'x3',userId:'a',title:'개인',body:'',read:false,at:iso(NOW)});
   command(s,A,{type:'readNotifications',teamId:a},NOW+1);
   const read=id=>s.notifications.find(x=>x.id===id).read;
@@ -4200,4 +4202,17 @@ test('1.26 채팅 메시지로 차단·신고: 보낸 사람과 원문은 서버
   res=await send({type:'blockUser',messageId:msg.id,mutationId:'r-3'});assert.equal(res.status,403);
   // 화면이 직접 viaRoom 을 붙여도 무시한다
   res=await send({type:'blockUser',userId:'player',viaRoom:'team:'+f.c,mutationId:'r-4'});assert.equal(res.status,404);
+});
+
+test('1.26.1 나간 팀의 알림은 지금 팀 알림을 읽을 때 함께 읽음 처리된다(영영 안 읽음으로 남지 않게)',()=>{
+  const f=fixture();addPlayer(f.s,f.a);
+  f.s.members.push({id:'mb',teamId:f.b,userId:'player',name:'선수',role:'player',status:'active',number:7,position:'MF',periods:[{start:iso(NOW-DAY)}],at:iso(NOW-DAY)});
+  f.s.notifications.push({id:'old1',userId:'player',teamId:f.b,title:'옛 팀 알림',body:'x',read:false,at:iso(NOW-DAY)});
+  f.s.notifications.push({id:'other',userId:'player',teamId:f.c,title:'다른 팀',body:'x',read:false,at:iso(NOW-DAY)});
+  const mb=f.s.members.find(m=>m.teamId===f.b&&m.userId==='player');mb.status='left';
+  // C 팀에도 활동 중이면 C 알림은 그 팀 화면에서 읽어야 하므로 남는다
+  f.s.members.push({id:'mc',teamId:f.c,userId:'player',name:'선수',role:'player',status:'active',number:7,position:'MF',periods:[{start:iso(NOW-DAY)}],at:iso(NOW-DAY)});
+  command(f.s,member,{type:'readNotifications',teamId:f.a});
+  assert.equal(f.s.notifications.find(n=>n.id==='old1').read,true,'나간 팀 알림은 읽음');
+  assert.equal(f.s.notifications.find(n=>n.id==='other').read,false,'활동 중인 다른 팀 알림은 그대로');
 });

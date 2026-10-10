@@ -991,7 +991,10 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  // 축구 소식에서 고른 좋아하는 팀(선택). 목록에 있는 것만, 최대 NEWS_TEAMS_MAX 개.
  else if(type==="setNewsTeams"){const teams=cleanNewsTeams(c.teams);ensure(teams.length<=NEWS_TEAMS_MAX,"좋아하는 팀은 "+NEWS_TEAMS_MAX+"개까지 고를 수 있어요.");const u=s.users.find(x=>x.id===a.id)!;u.newsTeams=teams;}
  // 1.25 팀별 알림 보기: 팀을 주면 그 팀 알림과 팀 없는 개인 알림만 읽음 처리한다(다른 팀 알림은 그 팀 화면에서).
- else if(type==="readNotifications"){const tid=typeof c.teamId==="string"&&c.teamId?c.teamId:"";for(const n of s.notifications.filter(x=>x.userId===a.id&&(!tid||!x.teamId||x.teamId===tid)))n.read=true;}
+ else if(type==="readNotifications"){const tid=typeof c.teamId==="string"&&c.teamId?c.teamId:"";
+  // 1.26.1 지금 고를 수 없는 팀(나간 팀·해산한 팀)의 알림은 개인 알림처럼 함께 읽음 처리한다. 안 그러면 영영 안 읽음으로 남는다.
+  const live=new Set(s.members.filter(m=>m.userId===a.id&&m.status==="active"&&["active","suspended"].includes(teamOf(s,m.teamId)?.status)).map(m=>m.teamId));
+  for(const n of s.notifications.filter(x=>x.userId===a.id&&(!tid||!x.teamId||x.teamId===tid||!live.has(x.teamId))))n.read=true;}
  else if(type==="correctRequest"){requireTeam(s,t,a.id);for(const m of s.members.filter(x=>x.teamId===t&&["captain","manager"].includes(x.role)&&x.status==="active"))userNotice(s,m.userId,"기록 정정 요청",a.name+": "+textValue(c.message,500),t,"records");}
  // 채팅 메시지를 보낸 뒤 화면이 부른다. 방 사람들에게 "새 메시지" 알림을 남긴다(내용은 싣지 않는다 — 잠금화면에 계좌 같은 게 뜨지 않게).
  // 읽지 않은 같은 방 알림이 10분 안에 이미 있으면 또 만들지 않는다(대화가 오갈 때 알림 폭탄 방지).

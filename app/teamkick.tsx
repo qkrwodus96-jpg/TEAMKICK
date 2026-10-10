@@ -122,7 +122,8 @@ function optimistic(real:Row|null,c:Row){
  if(c.type==="vote"){const me=(real.members??[]).find((m:Row)=>m.userId===real.user.id&&m.teamId===c.teamId&&m.status==="active");if(!me)return null;
   const sides=(real.sides??[]).map((s:Row)=>s.gameId===c.gameId&&s.teamId===c.teamId?{...s,votes:{...(s.votes??{}),[me.id]:[...(s.votes?.[me.id]??[]),{value:c.value,at:new Date().toISOString()}]}}:s);
   return {...real,sides}}
- if(c.type==="readNotifications")return {...real,notifications:(real.notifications??[]).map((n:Row)=>!c.teamId||!n.teamId||n.teamId===c.teamId?{...n,read:true}:n)};
+ if(c.type==="readNotifications"){const live=new Set((real.mine??[]).filter((m:Row)=>m.status==="active"&&["active","suspended"].includes((real.teams??[]).find((t:Row)=>t.id===m.teamId)?.status)).map((m:Row)=>m.teamId));
+  return {...real,notifications:(real.notifications??[]).map((n:Row)=>!c.teamId||!n.teamId||n.teamId===c.teamId||!live.has(n.teamId)?{...n,read:true}:n)}}
  try{const o:Row=structuredClone(real);for(const k of collections)if(!Array.isArray(o[k]))o[k]=[];
   applyCommand(o as unknown as State,{id:real.user.id,name:real.user.name??"팀원"},c);
   o.notifications=(o.notifications??[]).filter((n:Row)=>n.userId===real.user.id);
@@ -281,12 +282,15 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  // 빨간 점만으로는 몇 건인지, 무슨 일인지 알 수 없었다. 개수와 가장 최근 소식을 함께 보여준다.
  // 1.25 팀별 알림 보기(사장님 요청): 지금 고른 팀 알림과 팀 없는 개인 알림만 이 팀 화면에 보인다.
  // 받기는 모든 팀 알림을 그대로 받는다(폰 알림도). 다른 팀의 안 읽은 알림은 숫자로만 알려 주고 누르면 그 팀으로 간다.
- const inTeam=(n:Row)=>!n.teamId||n.teamId===v.teamId;
- const myTeamIds=new Set((v.mine??[]).filter((m:Row)=>m.status==="active").map((m:Row)=>m.teamId));
- const otherUnread=Object.entries((v.notifications??[]).filter((n:Row)=>!n.read&&n.teamId&&n.teamId!==v.teamId&&myTeamIds.has(n.teamId)).reduce((o:Record<string,number>,n:Row)=>{o[n.teamId]=(o[n.teamId]??0)+1;return o},{})).map(([teamId,count])=>({teamId,count:Number(count),name:String(v.teams?.find((x:Row)=>x.id===teamId)?.name??"다른 팀")}));
+ // 1.26.1 팀 고르기에 나오는 팀만 "다른 팀"으로 센다. 나간 팀·없어진 팀의 알림은 고를 수 없어서
+ // 위쪽 숫자만 남고 어디서도 열 수 없었다(사장님 화면: 칩 숫자 1, 목록엔 없음). 그런 알림은 개인 알림처럼 지금 화면에 보인다.
+ const pickTeams:Row[]=demo?v.teams.filter((t:Row)=>["team-a","team-b"].includes(t.id)):v.teams.filter((t:Row)=>v.mine?.some((m:Row)=>m.teamId===t.id&&m.status==="active"));
+ const pickIds=new Set(pickTeams.map((t:Row)=>t.id));
+ const inTeam=(n:Row)=>!n.teamId||n.teamId===v.teamId||!pickIds.has(n.teamId);
+ const otherUnread=Object.entries((v.notifications??[]).filter((n:Row)=>!n.read&&n.teamId&&n.teamId!==v.teamId&&pickIds.has(n.teamId)).reduce((o:Record<string,number>,n:Row)=>{o[n.teamId]=(o[n.teamId]??0)+1;return o},{})).map(([teamId,count])=>({teamId,count:Number(count),name:String(v.teams?.find((x:Row)=>x.id===teamId)?.name??"다른 팀")}));
  const otherTotal=otherUnread.reduce((x,y)=>x+y.count,0);
  // v-1250 사장님 요청: 위쪽 숫자만으로는 어느 팀 알림인지 몰라서 팀 고르기 목록의 팀 이름 옆에도 숫자를 붙인다.
- const teamPickerBase=<Picker value={v.teamId||"none"} onChange={switchTeam} options={(demo?v.teams.filter((t:Row)=>["team-a","team-b"].includes(t.id)):v.teams.filter((t:Row)=>v.mine?.some((m:Row)=>m.teamId===t.id&&m.status==="active"))).map((t:Row)=>{const c=otherUnread.find(x=>x.teamId===t.id)?.count??0;return {value:t.id,label:c?<span className="opt-with-alert">{t.name}<i className="opt-alert" aria-label={"새 알림 "+c+"개"}>{c>99?"99+":c}</i></span>:t.name}}).concat(v.teamId?[]:[{value:"none",label:"소속 팀 없음"}])}/>;
+ const teamPickerBase=<Picker value={v.teamId||"none"} onChange={switchTeam} options={pickTeams.map((t:Row)=>{const c=otherUnread.find(x=>x.teamId===t.id)?.count??0;return {value:t.id,label:c?<span className="opt-with-alert">{t.name}<i className="opt-alert" aria-label={"새 알림 "+c+"개"}>{c>99?"99+":c}</i></span>:t.name}}).concat(v.teamId?[]:[{value:"none",label:"소속 팀 없음"}])}/>;
  const teamPicker=<span className="team-picker-wrap">{teamPickerBase}{otherTotal>0&&<span className="team-alert" title="다른 팀 새 알림" aria-label={"다른 팀 새 알림 "+otherTotal+"개"}>{otherTotal>99?"99+":otherTotal}</span>}</span>;
  const openTeamNotifications=(t:string)=>{refresh(t).then(()=>{setModal({kind:"notifications"});run({type:"readNotifications",teamId:t})}).catch(e=>setError(e.message))};
  const unreadList=(v.notifications??[]).filter((n:Row)=>!n.read&&inTeam(n));

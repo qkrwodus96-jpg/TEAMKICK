@@ -1,15 +1,22 @@
 # TEAMKICK 작업 인계
 
-최종 갱신: 2026-10-08
+최종 갱신: 2026-10-10
 작업 폴더: `/home/user/TEAMKICK`
 브랜치: `claude/fervent-galileo-8sulep`
 이 브랜치에 배포본 1.7.1(`codex/account-recovery-20260919`)을 합쳐 두었다.
 PR #21 은 2026-09-18 병합 완료(T39-T62), PR #20 은 2026-09-17 병합 완료.
 **`main` 은 1.8.0 까지 들어가 있다. 1.8.1·1.9.0 은 이 브랜치에만 있다.**
 미커밋 변경: 없음
-버전: `APP_VERSION=1.23.2`, `BUILD=2026-10-09-1232`
+버전: `APP_VERSION=1.24.0`, `BUILD=2026-10-10-124`
 **다음 세션이 가장 먼저 할 일: 1.9.0 배포를 GPT 에게 맡기고 사용자 확인을 받는다.**
 현재 작업 ID: **사용자 요청 5가지 처리 완료(로컬 검증). 배포가 남았다.**
+
+### 2026-10-10 (35) 1.24.0 서버 개선 1단계 — 속도 (TASKS T87)
+
+- 새 표: `scope_revisions`, `schema_meta`(drizzle/0013 손으로 씀 — drizzle-kit 의 메타가 0006 에서 멈춰 있어 generate 결과를 쓰지 않음).
+- `lib/store.ts scopesOf`: 범위 규칙. 새 컬렉션을 만들면 여기 범위를 정할 것(안 정하면 팀/사용자 id 필드로 추정, 없으면 아무 화면도 다시 안 읽음).
+- 로컬 확인 스크립트: `scratchpad/opt-ui.mjs`(저장 지연 2.5초에서 투표 즉시 표시), `scratchpad/rev-ui.mjs`(다른 팀 저장 뒤 다시 읽지 않음).
+- 배포 뒤 확인: 브라우저 개발자 도구 → 네트워크 → /api/app → Timing 의 Server Timing(schema·load·view·total).
 
 ### 2026-10-09 (34) 1.23.2 처리방침 누락 4가지 보충 (TASKS T86g)
 

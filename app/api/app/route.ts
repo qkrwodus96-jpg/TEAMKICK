@@ -1,9 +1,9 @@
-import {currentUser,accountExists,closeAccount,clearedCookie} from "@/lib/auth";
+import {currentUser,currentUserCached,accountExists,closeAccount,clearedCookie} from "@/lib/auth";
 import {storageReady} from "@/lib/images";
 import {placeSearchReady,mapJsKey} from "@/lib/places";
 import {mailReady} from "@/lib/mail";
-import {load,commit} from "@/lib/store";
-import {applyCommand,visibleState,AppError,iso,prune,setupIncomplete,SETUP_MESSAGE,pushTargets} from "@/lib/model";
+import {load,commit,scopeToken} from "@/lib/store";
+import {applyCommand,visibleState,AppError,iso,prune,setupIncomplete,SETUP_MESSAGE,pushTargets,type State} from "@/lib/model";
 import {checkOwnerCode} from "@/lib/owner-config";
 import {ensureSchema} from "@/lib/schema";
 import {kakaoReady} from "@/lib/kakao";
@@ -11,15 +11,19 @@ import {socialReady} from "@/lib/social";
 import {emailSignupEnabled} from "@/lib/signup-policy";
 import {wakeDevices,devicesAmong,pushReady} from "@/lib/push";
 export const dynamic="force-dynamic";
-const json=(x:any,status=200,cookie?:string)=>Response.json(x,{status,headers:cookie?{"Cache-Control":"no-store","Set-Cookie":cookie}:{"Cache-Control":"no-store"}});
-export async function GET(req:Request){try{await ensureSchema();const user=await currentUser(req);
+// 1.24 이 사람 화면이 지켜볼 범위: 공개(pub), 나(u:), 내가 속했거나 가입을 기다리는 팀(t:).
+const myScopes=(s:State,uid:string)=>["pub","u:"+uid,...new Set(s.members.filter(m=>m.userId===uid&&["active","pending"].includes(String(m.status))).map(m=>"t:"+m.teamId))].slice(0,20);
+const json=(x:any,status=200,cookie?:string,timing?:string)=>Response.json(x,{status,headers:{"Cache-Control":"no-store",...(cookie?{"Set-Cookie":cookie}:{}),...(timing?{"Server-Timing":timing}:{})}});
+// 1.24 어디서 시간이 드는지 브라우저 개발자 도구(네트워크 → Timing)에서 보이게 한다. 숫자(ms)만, 내용 없음.
+const since=(t:number)=>Math.round(performance.now()-t);
+export async function GET(req:Request){try{const t0=performance.now();await ensureSchema();const tSchema=since(t0);const user=await currentUserCached(req);
  // 로그인 전이라도 초대 링크로 왔으면 어느 팀 초대인지(팀 이름만) 알려 준다. 가입 화면에 "OO 팀 초대"를 띄운다.
  if(!user){const token=new URL(req.url).searchParams.get("invite");let invitedTeamName:string|null=null;if(token){const {state}=await load();const inv=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());const team=inv?state.teams.find(t=>t.id===inv.teamId&&t.status==="active"):null;invitedTeamName=team?.name??null}
-  return json({user:null,invitedTeamName,mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver")});}const {state,version}=await load();const teamId=new URL(req.url).searchParams.get("team")??undefined;const token=new URL(req.url).searchParams.get("invite");const invite=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());
+  return json({user:null,invitedTeamName,mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver")});}const t1=performance.now();const {state,version}=await load();const tLoad=since(t1);const teamId=new URL(req.url).searchParams.get("team")??undefined;const token=new URL(req.url).searchParams.get("invite");const invite=state.invites.find(x=>x.id===token&&x.active&&Date.parse(x.expires)>Date.now());
  // 기록된 운영자의 계정이 사라졌으면 다시 등록할 수 있어야 한다. 그렇지 않으면 아무도 운영자가 될 수 없다.
  const ownerId=state.settings.find(x=>x.id==="owner")?.userId;
  const ownerMissing=!!ownerId&&ownerId!==user.userId&&!(await accountExists(ownerId));
- return json({rev:version,storageReady:storageReady(),ownerMissing,placeSearchReady:placeSearchReady(),mapKey:mapJsKey(),mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver"),needsVerification:mailReady()&&!user.verified,invitedTeam:invite?.teamId??null,user:{id:user.userId,name:state.users.find(x=>x.id===user.userId)?.name??user.fullName??"팀원",provider:user.provider??"local"},...visibleState(state,user.userId,teamId)});}catch(e){console.error("TeamKick load",e);return json({error:e instanceof AppError?e.message:setupIncomplete(e)?SETUP_MESSAGE:"데이터를 불러오지 못했어요. 다시 시도해주세요."},e instanceof AppError?e.status:503)}}
+ const scopes=myScopes(state,user.userId);let tView=0;return json({rev:version,scopes,scopeToken:await scopeToken(scopes),storageReady:storageReady(),ownerMissing,placeSearchReady:placeSearchReady(),mapKey:mapJsKey(),mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver"),needsVerification:mailReady()&&!user.verified,invitedTeam:invite?.teamId??null,user:{id:user.userId,name:state.users.find(x=>x.id===user.userId)?.name??user.fullName??"팀원",provider:user.provider??"local"},...(()=>{const t2=performance.now();const out=visibleState(state,user.userId,teamId);tView=since(t2);return out})()},200,undefined,`schema;dur=${tSchema}, load;dur=${tLoad}, view;dur=${tView}, total;dur=${since(t0)}`);}catch(e){console.error("TeamKick load",e);return json({error:e instanceof AppError?e.message:setupIncomplete(e)?SETUP_MESSAGE:"데이터를 불러오지 못했어요. 다시 시도해주세요."},e instanceof AppError?e.status:503)}}
 export async function POST(req:Request){
  try{
   await ensureSchema();
@@ -61,7 +65,7 @@ export async function POST(req:Request){
     const pushed=woken.length?{people:woken.length,withDevice:devices,
      sent:delivery?.sent??0,failed:delivery?.failed??0,
      ...(bad?{reason:(bad.host||"푸시 서버")+" "+(bad.status||"응답 없음")}:{})}:undefined;
-    return json({ok:true,output,...(pushed?{pushed}:{}),...visibleState(after,user.userId,seen)});
+    const scopes=myScopes(after,user.userId);return json({ok:true,output,...(pushed?{pushed}:{}),scopes,scopeToken:await scopeToken(scopes).catch(()=>""),...visibleState(after,user.userId,seen)});
    }catch(e){if(String(e).includes("revision_matches")||String(e).includes("CHECK constraint")){if(attempt<3)continue;throw new AppError("다른 변경이 먼저 저장되었어요. 새로고침 후 다시 시도해주세요.",409)}throw e}
   }
  }catch(e){console.error("TeamKick mutation",e instanceof AppError?e.message:e);return json({error:e instanceof AppError?e.message:setupIncomplete(e)?SETUP_MESSAGE:"저장하지 못했어요. 입력 내용을 유지한 채 다시 시도해주세요."},e instanceof AppError?e.status:503)}

@@ -117,11 +117,17 @@ const SAVE_META=new Set(["ok","output","closed","error","pushed"]);
 const OPTIMISTIC=new Set(["vote","mvpVote","readNotifications","setNotifyPrefs","markDues","reportDues","hideChat","setRankPublic","setProfilePublic","setNewsTeams"]);
 function optimistic(real:Row|null,c:Row){
  if(!OPTIMISTIC.has(c?.type)||!real?.user?.id)return null;
+ // 1.25.1 투표는 가장 자주 누르는 버튼이라 규칙 전체를 돌리지 않고 내 응답만 바로 바꾼다(운영 데이터에서 1~2초 걸린다는 확인).
+ // 마감·권한 확인은 서버가 한다. 서버가 거절하면 원래대로 돌아간다.
+ if(c.type==="vote"){const me=(real.members??[]).find((m:Row)=>m.userId===real.user.id&&m.teamId===c.teamId&&m.status==="active");if(!me)return null;
+  const sides=(real.sides??[]).map((s:Row)=>s.gameId===c.gameId&&s.teamId===c.teamId?{...s,votes:{...(s.votes??{}),[me.id]:[...(s.votes?.[me.id]??[]),{value:c.value,at:new Date().toISOString()}]}}:s);
+  return {...real,sides}}
+ if(c.type==="readNotifications")return {...real,notifications:(real.notifications??[]).map((n:Row)=>!c.teamId||!n.teamId||n.teamId===c.teamId?{...n,read:true}:n)};
  try{const o:Row=structuredClone(real);for(const k of collections)if(!Array.isArray(o[k]))o[k]=[];
   applyCommand(o as unknown as State,{id:real.user.id,name:real.user.name??"팀원"},c);
   o.notifications=(o.notifications??[]).filter((n:Row)=>n.userId===real.user.id);
   const next:Row={...real};for(const k of Object.keys(real))if(k in o&&k!=="user")next[k]=o[k];return next}
- catch{return null}
+ catch(e){console.warn("TeamKick optimistic skipped",c.type,e instanceof Error?e.message:e);return null}
 }
 // 고른 팀을 기기에 적어 둔다. 예전에는 화면을 새로 열 때마다 서버가 "가장 먼저
 // 가입한 팀" 으로 되돌려서, 팀이 여러 개면 고른 팀이 자꾸 바뀌었다. 권한은 여기서
@@ -267,7 +273,6 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  const scope=useMemo(()=>{const y=today.slice(0,4);if(period==="all")return ["1970-01-01","2100-01-01"];if(period==="custom"){const start=fromCustom||today,end=toCustom||today;return [isoDay(start),new Date(Date.parse(isoDay(end))+864e5).toISOString()]};const start=period==="year"?y+"-01-01":today.slice(0,7)+"-01";const date=new Date(start+"T00:00:00+09:00");const end=period==="year"?Number(y)+1+"-01-01T00:00:00+09:00":new Date(Date.UTC(Number(y),Number(today.slice(5,7)),1)-9*3600e3).toISOString();return [date.toISOString(),new Date(end).toISOString()]},[period,fromCustom,toCustom,today]);
  const stats=summaries({...v,games:v.games??[],members:v.members??[],sides:v.sides??[]},scope[0],scope[1]);
  const monthStats=summaries({...v,games:v.games??[],members:v.members??[],sides:v.sides??[]},isoDay(today.slice(0,7)+"-01"),new Date(Date.UTC(Number(today.slice(0,4)),Number(today.slice(5,7)),1)-9*3600e3).toISOString());
- const teamPickerBase=<Picker value={v.teamId||"none"} onChange={switchTeam} options={(demo?v.teams.filter((t:Row)=>["team-a","team-b"].includes(t.id)):v.teams.filter((t:Row)=>v.mine?.some((m:Row)=>m.teamId===t.id&&m.status==="active"))).map((t:Row)=>({value:t.id,label:t.name})).concat(v.teamId?[]:[{value:"none",label:"소속 팀 없음"}])}/>;
  const [jumpTab,setJumpTab]=useState("");
  const common={v,team,demo,busy,action,run,setModal,setView,toActual,manager,captain,setJumpTab,chatUnread};
  const goDate=(day:string)=>{setSelected(day);setMonth(day.slice(0,7));setDateFilter(true);setView("schedule")};
@@ -278,6 +283,8 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  const myTeamIds=new Set((v.mine??[]).filter((m:Row)=>m.status==="active").map((m:Row)=>m.teamId));
  const otherUnread=Object.entries((v.notifications??[]).filter((n:Row)=>!n.read&&n.teamId&&n.teamId!==v.teamId&&myTeamIds.has(n.teamId)).reduce((o:Record<string,number>,n:Row)=>{o[n.teamId]=(o[n.teamId]??0)+1;return o},{})).map(([teamId,count])=>({teamId,count:Number(count),name:String(v.teams?.find((x:Row)=>x.id===teamId)?.name??"다른 팀")}));
  const otherTotal=otherUnread.reduce((x,y)=>x+y.count,0);
+ // v-1250 사장님 요청: 위쪽 숫자만으로는 어느 팀 알림인지 몰라서 팀 고르기 목록의 팀 이름 옆에도 숫자를 붙인다.
+ const teamPickerBase=<Picker value={v.teamId||"none"} onChange={switchTeam} options={(demo?v.teams.filter((t:Row)=>["team-a","team-b"].includes(t.id)):v.teams.filter((t:Row)=>v.mine?.some((m:Row)=>m.teamId===t.id&&m.status==="active"))).map((t:Row)=>{const c=otherUnread.find(x=>x.teamId===t.id)?.count??0;return {value:t.id,label:c?<span className="opt-with-alert">{t.name}<i className="opt-alert" aria-label={"새 알림 "+c+"개"}>{c>99?"99+":c}</i></span>:t.name}}).concat(v.teamId?[]:[{value:"none",label:"소속 팀 없음"}])}/>;
  const teamPicker=<span className="team-picker-wrap">{teamPickerBase}{otherTotal>0&&<span className="team-alert" title="다른 팀 새 알림" aria-label={"다른 팀 새 알림 "+otherTotal+"개"}>{otherTotal>99?"99+":otherTotal}</span>}</span>;
  const openTeamNotifications=(t:string)=>{refresh(t).then(()=>{setModal({kind:"notifications"});run({type:"readNotifications",teamId:t})}).catch(e=>setError(e.message))};
  const unreadList=(v.notifications??[]).filter((n:Row)=>!n.read&&inTeam(n));

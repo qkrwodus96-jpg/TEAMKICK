@@ -7,14 +7,22 @@
 PR #21 은 2026-09-18 병합 완료(T39-T62), PR #20 은 2026-09-17 병합 완료.
 **`main` 은 1.8.0 까지 들어가 있다. 1.8.1·1.9.0 은 이 브랜치에만 있다.**
 미커밋 변경: 없음
-버전: `APP_VERSION=1.25.1`, `BUILD=2026-10-10-1251`
+버전: `APP_VERSION=1.26.0`, `BUILD=2026-10-10-126`
 **다음 세션이 가장 먼저 할 일: 1.9.0 배포를 GPT 에게 맡기고 사용자 확인을 받는다.**
 현재 작업 ID: **사용자 요청 5가지 처리 완료(로컬 검증). 배포가 남았다.**
 
 ### 기억할 것 (사장님 요청으로 상시 유지)
 
 - **팀이 수천 개가 되기 전에 "팀별로 나눠 읽기"를 한다.** 지금은 요청마다 공용 문서 전체를 한 번에 읽는다(1.24·1.25 로 줄였을 뿐). Cloudflare 로 옮길 때 팀별 SELECT 로 바꾼다 — 자세한 내용은 `ARCHITECTURE.md` "저장과 동시성".
-- 차단/신고는 1.26.0 에서 진행 중(TASKS T90).
+- 차단/신고는 1.26.0 에서 넣었다(TASKS T90). 두 기기 확인은 기기가 생기면.
+
+### 2026-10-10 (38) 1.26.0 차단·신고·고객센터 (TASKS T90)
+
+- 코드: `app/safety.tsx`(차단·신고 창, 차단 목록, 운영자 신고 목록, 고객센터), `lib/model.ts`(blockUser·unblockUser·blockTeam·unblockTeam·report·resolveReport, visibleState 가리기, staffBlocks), `app/api/app/route.ts`(messageId → 보낸 사람·원문을 서버가 채움, 화면이 보낸 viaRoom·authorId 는 버림), `app/api/chat/route.ts`(접기·보내기 막기·목록 미리보기).
+- 사유 목록은 `lib/model.REPORT_REASONS` 와 `app/safety.REPORT_REASONS` 두 곳에 있다(같이 고칠 것).
+- 랭킹 줄에 `ref`(그 사람의 팀원 번호)를 붙였다 — 계정 번호가 아니다. 본인 줄은 비움.
+- 로컬 시험 데이터: qa-cap 이 김민준(qa-mem)을 차단해 둔 상태, 신고 1건 처리 완료. 운영자 로컬 세션 토큰은 `scratchpad/owner-token.txt`(로컬 전용). 확인 스크립트 `scratchpad/safety-ui*.mjs`.
+- 남은 것: 다국어 사전에 새 문구 번역이 없다(한국어로 보임). 운영자가 신고된 채팅 메시지를 화면에서 지우는 기능은 아직 없다.
 
 ### 2026-10-10 (37) 1.25.1 투표 바로 보이기 보강 · 팀 고르기 목록에 알림 숫자 (TASKS T89)
 

@@ -55,7 +55,7 @@ export async function revision(){const r=await db().prepare("SELECT version FROM
 const QUIET=new Set(["audit","receipts"]);
 const PUBLIC=new Set(["teams","games","requests","guests","users","announcements","settings","inquiries"]);
 // 계정 행에서 이것들만 바뀌면 본인 화면만 다시 읽으면 된다(알림 설정·숨긴 채팅방·좋아하는 팀·코드 시도·생일 알림 표시).
-const PRIVATE_USER=new Set(["notify","chatHidden","newsTeams","codeTries","birthdayAt"]);
+const PRIVATE_USER=new Set(["notify","chatHidden","newsTeams","codeTries","birthdayAt","blocked"]);
 export function scopesOf(kind:string,row:Record<string,unknown>,out:Set<string>,was?:Record<string,unknown>){
  if(QUIET.has(kind))return true;
  // 알림은 받는 사람 것이다. 팀 번호까지 올리면 한 사람이 읽음 처리할 때마다 팀 전체가 다시 읽는다.

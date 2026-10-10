@@ -2,9 +2,9 @@ import {cleanNewsTeams,NEWS_TEAMS_MAX} from "./news";
 import {FORMATIONS} from "./formations";
 import {whenRange,whenText} from "./when";
 export type Row={id:string;[key:string]:any};
-export type State={users:Row[];teams:Row[];members:Row[];games:Row[];sides:Row[];requests:Row[];guests:Row[];notices:Row[];notifications:Row[];invites:Row[];audit:Row[];receipts:Row[];settings:Row[];inquiries:Row[];announcements:Row[]};
-export const collections=["users","teams","members","games","sides","requests","guests","notices","notifications","invites","audit","receipts","settings","inquiries","announcements"] as const;
-export const blank=():State=>({users:[],teams:[],members:[],games:[],sides:[],requests:[],guests:[],notices:[],notifications:[],invites:[],audit:[],receipts:[],settings:[],inquiries:[],announcements:[]});
+export type State={users:Row[];teams:Row[];members:Row[];games:Row[];sides:Row[];requests:Row[];guests:Row[];notices:Row[];notifications:Row[];invites:Row[];audit:Row[];receipts:Row[];settings:Row[];inquiries:Row[];announcements:Row[];reports:Row[]};
+export const collections=["users","teams","members","games","sides","requests","guests","notices","notifications","invites","audit","receipts","settings","inquiries","announcements","reports"] as const;
+export const blank=():State=>({users:[],teams:[],members:[],games:[],sides:[],requests:[],guests:[],notices:[],notifications:[],invites:[],audit:[],receipts:[],settings:[],inquiries:[],announcements:[],reports:[]});
 // 배포 후 migration 이 적용되지 않으면 테이블이나 열이 없어 SQLite 오류가 난다.
 // 그대로 두면 사용자에게 원인 모를 실패로 보이므로 구분해서 안내한다.
 // 스키마 내용은 응답에 담지 않고 서버 로그에만 남긴다.
@@ -17,7 +17,7 @@ export const blank=():State=>({users:[],teams:[],members:[],games:[],sides:[],re
 // 여기서 지우는 것은 "누가 무슨 버튼을 눌렀는지"(audit)와 알림뿐이다.
 // 안 읽은 알림은 오래 남긴다. 사용자가 아직 보지 못한 소식이기 때문이다.
 // 문의는 분쟁 기록이라 운영 이력(90일)보다 길게 둔다. 1년(사용자 결정 2026-09-16).
-export const KEEP={receipts:7,audit:90,readNotice:30,unreadNotice:180,inquiry:365};
+export const KEEP={receipts:7,audit:90,readNotice:30,unreadNotice:180,inquiry:365,report:365};
 // 한 요청에서 지우는 양을 제한한다. 오래 쌓인 상태에서 배포하면 첫 요청이
 // 수만 건을 한꺼번에 지우려 들어 저장이 실패할 수 있다. 여러 요청에 나눠 지운다.
 export const PRUNE_LIMIT=200;
@@ -36,6 +36,10 @@ export function forgetAccount(s:State,userId:string,stamp:string){
  s.notifications=s.notifications.filter(x=>x.userId!==userId);
  s.inquiries=s.inquiries.filter(x=>x.userId!==userId);
  for(const x of s.members.filter(y=>y.userId===userId))x.photo="";
+ // 1.26 다른 사람의 차단 목록에서 이 사람(이름)을 지운다. 이 사람이 낸 신고는 처리 기록으로 남기되 누가 냈는지는 지운다.
+ // 이 사람을 대상으로 한 신고는 운영 대응(재가입 후 반복 등)을 위해 보관 기간까지 남긴다(LEGAL 2-22).
+ for(const u of s.users)if(u.blocked?.users?.[userId])delete u.blocked.users[userId];
+ for(const r of s.reports.filter(x=>x.userId===userId)){r.userId="";r.reporterName="탈퇴한 사용자";}
 }
 
 // 팀 해산. 팀과 지난 기록은 남기고(팀의 공동 기록), 앞으로의 일정·신청·초대만 닫는다.
@@ -77,6 +81,8 @@ export function prune(s:State,now=Date.now()){
  s.notifications=sweep(s.notifications,r=>r.read?KEEP.readNotice:KEEP.unreadNotice);
  // 답변을 기다리는 문의는 지우지 않는다. 오래됐다고 못 본 채로 사라지면 안 된다.
  s.inquiries=sweep(s.inquiries,r=>r.status==="open"?Infinity:KEEP.inquiry);
+ // 신고도 처리 전에는 지우지 않는다. 처리한 신고는 신고일로부터 1년.
+ s.reports=sweep(s.reports,r=>r.status==="open"?Infinity:KEEP.report);
  return PRUNE_LIMIT-budget;
 }
 export const setupIncomplete=(e:unknown)=>/no such table|no such column/i.test(String(e));
@@ -348,7 +354,7 @@ export const NATIONAL_LIMIT=50;
 // 사람마다 다른 부분(내 줄 표시·사진)만 요청마다 붙인다. 예전에는 화면을 열 때마다 전국 + 내 지역 + 다른 지역(최대 18곳)을
 // 처음부터 다시 셌다. 저장 번호(__rev)가 없는 상태(시험·샘플)는 기억하지 않고 바로 센다.
 // MVP 는 시간이 지나 마감되므로 10분 단위로도 새로 센다.
-type RankBase=Record<string,{uid:string;name:string;team:string;goals:number;assists:number;points:number;mvp:number;attend:number;card:Record<string,unknown>|null}[]>;
+type RankBase=Record<string,{uid:string;mid:string;name:string;team:string;goals:number;assists:number;points:number;mvp:number;attend:number;card:Record<string,unknown>|null}[]>;
 const rankMemo=new Map<string,RankBase>();
 function rankingBase(s:State,now:number,region:string):RankBase{
  const rev=(s as unknown as {__rev?:number}).__rev;
@@ -359,7 +365,7 @@ function rankingBase(s:State,now:number,region:string):RankBase{
  const out:RankBase={};
  for(const period of RANK_PERIODS){
   const {from,to}=periodRange(period,now);
-  const people=new Map<string,{name:string;teams:Map<string,number>;goals:number;assists:number;mvp:number;attend:number}>();
+  const people=new Map<string,{mid:string;name:string;teams:Map<string,number>;goals:number;assists:number;mvp:number;attend:number}>();
   for(const side of s.sides){
    const g=games.get(side.gameId);
    if(!g||g.status!=="completed"||g.start<from||g.start>=to)continue;
@@ -367,19 +373,19 @@ function rankingBase(s:State,now:number,region:string):RankBase{
    const winners=mvpWinners(side,now);
    for(const r of (side.roster??[]) as Row[]){
     const m=members.get(r.id);if(!m?.userId||!open.has(m.userId))continue;
-    const p=people.get(m.userId)??{name:String(m.name??""),teams:new Map(),goals:0,assists:0,mvp:0,attend:0};
+    const p=people.get(m.userId)??{mid:String(m.id),name:String(m.name??""),teams:new Map(),goals:0,assists:0,mvp:0,attend:0};
     const came=side.attendanceFinal&&side.attendance?.[r.id]===true;
     if(came){p.attend++;p.teams.set(team.name,(p.teams.get(team.name)??0)+1)}
     // 1.20 거짓 기록 방지: 전국·지역 순위의 골·도움은 **팀킥 매칭으로 잡힌 경기**(상대도 팀킥 팀, 매칭 수락)이고
     // 상대 팀까지 점수를 확인한 경기만 센다. 외부 팀·자체전 기록은 우리 팀 기록에는 남지만 여기엔 안 들어간다.
     if(side.recordsFinal&&g.away&&!isIntra(g)&&g.result?.status==="confirmed"){p.goals+=Number(side.records?.[r.id]?.goals??0);p.assists+=Number(side.records?.[r.id]?.assists??0)}
     if(winners.includes(r.id))p.mvp++;
-    if(m.status==="active")p.name=String(m.name??p.name);
+    if(m.status==="active"){p.name=String(m.name??p.name);p.mid=String(m.id)}
     people.set(m.userId,p);
    }
   }
   const cardOf=(uid:string)=>{if(s.users.find(x=>x.id===uid)?.profilePublic!==true)return null;const pv=profileView(s,uid,false);if(!pv)return null;return {main:pv.main,sub:pv.sub,foot:pv.foot,regions:pv.regions,instagram:pv.instagram}};
-  out[period]=[...people.entries()].map(([uid,p])=>({uid,name:p.name,team:[...p.teams.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]??"",goals:p.goals,assists:p.assists,points:p.goals+p.assists,mvp:p.mvp,attend:p.attend,card:cardOf(uid)}));
+  out[period]=[...people.entries()].map(([uid,p])=>({uid,mid:p.mid,name:p.name,team:[...p.teams.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]??"",goals:p.goals,assists:p.assists,points:p.goals+p.assists,mvp:p.mvp,attend:p.attend,card:cardOf(uid)}));
  }
  if(key){if(rankMemo.size>200)rankMemo.clear();rankMemo.set(key,out)}
  return out;
@@ -391,7 +397,7 @@ export function nationalRanking(s:State,userId:string,now=Date.now(),region=""){
   const rows=(base[period]??[]).map(r=>({...r,me:r.uid===userId}));
   out[period]={};
   // 사진은 보여 줄 줄(상위 50명 + 나)에만 붙인다. 계정 번호(uid)는 내보내지 않는다.
-  for(const key of RANK_KEYS)out[period][key]=rankRows(rows,key).filter((r,i)=>i<NATIONAL_LIMIT||r.me).map(({uid,name,team,value,rank,me,card},i)=>({id:"n"+i,name,team,value,rank,me,card,photo:rankPhoto(s,uid,userId)}));
+  for(const key of RANK_KEYS)out[period][key]=rankRows(rows,key).filter((r,i)=>i<NATIONAL_LIMIT||r.me).map(({uid,mid,name,team,value,rank,me,card},i)=>({id:"n"+i,name,team,value,rank,me,card,photo:rankPhoto(s,uid,userId),ref:me?"":mid}));
  }
  return out;
 }
@@ -400,6 +406,30 @@ export const RULES_MAX=2000;
 
 const CODE_CHARS="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 function inviteCode(){const b=new Uint8Array(6);crypto.getRandomValues(b);return Array.from(b,x=>CODE_CHARS[x%CODE_CHARS.length]).join("")}
+// --- 1.26 차단·신고 ---
+// 차단은 내 계정 행(users.blocked)에 둔다. 나에게만 영향이 있다: 내 화면에서 가리고, 그 사람(팀)이 나(우리 팀 운영진)에게
+// 용병 신청·매칭 신청·경기 대화를 보내지 못하게 한다. 상대에게 차단 사실을 알리지 않는다(거절 문구도 일반 문구).
+export const BLOCK_MAX=300;
+export const REPORT_REASONS=["욕설·비하","노쇼·약속 불이행","허위 모집·기록","사기·금전 요구","광고·도배","기타"] as const;
+type BlockBook={users:Record<string,{name:string;at:string}>;teams:Record<string,{name:string;at:string}>};
+export function blockedOf(s:State,userId:string):BlockBook{const b=s.users.find(x=>x.id===userId)?.blocked;return {users:{...(b?.users??{})},teams:{...(b?.teams??{})}}}
+// 이 팀의 주장·운영진 중 한 명이라도 그 사람(또는 그 사람이 속한 팀)을 막았는가. 신청을 받는 쪽이 운영진이라 운영진 기준이다.
+export function staffBlocks(s:State,teamId:string,userId:string,fromTeam=""){
+ return s.members.some(m=>m.teamId===teamId&&m.status==="active"&&["captain","manager"].includes(m.role)&&(()=>{const b=s.users.find(x=>x.id===m.userId)?.blocked;return !!b?.users?.[userId]||(!!fromTeam&&!!b?.teams?.[fromTeam])})());
+}
+// 화면이 아는 것(팀원 번호·용병 신청 번호·랭킹 줄·계정 번호) 중 하나로 사람을 찾는다. 채팅 메시지는 /api/app 이 미리 바꿔 준다.
+function personOf(s:State,a:Actor,c:Row){
+ const m=c.memberId?s.members.find(x=>x.id===String(c.memberId)):null;
+ const g=!m&&c.guestId?s.guests.find(x=>x.id===String(c.guestId)):null;
+ // 계정 번호를 그대로 받는 것은 채팅 메시지로 찾은 경우뿐이다(/api/app 이 viaRoom 을 붙인다). 그 방에 내가 들어갈 수 있어야 한다.
+ const via=!m&&!g&&typeof c.viaRoom==="string"&&c.viaRoom?c.viaRoom:"";
+ if(via)ensure(chatRoom(s,a.id,via),"이 채팅방에 들어갈 수 없어요.",403);
+ const userId=String(m?.userId??g?.userId??(via?c.userId:"")??"");
+ ensure(userId&&(m||g||s.users.some(x=>x.id===userId)),"대상을 찾을 수 없어요.",404);
+ const name=textValue(m?.name??g?.name??s.users.find(x=>x.id===userId)?.name??c.name??"이용자",30,false)||"이용자";
+ return {userId,name};
+}
+function myBook(s:State,a:Actor){const u=s.users.find(x=>x.id===a.id)!;const b=u.blocked??{};u.blocked={users:{...(b.users??{})},teams:{...(b.teams??{})}};return u.blocked as BlockBook}
 export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  const type=textValue(c.type,50),t=String(c.teamId??""),stamp=iso(now);let output:any={};
  if(!s.users.find(u=>u.id===a.id))s.users.push({id:a.id,name:a.name,at:stamp});
@@ -559,6 +589,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   requireTeam(s,t,a.id,"captain");const g=s.games.find(x=>x.id===c.gameId);ensure(g,"경기를 찾을 수 없어요.",404);
   if(type==="applyMatch"){
    ensure(g!.home!==t&&g!.listing==="open"&&g!.status==="scheduled"&&Date.parse(g!.start)>now&&teamOf(s,g!.home)?.status==="active","신청할 수 없는 경기예요.",409);checkConflict(s,t,g!.start,g!.end,g!.id);
+   ensure(!staffBlocks(s,g!.home,a.id,t),"신청할 수 없는 경기예요.",409);
    const old=s.requests.find(x=>x.gameId===g!.id&&x.teamId===t);ensure(!old||old.status!=="pending","이미 신청한 경기예요.",409);
    const value={gameId:g!.id,teamId:t,by:a.id,message:textValue(c.message,300,false),status:"pending",version:g!.revision,at:stamp};if(old)Object.assign(old,value);else s.requests.push({id:id(),...value});
    // 1.17: 주장·운영진은 알림을 누르면 경기 대화방이 열리고, 신청 메시지와 [수락]·[거절]이 그 안에 있다. 다른 팀원은 매칭 화면으로.
@@ -776,6 +807,8 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    ensure(teamOf(s,t)?.status==="active","지금은 용병을 신청할 수 없는 팀이에요.",403);
    ensure(guestStatusOf(side!)==="open"&&upcoming()&&count()<limit(),"용병 모집이 마감되었어요.",409);
    ensure(!s.members.some(x=>x.teamId===t&&x.userId===a.id&&["active","pending"].includes(x.status)),"이미 이 팀에 소속되어 있어 용병으로 신청할 수 없어요.",409);
+   // 1.26 이 팀 운영진이 나를 차단했으면 받지 않는다. 차단 사실은 알리지 않는다.
+   ensure(!staffBlocks(s,t,a.id),"지금은 이 모집에 신청할 수 없어요.",403);
    const old=s.guests.find(x=>x.gameId===g!.id&&x.teamId===t&&x.userId===a.id);
    ensure(!old||!["pending","approved"].includes(old.status),"이미 신청한 경기예요.",409);
    const value={gameId:g!.id,teamId:t,userId:a.id,name:textValue(c.name||a.name,30),position:cleanPosition(c.position||s.users.find(x=>x.id===a.id)?.profile?.main||"MF"),number:integer(c.number??0,0,99),message:textValue(c.message,300,false),status:"pending",at:stamp};
@@ -888,6 +921,46 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   row!.status="answered";
   userNotice(s,row!.userId,"문의에 답변이 등록되었어요",text.slice(0,120),undefined,"team");
  }
+ // --- 1.26 차단 ---
+ else if(type==="blockUser"){
+  const p=personOf(s,a,c);ensure(p.userId!==a.id,"나 자신은 차단할 수 없어요.");ensure(!isOwner(s,p.userId),"서비스 운영자는 차단할 수 없어요. 불편한 점은 고객센터로 알려주세요.");
+  const b=myBook(s,a);ensure(b.users[p.userId]||Object.keys(b.users).length<BLOCK_MAX,"차단 목록이 가득 찼어요. 오래된 차단을 해제한 뒤 다시 해주세요.");
+  b.users[p.userId]={name:p.name,at:stamp};output={userId:p.userId};
+ }
+ else if(type==="unblockUser"){const b=myBook(s,a);delete b.users[String(c.userId??"")];}
+ else if(type==="blockTeam"){
+  const team=teamOf(s,t);ensure(team,"팀을 찾을 수 없어요.",404);
+  ensure(!s.members.some(m=>m.teamId===t&&m.userId===a.id&&m.status==="active"),"내가 속한 팀은 차단할 수 없어요.");
+  const b=myBook(s,a);ensure(b.teams[t]||Object.keys(b.teams).length<BLOCK_MAX,"차단 목록이 가득 찼어요. 오래된 차단을 해제한 뒤 다시 해주세요.");
+  b.teams[t]={name:String(team!.name??"팀"),at:stamp};
+ }
+ else if(type==="unblockTeam"){const b=myBook(s,a);delete b.teams[t];}
+ // --- 1.26 신고 ---
+ // 사람·팀·모집글을 신고한다. 운영자만 전부 보고, 신고한 사람은 자기 신고와 처리 결과만 본다. 신고 대상에게는 알리지 않는다.
+ else if(type==="report"){
+  const kind=pick(c.target,["user","team","listing"],"신고 대상");
+  const reason=pick(c.reason,REPORT_REASONS as unknown as string[],"신고 사유");
+  const detail=textValue(c.detail,500,false);
+  let targetUserId="",targetTeamId="",gameId="",targetName="";
+  if(kind==="user"){const p=personOf(s,a,c);ensure(p.userId!==a.id,"나 자신은 신고할 수 없어요.");targetUserId=p.userId;targetName=p.name;}
+  else if(kind==="team"){const team=teamOf(s,t);ensure(team,"팀을 찾을 수 없어요.",404);targetTeamId=t;targetName=String(team!.name??"");}
+  else{const g=s.games.find(x=>x.id===String(c.gameId??""));ensure(g,"모집글을 찾을 수 없어요.",404);
+   // 매칭 모집글(경기를 연 팀)과 용병 모집글(teamId 로 그 팀)을 함께 받는다.
+   const tid=t&&containsTeam(g!,t)?t:String(g!.home);targetTeamId=tid;gameId=g!.id;targetName=String(teamOf(s,tid)?.name??"")+" · "+whenRange(g!.start,g!.end);}
+  ensure(!s.reports.some(r=>r.userId===a.id&&r.status==="open"&&r.kind===kind&&r.targetUserId===targetUserId&&r.targetTeamId===targetTeamId&&r.gameId===gameId),"이미 신고했어요. 운영자가 확인하고 있어요.",409);
+  ensure(s.reports.filter(r=>r.userId===a.id&&r.status==="open").length<10,"처리를 기다리는 신고가 많아요. 처리된 뒤에 다시 신고해주세요.",429);
+  const row={id:id(),userId:a.id,reporterName:a.name,kind,targetUserId,targetTeamId,gameId,targetName,reason,detail,status:"open",at:stamp};
+  s.reports.push(row);output={reportId:row.id};
+  if(c.block===true){const b=myBook(s,a);if(kind==="user"&&!isOwner(s,targetUserId))b.users[targetUserId]={name:targetName,at:stamp};else if(kind!=="user"&&!s.members.some(m=>m.teamId===targetTeamId&&m.userId===a.id&&m.status==="active"))b.teams[targetTeamId]={name:String(teamOf(s,targetTeamId)?.name??""),at:stamp};}
+  const o=s.settings.find(x=>x.id==="owner");
+  if(o&&o.userId!==a.id)userNotice(s,o.userId,"새 신고",reason+" · "+targetName.slice(0,40),undefined,"modal:reports");
+ }
+ else if(type==="resolveReport"){
+  ensure(owner,"서비스 운영자만 처리할 수 있어요.",403);
+  const r=s.reports.find(x=>x.id===String(c.reportId??""));ensure(r,"신고를 찾을 수 없어요.",404);ensure(r!.status==="open","이미 처리한 신고예요.",409);
+  r!.status="closed";r!.result=textValue(c.result,300);r!.closedAt=stamp;
+  if(r!.userId)userNotice(s,r!.userId,"신고 처리 결과",r!.result.slice(0,120),undefined,"modal:help");
+ }
  // --- 서비스 공지 (팀 공지와 다르다. 모든 사용자에게 보인다) ---
  else if(type==="postAnnouncement"){
   ensure(owner,"서비스 운영자만 올릴 수 있어요.",403);
@@ -927,7 +1000,10 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   const to="chat:"+r!.room;let sent=0;
   // 보낸 사람이 목록에서 지웠던 방이면 다시 보이게 한다(받는 사람은 새 글 시각이 지운 시각보다 늦으면 다시 보인다).
   const me=s.users.find(x=>x.id===a.id);if(me?.chatHidden?.[r!.room])delete me.chatHidden[r!.room];
+  const fromTeam=r!.teamOf(a.id);
   for(const u of r!.members){if(u===a.id)continue;
+   // 1.26 나를 차단한 사람에게는 알림을 보내지 않는다(경기·용병 대화방은 우리 팀 차단도).
+   {const b=s.users.find(x=>x.id===u)?.blocked;if(b?.users?.[a.id]||(r!.kind!=="team"&&fromTeam&&b?.teams?.[fromTeam]))continue;}
    if(s.notifications.some(n=>n.userId===u&&n.to===to&&!n.read&&now-Date.parse(n.at)<10*60e3))continue;
    userNotice(s,u,r!.kind==="team"?"팀 채팅":"경기 대화",(a.name||"팀원")+"님이 "+r!.title.replace(/ 팀 채팅$/,"")+"에 메시지를 보냈어요.",r!.teamOf(u),to);sent++;}
   output={notified:sent};
@@ -939,7 +1015,10 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  }
  else if(type==="chatReported"){
   const r=chatRoom(s,a.id,c.room);ensure(r,"이 채팅방에 들어갈 수 없어요.",403);const o=s.settings.find(x=>x.id==="owner");
-  if(o)userNotice(s,o.userId,"채팅 신고",(a.name||"이용자")+" · "+r!.title+" · "+textValue(c.excerpt,80,false),undefined,"admin");
+  // 1.26 운영자 신고 목록에도 남긴다. 원문 일부와 보낸 사람은 /api/app 이 메시지 번호로 서버에서 찾아 넣는다(화면이 보낸 값은 쓰지 않는다).
+  const excerpt=textValue(c.excerpt,120,false),targetUserId=String(c.authorId??"");
+  if(!s.reports.some(x=>x.userId===a.id&&x.kind==="chat"&&x.messageId===String(c.messageId??"")))s.reports.push({id:id(),userId:a.id,reporterName:a.name,kind:"chat",targetUserId,targetTeamId:"",gameId:"",messageId:String(c.messageId??""),room:r!.room,targetName:textValue(c.authorName??"",30,false)+" · "+r!.title,reason:"부적절한 메시지",detail:excerpt,status:"open",at:stamp});
+  if(o)userNotice(s,o.userId,"채팅 신고",(a.name||"이용자")+" · "+r!.title+" · "+excerpt.slice(0,80),undefined,"modal:reports");
  }
  else throw new AppError("지원하지 않는 작업이에요.");
  s.audit.push({id:id(),actor:a.id,teamId:t||null,type,at:stamp,gameId:c.gameId??null,reason:c.reason??null});return output;
@@ -965,6 +1044,8 @@ export function gameTitle(s:State,g:Row){const home=String(teamOf(s,g.home)?.nam
 export function visibleState(s:State,userId:string,selected?:string){
  const owner=isOwner(s,userId),my=s.members.filter(m=>m.userId===userId),active=my.filter(m=>m.status==="active"&&["active","suspended"].includes(teamOf(s,m.teamId)?.status)),team=active.find(x=>x.teamId===selected)??active[0];
  const tid=team?.teamId;const activeAccess=active.some(m=>teamOf(s,m.teamId)?.status==="active");
+ // 1.26 내가 차단한 사람·팀은 내 화면에서 가린다(모집글·받은 신청·대기 중인 용병 신청).
+ const bk=blockedOf(s,userId),hidTeam=(x:unknown)=>!!bk.teams[String(x??"")];
  const ownTeams=s.teams.filter(t=>t.applicant===userId);const publicTeams=s.teams.filter(t=>t.status==="active"||owner||active.some(m=>m.teamId===t.id)||t.applicant===userId).map(t=>{const full=owner||active.some(m=>m.teamId===t.id)||t.applicant===userId;const counts={memberCount:s.members.filter(m=>m.teamId===t.id&&m.status==="active").length,gameCount:s.games.filter(g=>containsTeam(g,t.id)&&g.status==="completed").length};
   // 회비 납부 표시는 운영진에게만 다 보인다. 일반 팀원은 자기 것과 달마다 몇 명 냈는지만.
   if(full&&(t.duesPaid||t.duesReported||t.duesReminded)&&!owner&&!active.some(m=>m.teamId===t.id&&["captain","manager"].includes(m.role))){const me=active.find(m=>m.teamId===t.id)?.id;
@@ -976,9 +1057,9 @@ export function visibleState(s:State,userId:string,selected?:string){
     duesReminded:Object.fromEntries(Object.entries((t.duesReminded??{}) as Record<string,Record<string,string>>).map(([k,row])=>[k,me&&row[me]?{[me]:row[me]}:{}]))}}
   return full?{...t,...counts}:{id:t.id,name:t.name,region:t.region,description:t.description,format:t.format,days:t.days,level:t.level,status:t.status,color:t.color,logo:t.logo,rules:t.rules??"",
    photos:(t.photos??[]).map((p:Row)=>({id:p.id,key:p.key,caption:p.caption,at:p.at})),recruiting:!!t.recruiting,recruitNote:t.recruitNote??"",fee:t.fee??null,founded:t.founded??"",...counts}});
- const games=s.games.filter(g=>tid&&containsTeam(g,tid));const listings=activeAccess?s.games.filter(g=>g.listing==="open"&&g.status==="scheduled"&&Date.parse(g.start)>Date.now()&&teamOf(s,g.home)?.status==="active"):[];
+ const games=s.games.filter(g=>tid&&containsTeam(g,tid));const listings=activeAccess?s.games.filter(g=>g.listing==="open"&&g.status==="scheduled"&&Date.parse(g.start)>Date.now()&&teamOf(s,g.home)?.status==="active"&&!hidTeam(g.home)):[];
  // 모집 완료(1.17): 모집글로 매칭이 확정된 다가오는 경기. 팀 이름·시간·구장 등 모집글에 원래 공개하던 것만 보낸다.
- const matchedListings=activeAccess?s.games.filter(g=>g.listing==="matched"&&g.away&&g.status==="scheduled"&&Date.parse(g.end)>Date.now()-864e5&&teamOf(s,g.home)?.status==="active"&&teamOf(s,g.away)?.status==="active")
+ const matchedListings=activeAccess?s.games.filter(g=>g.listing==="matched"&&g.away&&g.status==="scheduled"&&Date.parse(g.end)>Date.now()-864e5&&teamOf(s,g.home)?.status==="active"&&teamOf(s,g.away)?.status==="active"&&!hidTeam(g.home)&&!hidTeam(g.away))
   .sort((x,y)=>String(x.start).localeCompare(String(y.start))).slice(0,40)
   .map(g=>({id:g.id,home:g.home,away:g.away,start:g.start,end:g.end,venue:g.venue,address:g.address,region:g.region,format:g.format,cost:g.cost,opponentCost:g.opponentCost,listing:g.listing})):[];
  const members=tid?s.members.filter(m=>m.teamId===tid&&(m.status==="active"||m.status==="left"||m.status==="removed"||team.role==="captain")).map(m=>({...m,profile:profileView(s,m.userId)})):[];
@@ -990,23 +1071,26 @@ export function visibleState(s:State,userId:string,selected?:string){
   // 문의는 본인 것만 본다. 운영자는 답변해야 하므로 전부 본다.
   inquiries:s.inquiries.filter(x=>owner||x.userId===userId).sort((x,y)=>String(y.at).localeCompare(String(x.at))).map(x=>({...x,mine:x.userId===userId})),
   announcements:[...s.announcements].sort((x,y)=>String(y.at).localeCompare(String(x.at))),
+  // 1.26 내 차단 목록(설정 → 차단 목록에서 해제). 신고는 운영자만 전부, 신고한 사람은 자기 것만(처리 결과 포함).
+  blocked:{users:Object.entries(bk.users).map(([id,x])=>({id,name:x.name,at:x.at})),teams:Object.entries(bk.teams).map(([id,x])=>({id,name:x.name,at:x.at}))},
+  reports:s.reports.filter(x=>owner||(x.userId&&x.userId===userId)).sort((x,y)=>String(y.at).localeCompare(String(x.at))).slice(0,owner?300:50).map(x=>owner?{...x,mine:x.userId===userId}:{id:x.id,kind:x.kind,targetName:x.targetName,reason:x.reason,detail:x.detail,status:x.status,result:x.result??"",at:x.at,closedAt:x.closedAt??"",mine:true}),
   setupNeeded:!s.settings.some(x=>x.id==="owner"),games,// 승인된 용병도 그 경기에 뛰는 사람이다. 예전에는 참여 인원에서 빠져 있어
  // "9명 참여 예정" 이 실제와 달랐다. 팀원 명단(roster)과는 따로 둔다 —
  // 용병은 팀원이 아니고 출석·선수 통계에도 넣지 않는다(ASM-04).
  sides:s.sides.filter(x=>x.teamId===tid).map(z=>({...z,mvp:mvpView(z,team?.id),roster:rosterFor(s,z,s.games.find(g=>g.id===z.gameId)!),draft:attendanceDraft(s,z,s.games.find(g=>g.id===z.gameId)!),
   guestRoster:s.guests.filter(x=>x.gameId===z.gameId&&x.teamId===tid&&x.status==="approved").map(x=>({id:x.id,name:x.name,number:x.number,position:x.position}))})),listings,matchedListings,
- requests:s.requests.filter(r=>r.teamId===tid||(tid&&isCaptain(s,tid,userId)&&s.games.some(g=>g.id===r.gameId&&g.home===tid))),
+ requests:s.requests.filter(r=>r.teamId===tid||(tid&&isCaptain(s,tid,userId)&&s.games.some(g=>g.id===r.gameId&&g.home===tid)&&!hidTeam(r.teamId)&&!bk.users[String(r.by??"")])),
  // 공지는 고정한 것을 먼저, 그다음 최근에 쓴 것부터 보여준다. 예전에는 저장된
  // 차례(=오래된 것 먼저) 그대로 나가서 새 공지가 아래에 묻혔다.
  notices:s.notices.filter(x=>x.teamId===tid).sort((x,y)=>(y.pinned?1:0)-(x.pinned?1:0)||String(y.at).localeCompare(String(x.at))),notifications:s.notifications.filter(n=>n.userId===userId&&(!n.teamId||active.some(m=>m.teamId===n.teamId)||my.some(m=>m.teamId===n.teamId))),
  // 용병 신청을 받은 팀의 운영진은 신청자 스펙(포지션·주발·지역·팀킥 기록)을, 주장은 키·몸무게까지 본다(2A).
- guests:tid?s.guests.filter(x=>x.teamId===tid).map(x=>["captain","manager"].includes(team?.role)?{...x,spec:guestSpec(s,x.userId,team?.role==="captain")}:x):[],
+ guests:tid?s.guests.filter(x=>x.teamId===tid&&!(x.status==="pending"&&bk.users[String(x.userId??"")])).map(x=>["captain","manager"].includes(team?.role)?{...x,spec:guestSpec(s,x.userId,team?.role==="captain")}:x):[],
  myProfile:s.users.find(x=>x.id===userId)?.profile??null,chatRooms:chatRooms(s,userId),
  myNotify:s.users.find(x=>x.id===userId)?.notify??{off:[],quiet:false},
  // 오늘 생일인 우리 팀 팀원(이름만). 공지 위에 축하 카드로 보여준다.
  birthdaysToday:tid?s.members.filter(m=>m.teamId===tid&&m.status==="active"&&birthdayToday(s.users.find(u=>u.id===m.userId)?.profile)).map(m=>m.name):[],
  myGuests:myGuestRows.map(x=>{const gm=guestGame(x.gameId);return {...x,teamName:teamOf(s,x.teamId)?.name??"",start:gm?.start??"",end:gm?.end??"",venue:gm?.venue??"",gameStatus:gm?.status??""}}),
- guestListings:s.sides.filter(z=>{const gm=guestGame(z.gameId);return guestStatusOf(z)==="open"&&!!gm&&gm.status==="scheduled"&&Date.parse(gm.start)>Date.now()&&teamOf(s,z.teamId)?.status==="active"}).map(z=>{const gm=guestGame(z.gameId)!;return {id:z.id,gameId:gm.id,teamId:z.teamId,teamName:teamOf(s,z.teamId)?.name??"",start:gm.start,end:gm.end,venue:gm.venue,address:gm.address,region:gm.region,format:gm.format,cost:gm.cost,secured:gm.secured,needed:z.guestNeeded??0,approved:approvedGuests(s,gm.id,z.teamId),fee:z.guestFee??0,feeNote:z.guestFeeNote??"",deposit:z.guestDeposit??0,minPlay:z.guestMinPlay??"",positions:z.guestPositions??null,positionsLeft:guestPositionsLeft(s,z),applied:myGuestRows.find(x=>x.gameId===gm.id&&x.teamId===z.teamId&&["pending","approved"].includes(x.status))?.status??""}}),
+ guestListings:s.sides.filter(z=>{const gm=guestGame(z.gameId);return guestStatusOf(z)==="open"&&!!gm&&gm.status==="scheduled"&&Date.parse(gm.start)>Date.now()&&teamOf(s,z.teamId)?.status==="active"&&!hidTeam(z.teamId)}).map(z=>{const gm=guestGame(z.gameId)!;return {id:z.id,gameId:gm.id,teamId:z.teamId,teamName:teamOf(s,z.teamId)?.name??"",start:gm.start,end:gm.end,venue:gm.venue,address:gm.address,region:gm.region,format:gm.format,cost:gm.cost,secured:gm.secured,needed:z.guestNeeded??0,approved:approvedGuests(s,gm.id,z.teamId),fee:z.guestFee??0,feeNote:z.guestFeeNote??"",deposit:z.guestDeposit??0,minPlay:z.guestMinPlay??"",positions:z.guestPositions??null,positionsLeft:guestPositionsLeft(s,z),applied:myGuestRows.find(x=>x.gameId===gm.id&&x.teamId===z.teamId&&["pending","approved"].includes(x.status))?.status??""}}),
  invites:s.invites.filter(x=>x.teamId===tid&&team?.role==="captain"),audit:owner?s.audit.slice(-100).reverse():[]};
 }
 // --- 채팅(1.16) ---

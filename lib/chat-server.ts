@@ -51,20 +51,21 @@ export async function markRead(accountId:string,room:string,at:string){
 }
 
 // 방마다 안 읽은 개수(내가 보낸 것 제외, 99까지)와 마지막 메시지. 1.17: 방마다 세 번씩 차례로 묻던 것을 한 번에 묶는다.
-export async function roomSummaries(accountId:string,rooms:string[]){
+export async function roomSummaries(accountId:string,rooms:string[],hidden:Record<string,unknown>={}){
  const out:Record<string,{unread:number;last:{name:string;body:string;at:string}|null;readAt:string}>={};
  const list=rooms.slice(0,40);if(!list.length)return out;
  const d=db();const qs:D1PreparedStatement[]=[];
  for(const room of list){
   qs.push(d.prepare(`SELECT (SELECT at FROM chat_reads WHERE id=?) AS read_at,
    (SELECT COUNT(*) FROM (SELECT 1 FROM chat_messages WHERE room=? AND at>COALESCE((SELECT at FROM chat_reads WHERE id=?),'') AND account_id<>? AND deleted=0 LIMIT 99)) AS unread`).bind(accountId+"|"+room,room,accountId+"|"+room,accountId));
-  qs.push(d.prepare(`SELECT name,body,at,deleted FROM chat_messages WHERE room=? ORDER BY at DESC LIMIT 1`).bind(room));
+  qs.push(d.prepare(`SELECT account_id,name,body,at,deleted FROM chat_messages WHERE room=? ORDER BY at DESC LIMIT 1`).bind(room));
  }
  const res=await d.batch(qs);
  list.forEach((room,i)=>{
   const a=(res[i*2].results?.[0]??{}) as {read_at?:string|null;unread?:number};
-  const last=(res[i*2+1].results?.[0]??null) as {name:string;body:string;at:string;deleted:number}|null;
-  out[room]={unread:Number(a.unread??0),readAt:String(a.read_at??""),last:last?{name:last.name,body:last.deleted?"삭제된 메시지":last.body.slice(0,60),at:last.at}:null};
+  const last=(res[i*2+1].results?.[0]??null) as {account_id:string;name:string;body:string;at:string;deleted:number}|null;
+  // 1.26 내가 차단한 사람의 마지막 글은 목록 미리보기에도 내용을 싣지 않는다.
+  out[room]={unread:Number(a.unread??0),readAt:String(a.read_at??""),last:last?{name:last.name,body:last.deleted?"삭제된 메시지":hidden[last.account_id]?"차단한 사용자의 메시지":last.body.slice(0,60),at:last.at}:null};
  });
  return out;
 }

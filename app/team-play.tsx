@@ -8,6 +8,7 @@ import {toast} from "sonner";
 import {SQUAD_NAMES,summaries,periodRange,rankRows,REGIONS,type Row} from "@/lib/model";
 import {PlayerPhoto,koreanDate,time,backNo,opponent} from "./teamkick";
 import {Medal} from "./medal";
+import {SafetyButton} from "./safety";
 
 // --- 공통: 숫자 올리고 내리기 ---
 // 휴대폰에서 작은 숫자 칸을 누르고 키보드를 띄우는 것보다 +/− 가 빠르다(골·도움 입력).
@@ -169,6 +170,7 @@ function RankCard({r,onClose}:{r:Row;onClose:()=>void}){
    <div><dt>활동 지역</dt><dd>{(c.regions??[]).join(", ")||"–"}</dd></div>
    <div><dt>인스타그램</dt><dd>{c.instagram?<a href={"https://instagram.com/"+encodeURIComponent(c.instagram)} target="_blank" rel="noopener noreferrer">@{c.instagram}</a>:"–"}</dd></div>
   </dl>:<p className="small muted">이 선수는 프로필을 공개하지 않았어요. 이름·팀·기록만 보여요.</p>}
+  {!!r.ref&&<div className="safety-row"><SafetyButton small target={{kind:"user",name:String(r.name??""),memberId:String(r.ref)}}/></div>}
  </div>;
 }
 

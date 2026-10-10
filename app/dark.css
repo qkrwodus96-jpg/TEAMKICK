@@ -629,6 +629,15 @@ html[data-theme="dark"] .as-photo{background:#2e2e2e}
 html[data-theme="dark"] .team-alert{background:#e5484d;color:#fff}
 html[data-theme="dark"] .other-team-alert{border:1px solid #563c3c;background:#281616;color:#de928c}
 html[data-theme="dark"] .opt-alert{background:#e5484d;color:#fff}
+html[data-theme="dark"] .safety-box{border:1px solid var(--border);background:var(--card)}
+html[data-theme="dark"] .safety-list{color:#bebebe}
+html[data-theme="dark"] .safety-done{color:#a5e5c7}
+html[data-theme="dark"] .safety-link{color:#aeaeae}
+html[data-theme="dark"] .help-item{border:1px solid var(--border);background:var(--card);color:inherit}
+html[data-theme="dark"] .help-item svg{color:#a5e5c7}
+html[data-theme="dark"] .help-item small{color:#aeaeae}
+html[data-theme="dark"] .chat-blocked{color:#9e9e9e}
+html[data-theme="dark"] .chat-menu-ask{color:#bebebe}
 html[data-theme="dark"]{--band:#08080a}
 html[data-theme="dark"] .switch::after{background:#ececee}
 html[data-theme="dark"] .seg{background:#232328}
@@ -642,4 +651,5 @@ html[data-theme="dark"] .main-column>section.panel,html[data-theme="dark"] .righ
 html[data-theme="dark"] .rec-block+.rec-block{border-top:0;margin-inline:0;padding-inline:0}
 html[data-theme="dark"] .rec-block>[data-slot=tabs]>[data-slot=tabs-content]>section.panel:first-child{padding:16px 12px;border-top:1px solid #3a3a41}
 html[data-theme="dark"] .bottom-nav{border-top-color:#2c2c32}
+html[data-theme="dark"] .chip-mini.on{background:#3fbf6a;border-color:#3fbf6a;color:#08140d}
 html[data-theme="dark"] .podium-step,html[data-theme="dark"] .place-1 .podium-step,html[data-theme="dark"] .place-2 .podium-step,html[data-theme="dark"] .place-3 .podium-step{background:linear-gradient(180deg,#3a3e44 0,#2c2f34 100%);border-top:3px solid #3fbf6a}

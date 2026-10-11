@@ -2,7 +2,7 @@
 // 저장소가 공개라 Actions 기록도 공개다. 그래서 출력은 버전·상태 코드·예약 실행 숫자만. 요청 내용·헤더·개인정보는 찍지 않는다.
 // 1) /api/health 공개 부분(version·build·database) 2) /api/cron 을 비밀값 없이 → 401 이어야 정상
 // 3) MINUTES 분 동안 worker 로그(wrangler tail)를 보다가 예약 실행(scheduled) 1건을 찾아 결과만 출력.
-import {spawn} from "node:child_process";
+import {spawn,execFileSync} from "node:child_process";
 
 const SITE=process.env.SITE||"https://teamkick.co.kr";
 const MINUTES=Math.max(0,Math.min(15,Number(process.env.MINUTES??"11")||0));
@@ -57,8 +57,19 @@ function tail(){
  });
 }
 
+// 운영 데이터베이스의 표 이름만 본다(내용은 읽지 않는다). 새 표가 실제로 생겼는지 확인용.
+function tables(){
+ try{
+  const out=execFileSync(process.execPath,["node_modules/wrangler/bin/wrangler.js","d1","execute","teamkick-db","--remote","--json","--command","SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"],{encoding:"utf8",stdio:["ignore","pipe","ignore"]});
+  const j=JSON.parse(out);const names=(j[0]?.results??[]).map(r=>String(r.name)).filter(n=>!n.startsWith("_cf_")&&!n.startsWith("sqlite_"));
+  console.log("표 "+names.length+"개: "+names.join(", "));
+  return names;
+ }catch(e){bad("표 목록을 읽지 못했어요: "+String(e.message??e).slice(0,120));return []}
+}
+
 if(import.meta.url===`file://${process.argv[1]}`){
  await web().catch(e=>bad("사이트 접속 실패: "+String(e).slice(0,120)));
+ if(process.env.CLOUDFLARE_API_TOKEN){const need=(process.env.TABLES||"").split(",").map(x=>x.trim()).filter(Boolean);const have=tables();for(const t of need)if(!have.includes(t))bad("표가 없어요: "+t)}
  if(MINUTES>0){
   if(!process.env.CLOUDFLARE_API_TOKEN)bad("CLOUDFLARE_API_TOKEN 이 없어 예약 실행 로그를 못 봐요");
   else{

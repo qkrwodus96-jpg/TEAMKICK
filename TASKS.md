@@ -13,7 +13,8 @@
 - [x] `docs/store/`: 설명·데이터 보안 양식 초안·콘텐츠 등급·올리는 순서, 아이콘 512, 그래픽 1024×500, 스크린샷 5장(샘플 팀, 앱 모드).
 - [x] 패키지 이름 `kr.co.teamkick`(사장님 결정, 2026-10-11). 사장님이 `ANDROID_KEY_PASSWORD` 넣음 → Android upload key 실행 → `android/upload-key.p12`(업로드 키 SHA-256 `CE:0D:EB:3B:71:FE:16:6C:F3:F8:76:B7:69:C9:AE:F7:CA:BD:58:ED:D5:C4:96:A3:AF:88:3B:9E:A3:BA:83:3A`).
 - [x] `/.well-known/assetlinks.json` 에 업로드 키 지문. [ ] Play 앱 서명 키 지문은 첫 업로드 뒤 Play Console 앱 무결성에서 받아 추가.
-- [ ] 사장님: 심사용 계정 방식 결정, Play Console 첫 업로드 뒤 앱 서명 키 SHA-256 알려주기.
+- [x] 서명 빌드 성공(main, run 38149418954): AAB 1.45MB·APK 1.36MB, 서명 지문 = assetlinks 지문. 운영 assetlinks 확인.
+- [ ] 사장님: 심사용 계정 방식 결정, Play Console 첫 업로드 뒤 앱 서명 키 SHA-256 알려주기, (선택) APK 를 안드로이드 폰에 설치해 주소창 없이 열리는지 확인.
 
 ## T97 1.29.0 — 웹 계정 삭제 안내 + 정지 회피 재가입 막기(2026-10-11)
 

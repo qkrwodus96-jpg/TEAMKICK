@@ -4407,3 +4407,46 @@ test('1.28.1 팀 정지 기간: 3·7·30일은 끝나면 저절로 풀리고(저
   assert.equal(restoreExpiredTeams(f.s,NOW+400*DAY),0);assert.equal(f.s.teams.find(t=>t.id===f.c).status,'suspended');
   command(f.s,owner,{type:'restoreTeam',teamId:f.c});assert.equal(f.s.teams.find(t=>t.id===f.c).status,'active');
 });
+
+// --- 1.29 정지 중 탈퇴 → 재가입 ---
+test('1.29 정지 중 탈퇴하면 로그인 수단 해시만 남고, 같은 수단으로 다시 가입하면 남은 정지가 이어진다',async()=>{
+  const db=localDatabase();const now=Date.now();
+  const first=await auth.signInWithKakao('k-777','정지된사람',now);
+  await auth.closeAccount(first.user.userId,now,{until:new Date(now+7*DAY).toISOString(),reason:'반복 욕설'});
+  const rows=db.prepare('SELECT * FROM suspension_holds').all();assert.equal(rows.length,1);
+  assert.ok(!JSON.stringify(rows).includes('k-777')&&!JSON.stringify(rows).includes('정지된사람'),'로그인 번호·이름 원문은 남기지 않는다');
+  assert.match(rows[0].id,/^[0-9a-f]{64}$/);
+  // 다른 카카오 계정은 상관없다
+  const other=await auth.signInWithKakao('k-888','다른사람',now);
+  assert.equal(db.prepare('SELECT hold_until FROM accounts WHERE id=?').get(other.user.userId).hold_until,null);
+  // 같은 카카오로 다시 가입 → 계정 줄로 옮기고 해시는 지운다
+  const again=await auth.signInWithKakao('k-777','다시왔음',now+DAY);
+  assert.notEqual(again.user.userId,first.user.userId);
+  const acc=db.prepare('SELECT hold_until,hold_reason FROM accounts WHERE id=?').get(again.user.userId);
+  assert.ok(acc.hold_until&&acc.hold_reason==='반복 욕설');
+  assert.equal(db.prepare('SELECT count(*) AS n FROM suspension_holds').get().n,0);
+  // 이메일 계정도 같은 이메일로 다시 가입하면 이어진다. 정지 기간이 이미 끝났으면 남기지 않는다.
+  const e1=await register({email:'bad@t.com',name:'이메일',password:'teamkick-1234'});
+  await auth.closeAccount(e1.user.userId,now,{until:'',reason:'사기'});
+  const e2=await register({email:'BAD@t.com',name:'이메일2',password:'teamkick-1234'});
+  assert.equal(db.prepare('SELECT hold_until FROM accounts WHERE id=?').get(e2.user.userId).hold_until,'','기간 없음도 이어진다');
+  const k1=await auth.signInWithKakao('k-999','끝난사람',now);
+  await auth.closeAccount(k1.user.userId,now,{until:new Date(now-1000).toISOString(),reason:'x'});
+  assert.equal(db.prepare('SELECT count(*) AS n FROM suspension_holds').get().n,0,'끝난 정지는 남기지 않는다');
+  // 정지 없이 탈퇴하면 아무것도 남기지 않는다
+  const k2=await auth.signInWithKakao('k-1000','보통사람',now);await auth.closeAccount(k2.user.userId,now);
+  assert.equal(db.prepare('SELECT count(*) AS n FROM suspension_holds').get().n,0);
+});
+
+test('1.29 다시 가입한 계정의 남은 정지는 첫 저장 때 한 번만 걸리고, 운영자가 풀면 다시 걸리지 않는다',()=>{
+  const f=fixture();const hold={until:iso(NOW+5*DAY),reason:'반복 욕설'};const back={id:'back',name:'돌아온 사람',hold};
+  assert.throws(()=>command(f.s,back,{type:'joinTeam',teamId:f.a,name:'돌아온',position:'MF',number:7}),/이용을 정지.*탈퇴 전 이용 정지가 이어져요/);
+  command(f.s,back,{type:'askSupport',message:'억울해요'});
+  assert.ok(visibleState(f.s,'back').mySuspension);
+  command(f.s,owner,{type:'unsuspendUser',userId:'back'});
+  command(f.s,back,{type:'joinTeam',teamId:f.a,name:'돌아온',position:'MF',number:7});
+  assert.ok(f.s.members.some(m=>m.userId==='back'),'풀린 뒤에는 다시 걸지 않는다');
+  // 이미 끝난 정지는 걸지 않는다
+  const late={id:'late',name:'늦게',hold:{until:iso(NOW-DAY),reason:'x'}};
+  command(f.s,late,{type:'joinTeam',teamId:f.b,name:'늦게',position:'MF',number:8});
+});

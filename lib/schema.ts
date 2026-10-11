@@ -71,13 +71,19 @@ export const STATEMENTS=[
  `CREATE TABLE IF NOT EXISTS user_notifications (id text PRIMARY KEY NOT NULL, user_id text NOT NULL, team_id text, dest text, read integer DEFAULT 0 NOT NULL, at text NOT NULL, body text NOT NULL)`,
  `CREATE INDEX IF NOT EXISTS idx_user_notifications_user_at ON user_notifications (user_id, at)`,
  `CREATE INDEX IF NOT EXISTS idx_user_notifications_dest ON user_notifications (dest)`,
+ // 1.29 이용 정지 중 탈퇴 → 같은 로그인 수단으로 다시 가입하면 남은 정지를 잇는다(lib/auth.ts).
+ // 로그인 수단은 되돌릴 수 없는 값(HMAC)으로만 두고, 정지가 끝나는 때(기간 없음은 1년)에 지운다.
+ `ALTER TABLE accounts ADD COLUMN hold_until text`,
+ `ALTER TABLE accounts ADD COLUMN hold_reason text`,
+ `CREATE TABLE IF NOT EXISTS suspension_holds (id text PRIMARY KEY NOT NULL, until text NOT NULL, reason text NOT NULL, expires text NOT NULL, at text NOT NULL)`,
+ `CREATE INDEX IF NOT EXISTS idx_suspension_holds_expires ON suspension_holds (expires)`,
 ];
 
 // 배포된 코드가 어느 시점 것인지 화면으로 확인하기 위한 표시.
 // 스키마나 진단에 영향을 주는 변경을 할 때 함께 올린다.
-export const BUILD="2026-10-11-1281";
+export const BUILD="2026-10-11-1290";
 
-export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications","push_subs","closed_accounts","social_signups","chat_messages","chat_reads","chat_reports","scope_revisions","schema_meta","user_notifications"];
+export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications","push_subs","closed_accounts","social_signups","chat_messages","chat_reads","chat_reports","scope_revisions","schema_meta","user_notifications","suspension_holds"];
 
 // 카카오만 있던 시절의 계정을 새 열로 옮긴다. 여러 번 돌아도 안전하다.
 export async function backfillAccounts(){

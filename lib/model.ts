@@ -85,6 +85,7 @@ export function prune(s:State,now=Date.now()){
  s.reports=sweep(s.reports,r=>r.status==="open"?Infinity:KEEP.report);
  // 1.28 기간이 끝난 이용 정지는 지운다(정지 기록은 정지 중에만 둔다. 운영 기록은 audit 90일).
  for(const u of s.users)if(u.suspended?.until&&Date.parse(u.suspended.until)<=now)delete u.suspended;
+ restoreExpiredTeams(s,now);
  return PRUNE_LIMIT-budget;
 }
 export const setupIncomplete=(e:unknown)=>/no such table|no such column/i.test(String(e));
@@ -424,6 +425,16 @@ export function activeSuspension(row:Row|undefined,now=Date.now()):Row|null{
  return x;
 }
 const kstDay=(v:string)=>{const d=new Date(Date.parse(v)+9*3600e3);return d.getUTCFullYear()+"."+(d.getUTCMonth()+1)+"."+d.getUTCDate()};
+// 기간이 끝난 팀 정지를 푼다. 저장할 때마다(prune)와 예약 실행(10분마다)에서 부른다. 푼 팀 수를 돌려준다.
+export function restoreExpiredTeams(s:State,now=Date.now()){
+ let n=0;
+ for(const team of s.teams){
+  if(team.status!=="suspended"||!team.suspendedUntil||Date.parse(String(team.suspendedUntil))>now)continue;
+  team.status="active";team.reason="";delete team.suspendedUntil;n++;
+  if(team.applicant)userNotice(s,team.applicant,"팀 등록 상태 변경",team.name+" · 이용 정지 기간이 끝나 다시 이용할 수 있어요.",team.id,"team");
+ }
+ return n;
+}
 export function suspensionMessage(x:Row){
  return "운영자가 이용을 정지한 계정이에요"+(x.until?"("+kstDay(String(x.until))+"까지)":"")+". 사유: "+String(x.reason||"운영 정책 위반")+". 이의가 있으면 MY → 고객센터 → 1:1 문의로 알려주세요.";
 }
@@ -464,9 +475,10 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   ensure(owner,"서비스 운영자만 처리할 수 있어요.",403);const team=teamOf(s,t);ensure(team,"팀을 찾을 수 없어요.",404);
   if(type==="approveTeam"){ensure(team!.status==="pending","이미 처리된 신청이에요.",409);team!.status="active";s.members.push({id:id(),teamId:t,userId:team!.applicant,name:team!.applicantName,role:"captain",status:"active",number:1,position:"MF",periods:[{start:stamp}],at:stamp});}
   if(type==="rejectTeam"){ensure(team!.status==="pending","이미 처리된 신청이에요.",409);team!.status="rejected";team!.reason=textValue(c.reason,300);}
-  if(type==="suspendTeam"){ensure(team!.status==="active","활성 팀만 정지할 수 있어요.");team!.status="suspended";team!.reason=textValue(c.reason,300);}
-  if(type==="restoreTeam"){ensure(team!.status==="suspended","정지된 팀이 아니에요.");team!.status="active";team!.reason="";}
-  userNotice(s,team!.applicant,"팀 등록 상태 변경",team!.name+" · "+(TEAM_STATUS[team!.status]??team!.status)+(team!.reason?" · "+team!.reason:""),t,"team");
+  // 1.28.1 팀 정지도 기간을 고른다(3·7·30일, 0·없음 = 해제할 때까지). 기간이 끝나면 restoreExpiredTeams 가 푼다.
+  if(type==="suspendTeam"){ensure(team!.status==="active","활성 팀만 정지할 수 있어요.");const days=Number(c.days??0);ensure((SUSPEND_DAYS as readonly number[]).includes(days),"정지 기간을 골라주세요.");team!.status="suspended";team!.reason=textValue(c.reason,300);team!.suspendedUntil=days?iso(now+days*864e5):"";}
+  if(type==="restoreTeam"){ensure(team!.status==="suspended","정지된 팀이 아니에요.");team!.status="active";team!.reason="";delete team!.suspendedUntil;}
+  userNotice(s,team!.applicant,"팀 등록 상태 변경",team!.name+" · "+(TEAM_STATUS[team!.status]??team!.status)+(team!.status==="suspended"?(team!.suspendedUntil?"("+kstDay(String(team!.suspendedUntil))+"까지)":"(기간 없음)"):"")+(team!.reason?" · "+team!.reason:""),t,"team");
  }
  else if(type==="joinTeam"){
   ensure(a.verified!==false,"이메일 확인을 먼저 해주세요. 받은 편지함에서 확인 링크를 눌러주세요.",403);

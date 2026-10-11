@@ -98,8 +98,9 @@ function ReportActions({r,v,busy,save,note}:{r:Row;v:Row;busy:boolean;save:Save;
   </div>}
   {ask==="takedown"&&<div className="safety-box"><p>매칭·용병 모집을 닫고 대기 중인 신청도 닫아요. 팀은 이 모집을 다시 열 수 없어요. 팀 운영진에게 사유와 함께 알려요.</p>
    {confirmRow("내리기",()=>save({type:"takedownListing",gameId:r.gameId,teamId:r.targetTeamId,reason:r.reason},()=>done("모집글을 내렸어요.")))}</div>}
-  {ask==="team"&&<div className="safety-box"><p>팀 전체를 정지해요(팀 화면·모집이 멈춰요). 서비스 관리 → 팀에서 다시 풀 수 있어요.</p>
-   {confirmRow("팀 정지",()=>save({type:"suspendTeam",teamId:r.targetTeamId,reason:r.reason},()=>done("팀을 정지했어요.")))}</div>}
+  {ask==="team"&&<div className="safety-box"><p>팀 전체를 정지해요(팀 화면·모집이 멈춰요). 기간이 끝나면 저절로 풀리고, 서비스 관리 → 팀에서 먼저 풀 수도 있어요.</p>
+   <div className="chip-row" role="radiogroup" aria-label="팀 정지 기간">{SUSPEND_CHOICES.map(([d,l])=><button type="button" key={d} role="radio" aria-checked={days===d} className={"chip-mini"+(days===d?" on":"")} onClick={()=>setDays(d)}>{l}</button>)}</div>
+   {confirmRow("팀 정지",()=>save({type:"suspendTeam",teamId:r.targetTeamId,reason:r.reason,days},()=>done("팀을 정지("+(SUSPEND_CHOICES.find(x=>x[0]===days)?.[1])+")했어요.")))}</div>}
   {msg&&<p className="data-note" role="status">{msg}</p>}
  </div>;
 }

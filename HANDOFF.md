@@ -21,7 +21,8 @@ PR #21 은 2026-09-18 병합 완료(T39-T62), PR #20 은 2026-09-17 병합 완�
 - 서비스가 이제 사장님 Cloudflare 에서 돈다: https://teamkick.co.kr (worker `teamkick`). **main 에 합치면 자동 배포** — GPT 배포 요청은 더 이상 없다. 배포 결과는 GitHub Actions "Deploy to Cloudflare" 로 확인.
 - 이 환경은 teamkick.co.kr·workers.dev·api.cloudflare.com 에 접속하지 못한다. 상태는 Actions 로그나 사장님 캡처로 본다.
 - 처리방침 OpenAI 삭제(LEGAL.md 2-23). 위탁 변경 공지는 사장님이 올린다.
-- 사장님 남은 일: MIGRATE_SECRET 삭제(양쪽), cron-job.org 기록 확인, 가비아 안전잠금, 1~2주 뒤 GPT Sites 데이터 삭제, Brevo 백업 코드 재발급, Play Console 주소 서류(평일), 테스터 15명.
+- 사장님이 MIGRATE_SECRET 양쪽 삭제·health 1.27.2 확인·위탁 변경 공지 게시 완료(2026-10-11). 이제 /api/migrate 는 닫혀 있다(404).
+- 사장님 남은 일: cron-job.org 기록 확인, 가비아 안전잠금, 1~2주 뒤 GPT Sites 데이터 삭제, Brevo 백업 코드 재발급, Play Console 주소 서류(평일), 테스터 15명.
 - 다음 개발: 운영자 관리 도구(메시지 삭제·이용 정지 — Play 정식 출시 전 필요) → 웹 계정 삭제 페이지 → TWA assetlinks·스토어 자료 → 새 문구 번역. 나중: MAIL_FROM 을 teamkick.co.kr 발신으로.
 
 ### 2026-10-11 (42) 시험 복사 성공 · 네임서버 Cloudflare 로 변경

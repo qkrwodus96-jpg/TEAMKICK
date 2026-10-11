@@ -13,7 +13,8 @@
 - [x] 이전 완료(사장님 확인 "다 돼"): ③ 마지막 복사 모두 일치(entities 547), 옛 서버 잠김. teamkick.co.kr 의 A 레코드 2개 삭제 → worker `teamkick` 사용자 지정 도메인 연결. 로그인 유지·데이터·사진·저장·서비스 관리·시험 알림 모두 정상.
 - [x] 처리방침 5·10항에서 OpenAI 삭제, `LEGAL_VERSION` 2026-10-11, 검토 묶음 다시 만듦(LEGAL.md 2-23).
 - [x] 문서: ARCHITECTURE·CLAUDE.md 주소 예시를 teamkick.co.kr 로, 절차서에 완료 표시.
-- [ ] 사장님: `MIGRATE_SECRET` 삭제(Cloudflare 는 새로고침 뒤, GPT Sites 도), cron-job.org 실행 기록 확인, 위탁 변경 공지 올리기, 가비아 안전잠금 다시 켜기, 1~2주 뒤 GPT Sites 데이터 삭제 요청.
+- [x] 사장님(2026-10-11): `MIGRATE_SECRET` 양쪽 삭제, health 1.27.2 확인, 위탁 변경 공지 올림.
+- [ ] 사장님: cron-job.org 실행 기록 확인, 가비아 안전잠금 다시 켜기, 1~2주 뒤 GPT Sites 데이터 삭제 요청.
 
 ## T93 1.27.1 — 새 알림 키 버튼(2026-10-11)
 

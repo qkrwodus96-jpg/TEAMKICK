@@ -1,6 +1,6 @@
 import {load,commit,cleanupNotifications} from "@/lib/store";
 import {frozen} from "@/lib/migrate";
-import {gameReminders,birthdayNotices,iso,pushTargets} from "@/lib/model";
+import {gameReminders,birthdayNotices,iso,pushTargets,restoreExpiredTeams} from "@/lib/model";
 import {ensureSchema} from "@/lib/schema";
 import {wakeDevices} from "@/lib/push";
 import {cronAuthorized,cronReady} from "@/lib/cron";
@@ -27,13 +27,15 @@ async function run(req:Request){
   for(let attempt=0;attempt<4;attempt++){
    const now=Date.now();const {state,version}=await load();const after=structuredClone(state);
    const {sides}=gameReminders(after,now);const {people:birthdays}=birthdayNotices(after,now);
-   if(!sides&&!birthdays)return json({ok:true,at:iso(now),reminded:0,birthdays:0,people:0,weather:wx.saved});
+   // 1.28.1 기간이 끝난 팀 정지를 푼다(아무도 저장하지 않아도 10분 안에 풀리게).
+   const restored=restoreExpiredTeams(after,now);
+   if(!sides&&!birthdays&&!restored)return json({ok:true,at:iso(now),reminded:0,birthdays:0,people:0,weather:wx.saved});
    try{await commit(state,after,version)}
    catch(e){if(String(e).includes("revision_matches")||String(e).includes("CHECK constraint")){if(attempt<3)continue}throw e}
    const had=new Set(state.notifications.map(x=>x.id));
    const woken=pushTargets(after,after.notifications.filter(x=>!had.has(x.id)),now);
    const d=woken.length?await wakeDevices(woken).catch(e=>{console.error("TeamKick cron push",e);return null}):null;
-   return json({ok:true,at:iso(now),reminded:sides,birthdays,people:woken.length,sent:d?.sent??0,failed:d?.failed??0,weather:wx.saved});
+   return json({ok:true,at:iso(now),reminded:sides,birthdays,restored,people:woken.length,sent:d?.sent??0,failed:d?.failed??0,weather:wx.saved});
   }
   return json({ok:false,error:"busy"},409);
  }catch(e){console.error("TeamKick cron",e);return json({ok:false,error:"cron failed"},503)}

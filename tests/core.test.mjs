@@ -57,7 +57,7 @@ compile('app/api/migrate/route.ts','migrate-api.mjs',s=>s.replace('"@/lib/model"
 compile('app/api/chat/route.ts','chat-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store-some"','"./store-some.mjs"').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/chat-server"','"./chat-server.mjs"'));
 compile('lib/close.ts','close.mjs',s=>s.replace('"./store"','"./store.mjs"').replace('"./model"','"./model.mjs"').replace('"./auth"','"./auth.mjs"').replace('"./unlink"','"./unlink.mjs"'));
 globalThis.__teamkickTestEnv={};
-const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp,mvpView,mvpWinners,periodRange,rankRows,nationalRanking,rankPhotoOpen,canSeeGame,gameTitle}=await import(path.join(runtime,'model.mjs'));
+const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp,mvpView,mvpWinners,periodRange,rankRows,nationalRanking,rankPhotoOpen,canSeeGame,gameTitle,restoreExpiredTeams}=await import(path.join(runtime,'model.mjs'));
 const {whenText,whenRange}=await import(path.join(runtime,'when.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
 const auth=await import(path.join(runtime,'auth.mjs'));
@@ -3629,7 +3629,7 @@ test('예약 실행(/api/cron): 비밀값이 맞을 때만, 알림은 한 번만
   globalThis.__teamkickTestWoken=[];
   const first=await call('Bearer '+secret);assert.equal(first.status,200);
   const body=await first.json();assert.equal(body.reminded,1);assert.equal(body.people,2);
-  assert.deepEqual(Object.keys(body).sort(),['at','birthdays','failed','ok','people','reminded','sent','weather'],'누구에게 보냈는지는 담지 않는다');
+  assert.deepEqual(Object.keys(body).sort(),['at','birthdays','failed','ok','people','reminded','restored','sent','weather'],'누구에게 보냈는지는 담지 않는다(숫자만)');
   assert.deepEqual([...globalThis.__teamkickTestWoken].sort(),['a','player'],'저장 뒤 기기를 깨운다');
   // 1.25 알림은 받는 사람별 표(user_notifications)에 저장된다.
   assert.equal(db.prepare("SELECT body FROM user_notifications").all().map(r=>JSON.parse(r.body)).filter(x=>/^오늘/.test(x.title)).length,2,'DB에 저장된다');
@@ -4389,4 +4389,21 @@ test('1.28 채팅: 운영자만 남의 메시지를 지우고, 정지된 사람�
   res=await post(member,{action:'send',room:'team:'+f.a,body:'또 보냄'});assert.equal(res.status,403);
   assert.match((await res.json()).error,/이용을 정지/);
   res=await post(A,{action:'send',room:'team:'+f.a,body:'괜찮아요'});assert.equal(res.status,200,'다른 사람은 그대로');
+});
+
+test('1.28.1 팀 정지 기간: 3·7·30일은 끝나면 저절로 풀리고(저장·예약 실행), 기간 없음은 복구할 때까지',()=>{
+  const f=fixture();
+  assert.throws(()=>command(f.s,owner,{type:'suspendTeam',teamId:f.b,reason:'노쇼',days:5}),/정지 기간/);
+  command(f.s,owner,{type:'suspendTeam',teamId:f.b,reason:'노쇼 반복',days:7});
+  const team=f.s.teams.find(t=>t.id===f.b);assert.equal(team.status,'suspended');assert.ok(team.suspendedUntil);
+  assert.ok(f.s.notifications.some(n=>n.userId==='b'&&n.body.includes('까지')&&n.body.includes('노쇼 반복')));
+  assert.equal(restoreExpiredTeams(f.s,NOW+6*DAY),0,'기간 안에는 그대로');
+  assert.equal(restoreExpiredTeams(f.s,NOW+8*DAY),1);assert.equal(team.status,'active');assert.equal(team.suspendedUntil,undefined);
+  assert.ok(f.s.notifications.some(n=>n.userId==='b'&&n.body.includes('다시 이용')));
+  // 저장할 때(prune)도 푼다
+  command(f.s,owner,{type:'suspendTeam',teamId:f.b,reason:'x',days:3});prune(f.s,NOW+4*DAY);assert.equal(team.status,'active');
+  // 기간 없음(예전처럼 days 를 안 보내도 같다)
+  command(f.s,owner,{type:'suspendTeam',teamId:f.c,reason:'사기'});
+  assert.equal(restoreExpiredTeams(f.s,NOW+400*DAY),0);assert.equal(f.s.teams.find(t=>t.id===f.c).status,'suspended');
+  command(f.s,owner,{type:'restoreTeam',teamId:f.c});assert.equal(f.s.teams.find(t=>t.id===f.c).status,'active');
 });

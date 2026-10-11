@@ -1,0 +1,56 @@
+name: Android build
+
+# Play 스토어에 올릴 앱 파일(AAB)과 바로 설치해 볼 APK 를 만든다. android/ 는 웹(teamkick.co.kr)을 띄우는 TWA 앱이라
+# 웹을 고치면 앱을 다시 만들 필요가 없다. 아이콘·이름·주소 등 앱 설정을 바꿀 때만 versionCode 를 올려 다시 만든다.
+# 결과: 이 실행 화면 아래 Artifacts 의 teamkick-android(파일은 공개 앱이라 비밀이 아니다).
+on:
+  workflow_dispatch:
+    inputs:
+      versionCode:
+        description: "앱 버전 번호(올릴 때마다 1씩 올리기)"
+        required: true
+        default: "1"
+      versionName:
+        description: "보여줄 버전 이름"
+        required: true
+        default: "1.0.0"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0" > /dev/null
+      - name: Build
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon bundleRelease assembleRelease -PversionCode=${{ github.event.inputs.versionCode }} -PversionName=${{ github.event.inputs.versionName }}
+      - name: Signing check
+        working-directory: android
+        run: |
+          if [ -f upload-key.p12 ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
+            echo "업로드 키로 서명했어요. 인증서 SHA-256:"
+            keytool -list -v -keystore upload-key.p12 -storetype PKCS12 -storepass:env ANDROID_KEY_PASSWORD | grep 'SHA256:'
+          else
+            echo "::warning::업로드 키가 없어 서명하지 않았어요(빌드 확인용). 스토어에 올리려면 Android upload key 를 먼저 실행하세요."
+          fi
+          ls -la app/build/outputs/bundle/release app/build/outputs/apk/release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: teamkick-android-${{ github.event.inputs.versionCode }}
+          path: |
+            android/app/build/outputs/bundle/release/*.aab
+            android/app/build/outputs/apk/release/*.apk
+          retention-days: 30

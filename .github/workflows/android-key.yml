@@ -1,0 +1,35 @@
+name: Android upload key
+
+# 안드로이드 업로드 키를 처음 한 번 만든다(scripts/android-key.mjs). 필요한 값: GitHub 비밀값 ANDROID_KEY_PASSWORD(24자 이상).
+# 만든 키 파일은 비밀번호로 암호화되어 있고, android-upload-key 가지에 올린다(Claude 가 main 에 합침).
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "처음 한 번만 누르세요. MAKE 라고 적으세요"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  key:
+    if: github.event.inputs.confirm == 'MAKE'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: node scripts/android-key.mjs
+      - run: |
+          git config user.name "teamkick-bot"
+          git config user.email "teamkick-bot@users.noreply.github.com"
+          git checkout -b android-upload-key
+          git add android/upload-key.p12
+          git commit -m "안드로이드 업로드 키(비밀번호로 암호화된 PKCS12)"
+          git push origin android-upload-key

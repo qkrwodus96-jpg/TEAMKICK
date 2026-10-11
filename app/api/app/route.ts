@@ -4,7 +4,7 @@ import {storageReady} from "@/lib/images";
 import {placeSearchReady,mapJsKey} from "@/lib/places";
 import {mailReady} from "@/lib/mail";
 import {load,commit,scopeToken,stamp} from "@/lib/store";
-import {applyCommand,visibleState,AppError,iso,prune,setupIncomplete,SETUP_MESSAGE,pushTargets,type State} from "@/lib/model";
+import {applyCommand,visibleState,AppError,iso,prune,setupIncomplete,SETUP_MESSAGE,pushTargets,applyHold,activeSuspension,type State} from "@/lib/model";
 import {checkOwnerCode} from "@/lib/owner-config";
 import {findMessage} from "@/lib/chat-server";
 import {ensureSchema} from "@/lib/schema";
@@ -25,7 +25,7 @@ export async function GET(req:Request){try{const t0=performance.now();await ensu
  // 기록된 운영자의 계정이 사라졌으면 다시 등록할 수 있어야 한다. 그렇지 않으면 아무도 운영자가 될 수 없다.
  const ownerId=state.settings.find(x=>x.id==="owner")?.userId;
  const ownerMissing=!!ownerId&&ownerId!==user.userId&&!(await accountExists(ownerId));
- const scopes=myScopes(state,user.userId);let tView=0;return json({rev:version,scopes,scopeToken:await scopeToken(scopes),storageReady:storageReady(),ownerMissing,placeSearchReady:placeSearchReady(),mapKey:mapJsKey(),mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver"),needsVerification:mailReady()&&!user.verified,invitedTeam:invite?.teamId??null,user:{id:user.userId,name:state.users.find(x=>x.id===user.userId)?.name??user.fullName??"팀원",provider:user.provider??"local"},...(()=>{const t2=performance.now();const out=visibleState(state,user.userId,teamId);tView=since(t2);return out})()},200,undefined,`schema;dur=${tSchema}, load;dur=${tLoad}, view;dur=${tView}, total;dur=${since(t0)}`);}catch(e){console.error("TeamKick load",e);return json({error:e instanceof AppError?e.message:setupIncomplete(e)?SETUP_MESSAGE:"데이터를 불러오지 못했어요. 다시 시도해주세요."},e instanceof AppError?e.status:503)}}
+ const scopes=myScopes(state,user.userId);let tView=0;return json({rev:version,scopes,scopeToken:await scopeToken(scopes),storageReady:storageReady(),ownerMissing,placeSearchReady:placeSearchReady(),mapKey:mapJsKey(),mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver"),needsVerification:mailReady()&&!user.verified,invitedTeam:invite?.teamId??null,user:{id:user.userId,name:state.users.find(x=>x.id===user.userId)?.name??user.fullName??"팀원",provider:user.provider??"local"},...(()=>{const t2=performance.now();const seenState=user.hold&&!state.users.find(x=>x.id===user.userId)?.holdApplied?(()=>{const c=structuredClone(state);applyHold(c,user.userId,user.hold);return c})():state;const out=visibleState(seenState,user.userId,teamId);tView=since(t2);return out})()},200,undefined,`schema;dur=${tSchema}, load;dur=${tLoad}, view;dur=${tView}, total;dur=${since(t0)}`);}catch(e){console.error("TeamKick load",e);return json({error:e instanceof AppError?e.message:setupIncomplete(e)?SETUP_MESSAGE:"데이터를 불러오지 못했어요. 다시 시도해주세요."},e instanceof AppError?e.status:503)}}
 export async function POST(req:Request){
  try{
   await ensureSchema();await assertWritable();
@@ -54,11 +54,12 @@ export async function POST(req:Request){
    if(state.audit.filter(x=>x.actor===user.userId&&Date.parse(x.at)>Date.now()-60000).length>=40)throw new AppError("잠시 후 다시 시도해주세요.",429);
    const ownerId=state.settings.find(x=>x.id==="owner")?.userId;
    const ownerReset=c.type==="setupOwner"&&!!ownerId&&ownerId!==user.userId&&!(await accountExists(ownerId));
-   const after=structuredClone(state);const output=applyCommand(after,{id:user.userId,name:user.fullName??state.users.find(x=>x.id===user.userId)?.name??"팀원",ownerSetup:setup,ownerReset,verified:!mailReady()||!!user.verified},c);
+   const after=structuredClone(state);const output=applyCommand(after,{id:user.userId,name:user.fullName??state.users.find(x=>x.id===user.userId)?.name??"팀원",ownerSetup:setup,ownerReset,verified:!mailReady()||!!user.verified,hold:user.hold},c);
    after.receipts.push({id:user.userId+":"+c.mutationId,output,at:iso()});prune(after);
    try{
     await commit(state,after,version);stamp(after,version+1);
-    if(c.type==="closeAccount"){await closeAccount(user.userId);return json({ok:true,closed:true},200,clearedCookie())}
+    // 1.29 정지 중 탈퇴면 남은 정지를 로그인 수단(해시)에 남긴다(재가입 때 이어짐).
+    if(c.type==="closeAccount"){const sus=activeSuspension(state.users.find(x=>x.id===user.userId));await closeAccount(user.userId,Date.now(),sus?{until:String(sus.until??""),reason:String(sus.reason??"")}:null);return json({ok:true,closed:true},200,clearedCookie())}
     // 저장이 끝난 뒤에만 기기를 깨운다. 실패해도 저장을 되돌리지 않는다.
     // 이번 저장으로 새로 생긴 알림을 받은 사람만 대상이다.
     const had=new Set(state.notifications.map(x=>x.id));

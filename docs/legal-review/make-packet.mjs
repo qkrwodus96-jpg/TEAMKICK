@@ -9,7 +9,7 @@ const require=createRequire(import.meta.url);
 const {Document,Packer,Paragraph,TextRun,HeadingLevel,Table,TableRow,TableCell,WidthType,ShadingType,AlignmentType,LevelFormat,BorderStyle,PageBreak}=require("docx");
 
 const root=path.resolve(path.dirname(new URL(import.meta.url).pathname),"../..");
-const DATE="2026-10-11",VERSION="1.28.0";
+const DATE="2026-10-11",VERSION="1.29.0";
 // lib/legal.ts 는 문자열 상수뿐이라 타입 없이 그대로 계산할 수 있다.
 const src=fs.readFileSync(path.join(root,"lib/legal.ts"),"utf8").replace(/^export const /gm,"const ");
 const {LEGAL_VERSION,TERMS,PRIVACY}=new Function(src+"\nreturn {LEGAL_VERSION,TERMS,PRIVACY};")();
@@ -146,6 +146,7 @@ const questions=[
  "**[새·예정 기능] 용병 가능 등록**: 개인이 '이 날 뛸 수 있어요'(지역·포지션)를 올리고, 팀은 팀킥 대화로만 연락합니다(연락처 비공개). 추가로 주의할 점이 있나요?",
  "**[새] 호스팅 이전**: 2026-10-11 OpenAI(ChatGPT Sites)에서 운영자 본인의 Cloudflare 계정으로 옮겼습니다(Cloudflare 는 원래 위탁·국외 이전 대상에 있었음). 처리방침의 위탁 표를 고치고 운영자가 앱 공지사항으로 알립니다. 옛 호스팅의 정보는 이전 확인 뒤 파기를 요청합니다. 이 정도 절차로 충분한가요?",
  "**[새] 운영자 조치**: 신고를 받으면 운영자가 채팅 메시지 삭제·모집글 내리기·이용 정지(3일·7일·30일·기간 없음)를 하고, 정지된 사람에게 사유와 기간을 알리며 정지 중에도 1:1 문의(이의 제기)·탈퇴는 열어 둡니다(약관 제5조). 사전 경고 없이 바로 정지하는 것, '기간 없음' 정지, 정지 기록을 정지가 끝나면 지우는 것이 괜찮은가요? 소명 절차를 더 갖춰야 하나요?",
+ "**[새] 정지 회피 재가입 막기**: 이용 정지 중에 탈퇴하면 로그인 수단(카카오·구글·네이버 회원번호 또는 이메일)을 HMAC 으로 바꾼 값과 남은 정지 기간·사유만 정지가 끝날 때까지(기간 없는 정지는 최대 1년) 보관하고, 같은 수단으로 다시 가입하면 남은 정지를 잇습니다. 처리방침 3항에 적었습니다. 탈퇴 후 보관의 근거로 이 정도 기재면 충분한가요? 별도 동의가 필요한가요?",
 ];
 
 const limits=[

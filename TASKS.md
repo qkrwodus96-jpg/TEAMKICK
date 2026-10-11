@@ -6,6 +6,14 @@
 `BLOCKED` / `DONE`(실제 실행 결과로 확인). 요구사항 본문은
 `PROJECT_CONTEXT.md`, 구조는 `ARCHITECTURE.md`를 본다.
 
+## T97 1.29.0 — 웹 계정 삭제 안내 + 정지 회피 재가입 막기(2026-10-11)
+
+- [x] `/delete-account` 페이지(앱 탈퇴 방법·메일 요청·지우는 것·남는 것) + [팀킥 열고 탈퇴하기] → `/?to=modal:settings`. 첫 화면 2초 건너뜀.
+- [x] 정지 중 탈퇴 → `suspension_holds`(로그인 수단 HMAC, 남은 정지) → 같은 수단 재가입 시 `accounts.hold_*` → 첫 저장(`applyHold`)에 정지 1회 적용, GET 화면도 안내 표시. 운영자가 풀면 다시 안 걸림. drizzle 0015.
+- [x] 처리방침 3항, LEGAL 2-26, 검토 질문 36번.
+- 검증: 테스트 234/234(새 2개: 해시만 남고 원문 없음·다른 계정 무관·같은 카카오/이메일 재가입 시 이어짐·끝난 정지 안 남김, 정지 1회 적용·해제 후 재적용 안 함), tsc, lint 74/21, 로컬 화면(삭제 안내 페이지, 링크로 설정 창 열림).
+- 사장님: Play Console 데이터 보안 양식의 계정 삭제 URL 에 https://teamkick.co.kr/delete-account
+
 ## T96b 1.28.1 — 팀 정지 기간(2026-10-11, 사장님 확인 "팀 이용정지 3/7/30 고르는 건 없어")
 
 - [x] `suspendTeam` 에 `days`(3·7·30·0, 안 보내면 0=기간 없음), 팀 줄 `suspendedUntil`. `restoreExpiredTeams` 가 저장 때(prune)와 예약 실행(10분마다)에 기간 끝난 팀을 풀고 신청자에게 알림. 예약 실행 응답에 `restored` 숫자 추가.

@@ -1,5 +1,5 @@
 import {load,commit} from "./store";
-import {applyCommand,prune,AppError} from "./model";
+import {applyCommand,prune,AppError,activeSuspension} from "./model";
 import {closeAccount,socialAccountOwner} from "./auth";
 import {unlink,type UnlinkProvider} from "./unlink";
 
@@ -25,11 +25,13 @@ export async function closeEverywhere(userId:string,name:string){
  for(let attempt=0;attempt<4;attempt++){
   const {state,version}=await load();
   const after=structuredClone(state);
+  const sus=activeSuspension(state.users.find(x=>x.id===userId));
   applyCommand(after,{id:userId,name},{type:"closeAccount",mutationId:crypto.randomUUID()});
   prune(after);
   try{await commit(state,after,version)}
   catch(e){if(conflict(e)&&attempt<3)continue;throw e}
-  await closeAccount(userId);
+  // 1.29 정지 중 탈퇴면 남은 정지를 로그인 수단(해시)에 남긴다.
+  await closeAccount(userId,Date.now(),sus?{until:String(sus.until??""),reason:String(sus.reason??"")}:null);
   return;
  }
 }

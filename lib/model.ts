@@ -94,7 +94,7 @@ export const SETUP_MESSAGE="데이터베이스 준비가 아직 끝나지 않았
 // 공개 전까지만 쓰는 진단용. 예상하지 못한 오류의 종류와 앞부분을 응답에 덧붙인다.
 // 개인정보나 키가 들어갈 수 있는 값은 담지 않는다. 공개 전환 전에 없앤다(LEGAL.md).
 
-export type Actor={id:string;name:string;ownerSetup?:boolean;ownerReset?:boolean;verified?:boolean};
+export type Actor={id:string;name:string;ownerSetup?:boolean;ownerReset?:boolean;verified?:boolean;hold?:{until:string;reason:string}|null};
 export class AppError extends Error{constructor(message:string,public status=400){super(message)}}
 export const ensure=(value:any,message:string,status=400)=>{if(!value)throw new AppError(message,status)};
 export const iso=(ms=Date.now())=>new Date(ms).toISOString();
@@ -419,6 +419,16 @@ export const REPORT_REASONS=["욕설·비하","노쇼·약속 불이행","허위
 // 알림 읽기·알림 설정, 1:1 문의(이의 제기), 탈퇴, 팀 나가기·가입 신청 취소·내 용병 신청 철회, 차단·신고, 채팅방 숨기기.
 export const SUSPEND_DAYS=[3,7,30,0] as const;
 const SUSPEND_ALLOWED=new Set(["readNotifications","setNotifyPrefs","askSupport","closeAccount","leaveTeam","cancelJoin","withdrawGuest","blockUser","unblockUser","blockTeam","unblockTeam","report","chatReported","hideChat"]);
+// 1.29 정지 중 탈퇴했다가 같은 로그인 수단으로 다시 가입한 계정(accounts.hold_*)에 남은 정지를 한 번만 옮긴다.
+// 운영자가 풀면 다시 걸지 않도록 holdApplied 를 남긴다. 바꿨으면 true.
+export function applyHold(s:State,userId:string,hold:{until:string;reason:string}|null|undefined,now=Date.now()){
+ if(!hold||isOwner(s,userId))return false;
+ let row=s.users.find(u=>u.id===userId);if(!row){row={id:userId,name:"",at:iso(now)};s.users.push(row)}
+ if(row.holdApplied)return false;
+ row.holdApplied=true;
+ if(!hold.until||Date.parse(hold.until)>now)row.suspended={until:hold.until,reason:"탈퇴 전 이용 정지가 이어져요 · "+String(hold.reason||"운영 정책 위반"),at:iso(now)};
+ return true;
+}
 export function activeSuspension(row:Row|undefined,now=Date.now()):Row|null{
  const x=row?.suspended;if(!x||typeof x!=="object")return null;
  if(x.until&&!(Date.parse(String(x.until))>now))return null;
@@ -461,6 +471,8 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  const type=textValue(c.type,50),t=String(c.teamId??""),stamp=iso(now);let output:any={};
  if(!s.users.find(u=>u.id===a.id))s.users.push({id:a.id,name:a.name,at:stamp});
  const owner=isOwner(s,a.id);
+ // 1.29 다시 가입한 계정에 남은 정지가 있으면 먼저 옮긴다.
+ applyHold(s,a.id,a.hold,now);
  // 1.28 이용 정지 중이면 허용된 명령 말고는 막는다. 화면이 아니라 여기서 막아야 우회할 수 없다.
  const ban=owner?null:activeSuspension(s.users.find(u=>u.id===a.id),now);
  if(ban&&!SUSPEND_ALLOWED.has(type))throw new AppError(suspensionMessage(ban),403);

@@ -51,7 +51,7 @@ export async function verifyPassword(password:string,stored:string){
 
 type Credentials={email?:unknown;password?:unknown;name?:unknown;agree?:unknown;adult?:unknown};
 type AccountRow={id:string;name:string;password:string;failures:number;locked_until:string|null};
-type SessionRow={id:string;name:string;expires:string;verified_at:string|null;provider?:string|null};
+type SessionRow={id:string;name:string;expires:string;verified_at:string|null;provider?:string|null;hold_until?:string|null;hold_reason?:string|null};
 const hashToken=async(token:string)=>toHex(await crypto.subtle.digest("SHA-256",encode(token)));
 
 // 남용 제한. 같은 접속 주소에서 짧은 시간에 반복되는 요청을 막는다.
@@ -130,6 +130,7 @@ export async function signUp(input:Credentials,origin="",now=Date.now()){
   if(String(e).includes("UNIQUE"))throw new AppError("이미 가입된 이메일이에요. 로그인해주세요.",409);
   throw e;
  }
+ await adoptHold(account.id,now);
  // 메일 발송이 준비되어 있을 때만 확인 메일을 보낸다. 보내지 못해도 가입은 되돌리지 않고,
  // 보냈는지 여부를 그대로 돌려줘 화면이 사실과 다르게 안내하지 않도록 한다.
  let verificationSent=false;
@@ -180,11 +181,13 @@ export async function currentUser(req:Request,now=Date.now()){
  const token=cookieValue(req.headers.get("cookie"),COOKIE);
  if(!token)return null;
  const row=await db().prepare(
-  "SELECT a.id AS id, a.name AS name, a.verified_at AS verified_at, a.provider AS provider, s.expires AS expires FROM sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=?"
+  "SELECT a.id AS id, a.name AS name, a.verified_at AS verified_at, a.provider AS provider, a.hold_until AS hold_until, a.hold_reason AS hold_reason, s.expires AS expires FROM sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=?"
  ).bind(await hashToken(token)).first<SessionRow>();
  if(!row)return null;
  if(Date.parse(row.expires)<=now){await db().prepare("DELETE FROM sessions WHERE id=?").bind(await hashToken(token)).run();return null}
- return {userId:row.id,fullName:row.name,verified:!!row.verified_at,provider:row.provider??"local"};
+ return {userId:row.id,fullName:row.name,verified:!!row.verified_at,provider:row.provider??"local",
+  // 1.29 다시 가입한 계정에 남은 정지가 있을 때만 싣는다.
+  ...(row.hold_until!=null?{hold:{until:String(row.hold_until),reason:String(row.hold_reason??"")}}:{})};
 }
 
 // 이 팀킥 계정이 그 사업자의 그 사람으로 가입한 것인지. 탈퇴 전에 본인 확인으로 쓴다.
@@ -207,7 +210,9 @@ export async function accountExists(accountId:string){
 // 탈퇴. 로그인 수단과 세션을 지운다. 팀 활동 기록은 model 의 closeAccount 가 먼저 정리한다.
 // 탈퇴한 계정 번호는 1년 남긴다(백업 파일 최대 보관 기간). 복원이 그 사람을 되살리지 않게 한다.
 export const CLOSED_KEEP_DAYS=365;
-export async function closeAccount(accountId:string,now=Date.now()){forgetSessions();
+export async function closeAccount(accountId:string,now=Date.now(),hold?:Hold|null){forgetSessions();
+ // 1.29 정지 중에 탈퇴하면 로그인 수단을 되돌릴 수 없는 값으로만 남긴다(계정 줄을 지우기 전에).
+ if(hold)await keepHold(accountId,hold,now).catch(e=>console.error("TeamKick hold keep",e instanceof Error?e.message:"error"));
  await db().prepare("INSERT OR REPLACE INTO closed_accounts(id,at) VALUES(?,?)").bind(accountId,new Date(now).toISOString()).run();
  await db().prepare("DELETE FROM closed_accounts WHERE at<?").bind(new Date(now-CLOSED_KEEP_DAYS*864e5).toISOString()).run();
  await db().prepare("DELETE FROM sessions WHERE account_id=?").bind(accountId).run();
@@ -282,6 +287,46 @@ export async function verifyEmail(input:{token?:unknown},now=Date.now()){
 const kakaoPlaceholder=(kakaoId:string)=>"kakao-"+kakaoId+"@teamkick.invalid";
 
 // 소셜 로그인으로 들어온 사람을 계정에 연결한다. 제공자마다 열을 따로 만들지 않고
+// --- 1.29 정지 중 탈퇴 → 같은 로그인 수단으로 다시 가입하면 남은 정지를 잇는다 ---
+// 남기는 것: 로그인 수단(카카오·구글·네이버 번호, 이메일 계정은 이메일)을 HMAC-SHA256 으로 바꾼 값, 남은 정지(끝나는 때·사유).
+// 이름·이메일 원문은 남기지 않는다. 열쇠는 이 데이터베이스에 처음 한 번 만든 무작위 값(schema_meta id=3)이다.
+// 정지가 끝나는 때(기간 없음은 1년 뒤) 지운다. 다시 가입하면 계정 줄(hold_until·hold_reason)로 옮기고 지운다.
+export type Hold={until:string;reason:string};
+const HOLD_MAX_DAYS=365;
+async function holdKey(){
+ const get=()=>db().prepare("SELECT sig FROM schema_meta WHERE id=3").first<{sig:string}>();
+ let row=await get();
+ if(!row){await db().prepare("INSERT OR IGNORE INTO schema_meta(id,sig) VALUES(3,?)").bind(toHex(crypto.getRandomValues(new Uint8Array(32)).buffer)).run();row=await get()}
+ return row!.sig;
+}
+async function identityHash(accountId:string){
+ const a=await db().prepare("SELECT email,provider,provider_id,kakao_id FROM accounts WHERE id=?").bind(accountId)
+  .first<{email:string;provider:string|null;provider_id:string|null;kakao_id:string|null}>();
+ if(!a)return null;
+ const p=a.provider||"local",subject=p==="kakao"?(a.provider_id||a.kakao_id):p==="local"?a.email:a.provider_id;
+ if(!subject)return null;
+ const key=await crypto.subtle.importKey("raw",encode(await holdKey()),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
+ return toHex(await crypto.subtle.sign("HMAC",key,encode(p+":"+String(subject).trim().toLowerCase())));
+}
+async function keepHold(accountId:string,hold:Hold,now:number){
+ const h=await identityHash(accountId);if(!h)return;
+ const cap=now+HOLD_MAX_DAYS*864e5,end=hold.until?Math.min(Date.parse(hold.until),cap):cap;
+ if(!(end>now))return;
+ await db().prepare("INSERT OR REPLACE INTO suspension_holds(id,until,reason,expires,at) VALUES(?,?,?,?,?)")
+  .bind(h,hold.until||"",String(hold.reason??"").slice(0,200),iso(end),iso(now)).run();
+}
+// 새 계정을 만든 직후 부른다. 같은 로그인 수단의 정지가 남아 있으면 계정 줄로 옮긴다.
+async function adoptHold(accountId:string,now:number){
+ try{
+  await db().prepare("DELETE FROM suspension_holds WHERE expires<=?").bind(iso(now)).run();
+  const h=await identityHash(accountId);if(!h)return;
+  const row=await db().prepare("SELECT until,reason FROM suspension_holds WHERE id=?").bind(h).first<{until:string;reason:string}>();
+  if(!row)return;
+  await db().prepare("UPDATE accounts SET hold_until=?,hold_reason=? WHERE id=?").bind(row.until,row.reason,accountId).run();
+  await db().prepare("DELETE FROM suspension_holds WHERE id=?").bind(h).run();
+ }catch(e){console.error("TeamKick hold adopt",e instanceof Error?e.message:"error")}
+}
+
 // (provider, provider_id) 로 묶는다. 같은 사람이라도 제공자가 다르면 다른 계정이다.
 // 그래야 "카카오로 가입했는데 구글로 들어가니 남의 계정"이 되는 일이 없다.
 export async function signInWithSocial(provider:string,socialId:string,nickname:string,now=Date.now()){
@@ -296,6 +341,7 @@ export async function signInWithSocial(provider:string,socialId:string,nickname:
   // 제공자가 이미 본인을 확인했으므로 확인 완료로 둔다. 비밀번호는 비워 어떤 값과도 맞지 않는다.
   await db().prepare("INSERT INTO accounts(id,email,name,password,failures,locked_until,agreed_at,verified_at,provider,provider_id,at) VALUES(?,?,?,'',0,NULL,?,?,?,?,?)")
    .bind(account.id,account.email,account.name,iso(now),iso(now),who,id_,iso(now)).run();
+  await adoptHold(account.id,now);
  }catch(e){
   // 같은 사람이 동시에 두 번 눌렀을 수 있다. 그때는 먼저 만들어진 계정을 쓴다.
   if(String(e).includes("UNIQUE")){
@@ -366,6 +412,7 @@ export async function signInWithKakao(kakaoId:string,nickname:string,now=Date.no
   // 카카오가 이미 본인을 확인했으므로 확인 완료로 둔다. 비밀번호는 비워 어떤 값과도 맞지 않는다.
   await db().prepare("INSERT INTO accounts(id,email,name,password,failures,locked_until,agreed_at,verified_at,provider,kakao_id,at) VALUES(?,?,?,'',0,NULL,?,?, 'kakao',?,?)")
    .bind(account.id,account.email,account.name,iso(now),iso(now),kakaoId,iso(now)).run();
+  await adoptHold(account.id,now);
  }catch(e){
   if(String(e).includes("UNIQUE")){
    const again=await db().prepare("SELECT id,name FROM accounts WHERE kakao_id=?").bind(kakaoId).first<{id:string;name:string}>();

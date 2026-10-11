@@ -5,6 +5,8 @@
 // 표 만들기는 앱이 첫 요청에서 스스로 한다(lib/schema.ensureSchema) — 여기서 migration 을 돌리지 않는다.
 import {execFileSync} from "node:child_process";
 import fs from "node:fs";
+import path from "node:path";
+import {addCronEntry,CRON} from "./cron-entry.mjs";
 
 const WORKER="teamkick",DB_NAME="teamkick-db",BUCKET_NAME="teamkick-images";
 const CONFIG="dist/server/wrangler.json";
@@ -30,8 +32,10 @@ cfg.d1_databases=[{binding:"DB",database_name:DB_NAME,database_id:dbId}];
 cfg.r2_buckets=[{binding:"BUCKET",bucket_name:BUCKET_NAME}];
 cfg.workers_dev=true;      // 도메인을 옮기기 전 시험 주소(teamkick.<계정>.workers.dev)
 cfg.keep_vars=true;        // 화면에서 넣은 변수를 배포가 지우지 않게
-cfg.triggers={crons:[]};   // 예약 실행은 cron-job.org 가 /api/cron 을 부른다(지금과 같음)
+// 1.27.3 예약 실행: Cloudflare 가 10분마다 worker 의 scheduled 를 부르고, 그것이 /api/cron 을 안에서 부른다.
+// cron-job.org 는 Cloudflare 입구에서 403 으로 막혀서 더 쓰지 않는다(scripts/cron-entry.mjs).
+addCronEntry(path.dirname(CONFIG),cfg);
 fs.writeFileSync(CONFIG,JSON.stringify(cfg));
-console.log("배포 설정: worker="+WORKER+" d1="+DB_NAME+" r2="+BUCKET_NAME);
+console.log("배포 설정: worker="+WORKER+" d1="+DB_NAME+" r2="+BUCKET_NAME+" cron="+CRON);
 
 execFileSync(process.execPath,["node_modules/wrangler/bin/wrangler.js","deploy","--config",CONFIG],{stdio:"inherit"});

@@ -4300,3 +4300,25 @@ test('1.27 새 알림 키 버튼이 만드는 키로 앱이 푸시 서명을 만
     assert.equal(await crypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},key,Buffer.from(sig,'base64url'),new TextEncoder().encode(h+'.'+b)),true);
   }finally{E.VAPID_PUBLIC_KEY=before.pub;E.VAPID_PRIVATE_KEY=before.priv;if(before.pub===undefined)delete E.VAPID_PUBLIC_KEY;if(before.priv===undefined)delete E.VAPID_PRIVATE_KEY}
 });
+
+test('1.27.3 Cloudflare 예약 실행: 배포 설정에 10분 cron 이 들어가고, scheduled 가 같은 worker 의 /api/cron 을 비밀값으로 부른다',async()=>{
+  const {addCronEntry,CRON,ENTRY}=await import(path.resolve('scripts/cron-entry.mjs'));
+  const dir=fs.mkdtempSync(path.join(process.env.TMPDIR||'/tmp','cron-entry-'));
+  try{
+    // 빌드 결과 대신: 받은 요청을 기록하는 가짜 입구
+    fs.writeFileSync(path.join(dir,'index.js'),'export const seen=[];export default {seen,async fetch(req,env,ctx){seen.push({url:req.url,auth:req.headers.get("authorization"),env});return new Response(JSON.stringify({ok:true}),{status:200})}};');
+    const cfg=addCronEntry(dir,{main:'index.js',triggers:{}});
+    assert.equal(cfg.main,ENTRY);assert.deepEqual(cfg.triggers,{crons:[CRON]});assert.equal(CRON,'*/10 * * * *');
+    const mod=await import(path.join(dir,ENTRY));const inner=await import(path.join(dir,'index.js'));
+    const waits=[];const env={CRON_SECRET:'  s3cret-value-1234567  '};
+    await mod.default.scheduled({cron:CRON},env,{waitUntil:p=>waits.push(p)});
+    assert.equal(waits.length,1,'waitUntil 로 끝까지 기다린다');
+    assert.equal(inner.seen.length,1);
+    assert.equal(new URL(inner.seen[0].url).pathname,'/api/cron');
+    assert.equal(inner.seen[0].auth,'Bearer s3cret-value-1234567');
+    assert.equal(inner.seen[0].env,env,'같은 worker 의 바인딩을 그대로 넘긴다');
+    // 일반 요청은 원래 입구로 그대로
+    const r=await mod.default.fetch(new Request('https://teamkick.co.kr/api/health'),env,{waitUntil(){}});
+    assert.equal(r.status,200);assert.equal(inner.seen.length,2);
+  }finally{fs.rmSync(dir,{recursive:true,force:true})}
+});

@@ -34,7 +34,7 @@ Cloudflare → **Workers 및 Pages** → **teamkick** → **설정(Settings)** �
 | 구글 로그인 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
 | 메일 | `BREVO_API_KEY`(또는 `RESEND_API_KEY`), `MAIL_FROM` |
 | 휴대폰 알림 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` — 아래 **New push keys** 버튼으로 새로 넣습니다 |
-| 예약 실행 | `CRON_SECRET` — 같은 값이어야 cron-job.org 설정을 안 바꿔도 됩니다 |
+| 예약 실행 | `CRON_SECRET` — 1.27.3부터 Cloudflare 가 스스로 부를 때도 이 값으로 확인합니다(지우면 예약 실행이 멈춤) |
 | 날씨 | `DATA_GO_KR_KEY` |
 | 기타(넣어 둔 경우만) | `OWNER_SETUP_CODE`, `EMAIL_SIGNUP_ENABLED` |
 | **이전용(새로 만들기)** | `MIGRATE_SECRET` — 아래 3번 참고 |
@@ -76,7 +76,7 @@ GitHub → Actions → **New push keys** → **Run workflow** → 칸에 `NEW` �
 
 ## 7. 끝난 뒤 정리
 - Cloudflare·GPT Sites 둘 다에서 `MIGRATE_SECRET` 삭제
-- cron-job.org: 주소(`https://teamkick.co.kr/api/cron`)와 `CRON_SECRET` 이 같으면 **바꿀 것 없음**
+- ~~cron-job.org: 바꿀 것 없음~~ → 실제로는 이전 뒤 Cloudflare 입구에서 403 으로 막혔다(보안 이벤트 기록 없음, 브라우저는 통과). 1.27.3 에서 Cloudflare Cron Triggers(10분마다)로 옮겼고 cron-job.org 작업은 끈다
 - ✅ Claude: 처리방침 "호스팅: OpenAI" 줄을 빼는 수정(1.27.2). 위탁 업체 변경 공지는 사장님이 앱 공지사항에 올림
 - 1~2주 문제없으면 GPT Sites 프로젝트 데이터 삭제를 GPT에게 요청
 - 이후 배포는 **main에 합치면 자동** — GPT 배포 요청이 더 이상 필요 없습니다.

@@ -7,7 +7,7 @@
 PR #21 은 2026-09-18 병합 완료(T39-T62), PR #20 은 2026-09-17 병합 완료.
 **`main` 은 1.8.0 까지 들어가 있다. 1.8.1·1.9.0 은 이 브랜치에만 있다.**
 미커밋 변경: 없음
-버전: `APP_VERSION=1.27.2`, `BUILD=2026-10-11-1272`
+버전: `APP_VERSION=1.27.3`, `BUILD=2026-10-11-1273`
 **다음 세션이 가장 먼저 할 일: 아래 (43)을 읽고 운영자 관리 도구(메시지 삭제·이용 정지)를 시작한다.** 배포는 main 에 합치면 자동(Cloudflare).
 현재 작업 ID: **T94 Cloudflare 이전 완료 · 1.27.2**
 
@@ -16,12 +16,18 @@ PR #21 은 2026-09-18 병합 완료(T39-T62), PR #20 은 2026-09-17 병합 완�
 - **팀이 수천 개가 되기 전에 "팀별로 나눠 읽기"를 한다.** 지금은 요청마다 공용 문서 전체를 한 번에 읽는다(1.24·1.25 로 줄였을 뿐). Cloudflare 로 옮길 때 팀별 SELECT 로 바꾼다 — 자세한 내용은 `ARCHITECTURE.md` "저장과 동시성".
 - 차단/신고는 1.26.0 에서 넣었다(TASKS T90). 두 기기 확인은 기기가 생기면.
 
+### 2026-10-11 (44) 1.27.3 예약 실행을 Cloudflare Cron Triggers 로 (TASKS T95)
+
+- cron-job.org 호출이 이전 뒤 403 으로 막혀(22:00~) 경기 알림·생일·날씨·알림 정리가 멈췄다. 이제 Cloudflare 가 10분마다 worker scheduled → `/api/cron`(안에서). `CRON_SECRET` 은 그대로 필요(지우면 멈춤).
+- 확인은 Cloudflare → Workers 및 Pages → teamkick → 로그(Observability)에서 `TeamKick scheduled 200`. 사장님은 cron-job.org 작업을 끈다(지우지 않음).
+
 ### 2026-10-11 (43) Cloudflare 이전 완료 · 1.27.2 처리방침 호스팅 변경 (TASKS T94)
 
 - 서비스가 이제 사장님 Cloudflare 에서 돈다: https://teamkick.co.kr (worker `teamkick`). **main 에 합치면 자동 배포** — GPT 배포 요청은 더 이상 없다. 배포 결과는 GitHub Actions "Deploy to Cloudflare" 로 확인.
 - 이 환경은 teamkick.co.kr·workers.dev·api.cloudflare.com 에 접속하지 못한다. 상태는 Actions 로그나 사장님 캡처로 본다.
 - 처리방침 OpenAI 삭제(LEGAL.md 2-23). 위탁 변경 공지는 사장님이 올린다.
-- 사장님 남은 일: MIGRATE_SECRET 삭제(양쪽), cron-job.org 기록 확인, 가비아 안전잠금, 1~2주 뒤 GPT Sites 데이터 삭제, Brevo 백업 코드 재발급, Play Console 주소 서류(평일), 테스터 15명.
+- 사장님이 MIGRATE_SECRET 양쪽 삭제·health 1.27.2 확인·위탁 변경 공지 게시 완료(2026-10-11). 이제 /api/migrate 는 닫혀 있다(404).
+- 사장님 남은 일: cron-job.org 작업 끄기(1.27.3), 가비아 안전잠금, 1~2주 뒤 GPT Sites 데이터 삭제, Brevo 백업 코드 재발급, Play Console 주소 서류(평일), 테스터 15명.
 - 다음 개발: 운영자 관리 도구(메시지 삭제·이용 정지 — Play 정식 출시 전 필요) → 웹 계정 삭제 페이지 → TWA assetlinks·스토어 자료 → 새 문구 번역. 나중: MAIL_FROM 을 teamkick.co.kr 발신으로.
 
 ### 2026-10-11 (42) 시험 복사 성공 · 네임서버 Cloudflare 로 변경

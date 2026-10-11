@@ -2404,8 +2404,10 @@ test('처리방침에 법정 기재사항이 모두 들어 있다',()=>{
   assert.match(legal.TERMS.split('\n')[0],/초안/,'약관 첫 줄에도 같은 표기를 유지해야 한다');
 
   // 해외 사업자는 위탁 절과 국외 이전 절에 모두 있어야 한다. 한쪽만 고치면 어긋난다.
-  for(const vendor of ['OpenAI','Cloudflare','Brevo'])
+  for(const vendor of ['Cloudflare','Brevo'])
     assert.ok(국외.includes(vendor),vendor+' 은(는) 해외 사업자이므로 국외 이전에도 적어야 한다');
+  // 2026-10-11 호스팅을 OpenAI(ChatGPT Sites)에서 Cloudflare 로 옮겼다. 더 이상 받는 자가 아니다.
+  assert.ok(!국외.includes('OpenAI'),'옮긴 뒤에는 OpenAI 를 국외 이전 받는 자로 적지 않는다');
 });
 
 // 소셜 로그인을 늘리면 처리방침도 같이 늘어야 한다. 코드만 고치고 문서를 두면 잡는다.

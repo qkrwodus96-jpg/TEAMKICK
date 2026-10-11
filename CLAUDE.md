@@ -165,7 +165,7 @@ Astra의 답변을 다음 작업의 필수 조건으로 만들지 않는다.
 
 - **주소는 항상 전체 링크로 준다.** `/api/health` 처럼 경로만 주지 않는다.
   사용자가 그대로 복사해 열 수 있어야 한다.
-  예: `https://teamkick-jaeyeon.qkrwodus96.chatgpt.site/api/health`
+  예: `https://teamkick.co.kr/api/health`
 - 화면에서 눌러야 할 것은 **메뉴 경로와 버튼 이름을 그대로** 적는다.
 - 배포·설정 상태를 판단할 때는 추측하지 말고 `/api/health` 응답으로 확인한다.
 

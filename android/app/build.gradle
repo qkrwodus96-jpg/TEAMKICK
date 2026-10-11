@@ -55,7 +55,7 @@ android {
     namespace "kr.co.teamkick.app"
     defaultConfig {
         applicationId "kr.co.teamkick.app"
-        minSdkVersion 21
+        minSdkVersion 24 // androidbrowserhelper 2.7.4 가 24 이상을 요구(안드로이드 7.0)
         targetSdkVersion 36
         // 스토어에 올릴 때마다 versionCode 를 올려야 한다(GitHub Actions "Android build" 의 입력값).
         versionCode((project.findProperty('versionCode') ?: '1') as Integer)

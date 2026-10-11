@@ -16,6 +16,10 @@ PR #21 은 2026-09-18 병합 완료(T39-T62), PR #20 은 2026-09-17 병합 완�
 - **팀이 수천 개가 되기 전에 "팀별로 나눠 읽기"를 한다.** 지금은 요청마다 공용 문서 전체를 한 번에 읽는다(1.24·1.25 로 줄였을 뿐). Cloudflare 로 옮길 때 팀별 SELECT 로 바꾼다 — 자세한 내용은 `ARCHITECTURE.md` "저장과 동시성".
 - 차단/신고는 1.26.0 에서 넣었다(TASKS T90). 두 기기 확인은 기기가 생기면.
 
+### 2026-10-11 (45) 운영 점검 버튼(Check production)
+
+- 이 환경은 teamkick.co.kr 에 못 붙는다. 대신 GitHub Actions **Check production**(`scripts/check-production.mjs`)을 `gh api .../actions/workflows/check-production.yml/dispatches` 로 돌려 확인한다: health 공개 부분, `/api/cron` 비밀값 없이 401, `wrangler tail` 로 예약 실행 1건(결과 숫자만). 저장소가 **공개**라 출력에 요청 내용·헤더·개인정보를 찍지 않는다(스크립트가 scheduled 이벤트만 골라 숫자만 출력).
+
 ### 2026-10-11 (44) 1.27.3 예약 실행을 Cloudflare Cron Triggers 로 (TASKS T95)
 
 - cron-job.org 호출이 이전 뒤 403 으로 막혀(22:00~) 경기 알림·생일·날씨·알림 정리가 멈췄다. 이제 Cloudflare 가 10분마다 worker scheduled → `/api/cron`(안에서). `CRON_SECRET` 은 그대로 필요(지우면 멈춤).

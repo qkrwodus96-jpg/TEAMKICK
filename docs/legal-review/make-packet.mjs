@@ -9,7 +9,7 @@ const require=createRequire(import.meta.url);
 const {Document,Packer,Paragraph,TextRun,HeadingLevel,Table,TableRow,TableCell,WidthType,ShadingType,AlignmentType,LevelFormat,BorderStyle,PageBreak}=require("docx");
 
 const root=path.resolve(path.dirname(new URL(import.meta.url).pathname),"../..");
-const DATE="2026-10-10",VERSION="1.26.0";
+const DATE="2026-10-11",VERSION="1.27.2";
 // lib/legal.ts 는 문자열 상수뿐이라 타입 없이 그대로 계산할 수 있다.
 const src=fs.readFileSync(path.join(root,"lib/legal.ts"),"utf8").replace(/^export const /gm,"const ");
 const {LEGAL_VERSION,TERMS,PRIVACY}=new Function(src+"\nreturn {LEGAL_VERSION,TERMS,PRIVACY};")();
@@ -99,7 +99,6 @@ const status=[
 ];
 
 const vendors=[
- ["OpenAI (ChatGPT Sites)","미국","호스팅·저장","서비스에 저장되는 모든 정보","처리방침 3항과 같음"],
  ["Cloudflare","미국","저장(D1·R2)·전송","서비스에 저장되는 모든 정보, 접속 정보","위와 같음"],
  ["Brevo","프랑스","메일 발송","메일 수신 주소","발송 기록 1개월"],
  ["Google","미국","구글 로그인, 탈퇴 시 연결 끊기","로그인 시 받기만, 탈퇴 시 접속 토큰","로그인 처리 시까지"],
@@ -146,7 +145,7 @@ const questions=[
  "**[새·예정 기능] 경기 영상**: 팀이 유튜브 '일부 공개' 영상 링크와 골 시각을 경기에 붙이는 기능을 계획합니다(영상은 팀킥에 저장하지 않음). 촬영된 사람의 동의 안내 외에 필요한 조치가 있나요?",
  "**[새·예정 기능] 관심 구장 새 매칭 알림**: 이용자가 고른 구장에 새 모집글이 오면 알립니다(밤 10시~아침 8시는 모아서 아침에). 광고성 정보가 아닌 서비스 알림으로 보는 것이 맞나요?",
  "**[새·예정 기능] 용병 가능 등록**: 개인이 '이 날 뛸 수 있어요'(지역·포지션)를 올리고, 팀은 팀킥 대화로만 연락합니다(연락처 비공개). 추가로 주의할 점이 있나요?",
- "**[새·예정] 호스팅 이전**: OpenAI(ChatGPT Sites)에서 운영자 본인의 Cloudflare 계정으로 옮길 계획입니다. 위탁 표 변경과 공지는 어떤 절차로 해야 하나요?",
+ "**[새] 호스팅 이전**: 2026-10-11 OpenAI(ChatGPT Sites)에서 운영자 본인의 Cloudflare 계정으로 옮겼습니다(Cloudflare 는 원래 위탁·국외 이전 대상에 있었음). 처리방침의 위탁 표를 고치고 운영자가 앱 공지사항으로 알립니다. 옛 호스팅의 정보는 이전 확인 뒤 파기를 요청합니다. 이 정도 절차로 충분한가요?",
 ];
 
 const limits=[

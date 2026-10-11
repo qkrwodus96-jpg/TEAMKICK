@@ -1,6 +1,6 @@
 # 팀킥 아키텍처
 
-React·TypeScript·Vinext 화면을 Cloudflare Worker에서 제공한다. 기존 Sites 스타터의 Vite 플러그인과 Worker fetch 진입점을 유지한다. Shadcn/Radix의 사이드바·탭·모달·선택·확인 창·표를 사용한다.
+React·TypeScript·Vinext 화면을 Cloudflare Worker에서 제공한다. 2026-10-11부터 운영자 본인의 Cloudflare 계정(worker `teamkick`, D1 `teamkick-db`, R2 `teamkick-images`, 도메인 teamkick.co.kr)에서 돌고, main 에 합치면 GitHub Actions 가 배포한다(그 전에는 ChatGPT Sites). 기존 Sites 스타터의 Vite 플러그인과 Worker fetch 진입점을 유지한다. Shadcn/Radix의 사이드바·탭·모달·선택·확인 창·표를 사용한다.
 
 ## 모듈
 

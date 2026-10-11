@@ -1,6 +1,8 @@
 # 팀킥 서버 이전 절차서 (GPT Sites → 사장님 Cloudflare)
 
 작성: 2026-10-11 · 대상 버전: 1.27.1 이상
+
+> **2026-10-11 이전 완료.** 1~6번 끝. 7번 정리 중 Claude 몫(처리방침 수정)은 1.27.2 에서 끝났고, 나머지는 사장님 몫.
 메뉴 이름은 **한국어(영어)** 순서로 적었습니다. 화면 번역이 조금 다를 수 있습니다.
 **비밀값·토큰은 채팅이나 이 문서에 적지 않습니다.**
 
@@ -75,6 +77,6 @@ GitHub → Actions → **New push keys** → **Run workflow** → 칸에 `NEW` �
 ## 7. 끝난 뒤 정리
 - Cloudflare·GPT Sites 둘 다에서 `MIGRATE_SECRET` 삭제
 - cron-job.org: 주소(`https://teamkick.co.kr/api/cron`)와 `CRON_SECRET` 이 같으면 **바꿀 것 없음**
-- Claude: 처리방침 "호스팅: OpenAI" 줄을 빼는 수정(위탁 업체 변경 공지)
+- ✅ Claude: 처리방침 "호스팅: OpenAI" 줄을 빼는 수정(1.27.2). 위탁 업체 변경 공지는 사장님이 앱 공지사항에 올림
 - 1~2주 문제없으면 GPT Sites 프로젝트 데이터 삭제를 GPT에게 요청
 - 이후 배포는 **main에 합치면 자동** — GPT 배포 요청이 더 이상 필요 없습니다.

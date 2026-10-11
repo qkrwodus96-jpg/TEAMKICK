@@ -1,4 +1,4 @@
-package kr.co.teamkick.app;
+package kr.co.teamkick;
 
 
 

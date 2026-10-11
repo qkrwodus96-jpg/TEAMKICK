@@ -30,8 +30,12 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
-      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0" > /dev/null
+      # GitHub 빌드 기계에 이미 있는 Android SDK 를 쓴다(setup-android 는 없어진 'tools' 꾸러미를 찾다 실패함).
+      - name: Android SDK
+        run: |
+          SDK=$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin | sort -V | tail -1)
+          yes | "$SDK/sdkmanager" --licenses > /dev/null || true
+          "$SDK/sdkmanager" "platforms;android-36" "build-tools;36.0.0" > /dev/null
       - name: Build
         working-directory: android
         run: |

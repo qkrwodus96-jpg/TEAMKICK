@@ -9,7 +9,7 @@ const require=createRequire(import.meta.url);
 const {Document,Packer,Paragraph,TextRun,HeadingLevel,Table,TableRow,TableCell,WidthType,ShadingType,AlignmentType,LevelFormat,BorderStyle,PageBreak}=require("docx");
 
 const root=path.resolve(path.dirname(new URL(import.meta.url).pathname),"../..");
-const DATE="2026-10-11",VERSION="1.27.2";
+const DATE="2026-10-11",VERSION="1.27.3";
 // lib/legal.ts 는 문자열 상수뿐이라 타입 없이 그대로 계산할 수 있다.
 const src=fs.readFileSync(path.join(root,"lib/legal.ts"),"utf8").replace(/^export const /gm,"const ");
 const {LEGAL_VERSION,TERMS,PRIVACY}=new Function(src+"\nreturn {LEGAL_VERSION,TERMS,PRIVACY};")();
@@ -105,7 +105,6 @@ const vendors=[
  ["카카오","한국","로그인·연결 끊기, 구장 검색, 지도 표시","탈퇴 시 접속 토큰, 구장 검색어. 지도는 이용자 브라우저가 카카오에 직접 접속(IP·브라우저 정보)","—"],
  ["네이버 / 네이버클라우드(NAVER API HUB)","한국","로그인·연결 끊기, 뉴스 검색","탈퇴 시 접속 토큰, 뉴스 검색어(팀·리그 이름)","—"],
  ["공공데이터포털(기상청·한국환경공단)","한국","날씨·미세먼지 예보","구장 위치의 5km 격자 좌표·권역 이름(개인정보 아님)","—"],
- ["cron-job.org","해외","10분마다 예약 실행 호출","주소와 비밀값뿐(개인정보 없음)","—"],
  ["브라우저 푸시 서버(Google·Apple 등)","미국 등","휴대폰 알림 전달","알림 구독 주소(내용 없는 알림)","전달 시까지"],
 ];
 

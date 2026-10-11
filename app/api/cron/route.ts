@@ -8,7 +8,8 @@ import {saveDueWeather} from "@/lib/weather-keep";
 export const dynamic="force-dynamic";
 const json=(x:unknown,status=200)=>Response.json(x,{status,headers:{"Cache-Control":"no-store"}});
 
-// 예약 실행. cron-job.org 가 10분마다 부른다(GET·POST 모두 받는다).
+// 예약 실행. 1.27.3부터 Cloudflare Cron Triggers 가 10분마다 worker 의 scheduled 로 부르고, 그것이 이 주소를
+// 안에서 부른다(scripts/cron-entry.mjs). 밖에서 Bearer 비밀값으로 불러도 그대로 된다(GET·POST 모두 받는다).
 // 지금 하는 일: 3시간 안에 시작하는 경기의 팀원·용병에게 "오늘 경기" 알림을 한 번 보낸다.
 // 1.18: 오늘 생일인 팀원이 있으면 같은 팀원들에게 한 번 알린다(아침 9시 이후).
 // 1.21: 경기 시간대(시작 3시간 전~1시간 뒤) 날씨를 경기에 저장한다(lib/weather-keep.ts).

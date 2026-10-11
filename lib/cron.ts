@@ -1,6 +1,6 @@
 import {env} from "cloudflare:workers";
 
-// 예약 실행(/api/cron) 잠금. 부르는 쪽(cron-job.org 등)이 `Authorization: Bearer <CRON_SECRET>` 을 보낸다.
+// 예약 실행(/api/cron) 잠금. 부르는 쪽(1.27.3부터 Cloudflare scheduled → scripts/cron-entry.mjs)이 `Authorization: Bearer <CRON_SECRET>` 을 보낸다.
 // 비밀값은 주소(?key=)로 받지 않는다 — 주소는 호출 기록·로그에 그대로 남는다.
 const secret=()=>String((env as unknown as Record<string,string|undefined>).CRON_SECRET??"").trim();
 export const cronReady=()=>secret().length>=16;

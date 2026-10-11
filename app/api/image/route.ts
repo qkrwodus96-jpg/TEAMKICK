@@ -1,7 +1,7 @@
 import {currentUser} from "@/lib/auth";
 import {assertWritable} from "@/lib/migrate";
 import {load} from "@/lib/store";
-import {AppError,ensure,membership,teamOf,rankPhotoOpen} from "@/lib/model";
+import {AppError,ensure,membership,teamOf,rankPhotoOpen,activeSuspension,suspensionMessage} from "@/lib/model";
 import {getImage,putImage,pruneOthers,parseKey,teamLogoPrefix,memberPhotoPrefix,teamPhotoPrefix,removeImage,MAX_BYTES} from "@/lib/images";
 export const dynamic="force-dynamic";
 const json=(x:unknown,status=200)=>Response.json(x,{status,headers:{"Cache-Control":"no-store"}});
@@ -23,6 +23,8 @@ export async function POST(req:Request){
   ensure(blob.size<=MAX_BYTES,"이미지는 2MB 이하만 올릴 수 있어요.",413);
   const teamId=String(form.get("teamId")??""),memberId=String(form.get("memberId")??""),kind=String(form.get("kind")??"");
   const {state}=await load();
+  // 1.28 이용 정지 중에는 사진도 올리지 못한다.
+  const ban=activeSuspension(state.users.find(x=>x.id===user.userId));if(ban)throw new AppError(suspensionMessage(ban),403);
   const mine=membership(state,teamId,user.userId);
   ensure(teamOf(state,teamId)?.status==="active","현재 이용 가능한 팀이 아니에요.",403);
   ensure(mine,"이 팀에서 해당 작업을 할 권한이 없어요.",403);

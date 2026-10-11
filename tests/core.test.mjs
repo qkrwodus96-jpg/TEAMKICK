@@ -54,6 +54,7 @@ compile('lib/chat-server.ts','chat-server.mjs',s=>s.replace('import {env} from "
 compile('lib/cron.ts','cron.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;'));
 compile('app/api/cron/route.ts','cron-api.mjs',s=>s.replace('import {saveDueWeather} from "@/lib/weather-keep";','const saveDueWeather=async()=>globalThis.__teamkickTestWeather??{saved:0};').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {wakeDevices} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0,results:[]}};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/cron"','"./cron.mjs"'));
 compile('app/api/migrate/route.ts','migrate-api.mjs',s=>s.replace('"@/lib/model"','"./model.mjs"').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};'));
+compile('app/api/chat/route.ts','chat-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store-some"','"./store-some.mjs"').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/chat-server"','"./chat-server.mjs"'));
 compile('lib/close.ts','close.mjs',s=>s.replace('"./store"','"./store.mjs"').replace('"./model"','"./model.mjs"').replace('"./auth"','"./auth.mjs"').replace('"./unlink"','"./unlink.mjs"'));
 globalThis.__teamkickTestEnv={};
 const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp,mvpView,mvpWinners,periodRange,rankRows,nationalRanking,rankPhotoOpen,canSeeGame,gameTitle}=await import(path.join(runtime,'model.mjs'));
@@ -86,6 +87,7 @@ const cronApi=await import(path.join(runtime,'cron-api.mjs'));
 const storeSome=await import(path.join(runtime,'store-some.mjs'));
 const migrateApi=await import(path.join(runtime,'migrate-api.mjs'));
 const migrateLib=await import(path.join(runtime,'migrate.mjs'));
+const chatApi=await import(path.join(runtime,'chat-api.mjs'));
 const NOW=Date.now(),DAY=864e5;
 const owner={id:'owner',name:'운영자',ownerSetup:true},A={id:'a',name:'A 주장'},B={id:'b',name:'B 주장'},C={id:'c',name:'C 주장'},member={id:'player',name:'선수'};
 function command(s,a,c,when=NOW){return applyCommand(s,a,c,when)}
@@ -4321,4 +4323,70 @@ test('1.27.3 Cloudflare 예약 실행: 배포 설정에 10분 cron 이 들어가
     const r=await mod.default.fetch(new Request('https://teamkick.co.kr/api/health'),env,{waitUntil(){}});
     assert.equal(r.status,200);assert.equal(inner.seen.length,2);
   }finally{fs.rmSync(dir,{recursive:true,force:true})}
+});
+
+// --- 1.28 운영자 조치 ---
+test('1.28 이용 정지: 운영자만, 운영자·본인은 못 하고, 정지 중엔 이의 제기·탈퇴·알림 읽기만 되고, 기간이 끝나면 풀린다',()=>{
+  const f=fixture();addPlayer(f.s,f.a);
+  assert.throws(()=>command(f.s,A,{type:'suspendUser',userId:'player',days:7,reason:'욕설'}),/운영자만/);
+  assert.throws(()=>command(f.s,owner,{type:'suspendUser',userId:'owner',days:7,reason:'x'}),/운영자 계정/);
+  assert.throws(()=>command(f.s,owner,{type:'suspendUser',userId:'player',days:5,reason:'욕설'}),/정지 기간/);
+  assert.throws(()=>command(f.s,owner,{type:'suspendUser',userId:'nobody',days:7,reason:'욕설'}),/찾을 수 없/);
+  command(f.s,owner,{type:'suspendUser',userId:'player',days:7,reason:'반복 욕설'});
+  assert.ok(f.s.notifications.some(n=>n.userId==='player'&&n.title==='이용 정지 안내'&&n.body.includes('반복 욕설')));
+  // 막히는 것: 저장 명령 전부(화면이 아니라 서버에서)
+  assert.throws(()=>command(f.s,member,{type:'createTeam',name:'새 팀',region:'서울'}),/이용을 정지한 계정.*1:1 문의/);
+  assert.throws(()=>command(f.s,member,{type:'joinTeam',teamId:f.b,name:'선수',position:'MF',number:9}),/이용을 정지/);
+  assert.throws(()=>command(f.s,member,{type:'setRankPublic',on:true}),/이용을 정지/);
+  // 되는 것: 이의 제기·알림 읽기·차단
+  command(f.s,member,{type:'askSupport',message:'정지 사유가 궁금해요'});
+  command(f.s,member,{type:'readNotifications',teamId:f.a});
+  // 보이는 것
+  const mine=visibleState(f.s,'player',f.a).mySuspension;assert.ok(mine&&mine.reason==='반복 욕설'&&mine.until);
+  assert.equal(visibleState(f.s,'a',f.a).mySuspension,null);
+  assert.deepEqual(visibleState(f.s,'owner').suspendedUsers.map(x=>x.id),['player']);
+  assert.deepEqual(visibleState(f.s,'a',f.a).suspendedUsers,[],'운영자가 아니면 목록을 받지 않는다');
+  // 기간이 지나면 자동으로 풀리고, 정리 때 기록도 지운다
+  command(f.s,member,{type:'setRankPublic',on:true},NOW+8*DAY);
+  prune(f.s,NOW+8*DAY);assert.equal(f.s.users.find(u=>u.id==='player').suspended,undefined);
+  // 기간 없음(0) → 해제할 때까지
+  command(f.s,owner,{type:'suspendUser',userId:'player',days:0,reason:'사기'});
+  assert.throws(()=>command(f.s,member,{type:'setRankPublic',on:true},NOW+400*DAY),/이용을 정지/);
+  assert.throws(()=>command(f.s,A,{type:'unsuspendUser',userId:'player'}),/운영자만/);
+  command(f.s,owner,{type:'unsuspendUser',userId:'player'});
+  command(f.s,member,{type:'setRankPublic',on:true});
+  assert.throws(()=>command(f.s,owner,{type:'unsuspendUser',userId:'player'}),/정지된 이용자가 아니/);
+});
+
+test('1.28 모집글 내리기: 운영자만, 매칭·용병 모집을 닫고 대기 신청도 닫고, 팀은 다시 열 수 없다',()=>{
+  const f=fixture();const gameId=game(f.s,f.a,{listing:true,start:NOW+3*DAY});
+  command(f.s,A,{type:'openGuests',teamId:f.a,gameId,needed:2});
+  command(f.s,B,{type:'applyMatch',teamId:f.b,gameId});applyGuest(f.s,f.a,gameId,C);
+  assert.throws(()=>command(f.s,B,{type:'takedownListing',gameId,teamId:f.a,reason:'허위'}),/운영자만/);
+  const out=command(f.s,owner,{type:'takedownListing',gameId,teamId:f.a,reason:'허위 모집'});assert.equal(out.closed,2);
+  const g=f.s.games.find(x=>x.id===gameId);assert.equal(g.listing,'closed');
+  assert.equal(sideOf(f.s,gameId,f.a).guestStatus,'closed');
+  assert.ok(f.s.requests.filter(r=>r.gameId===gameId).every(r=>r.status!=='pending'));
+  assert.ok(f.s.guests.filter(x=>x.gameId===gameId).every(x=>x.status!=='pending'));
+  assert.ok(f.s.notifications.some(n=>n.userId==='a'&&n.title==='모집글 내림 안내'&&n.body.includes('허위 모집')));
+  assert.throws(()=>command(f.s,A,{type:'openListing',teamId:f.a,gameId}),/운영자가 내린/);
+  assert.throws(()=>command(f.s,A,{type:'openGuests',teamId:f.a,gameId,needed:2}),/운영자가 내린/);
+  assert.throws(()=>command(f.s,owner,{type:'takedownListing',gameId,teamId:f.a,reason:'또'}),/이미 내려간/);
+});
+
+test('1.28 채팅: 운영자만 남의 메시지를 지우고, 정지된 사람은 보내지 못한다(지우기는 된다)',async()=>{
+  localDatabase();const f=fixture();addPlayer(f.s,f.a);await repository.commit(blank(),f.s,0);
+  const msg=await chatServer.sendMessage('team:'+f.a,'player','선수','나쁜 말',NOW);
+  const post=(who,body)=>{globalThis.__teamkickTestIdentity={userId:who.id,fullName:who.name};
+    return chatApi.POST(new Request('https://example.test/api/chat',{method:'POST',headers:{'content-type':'application/json',origin:'https://example.test'},body:JSON.stringify(body)}))};
+  let res=await post(A,{action:'modDelete',id:msg.id});assert.equal(res.status,403,'팀 주장도 남의 메시지는 못 지운다');
+  res=await post(owner,{action:'modDelete',id:msg.id});assert.equal(res.status,200);assert.equal((await res.json()).removed,true);
+  const row=await chatServer.findMessage(msg.id);assert.equal(row.deleted,1);assert.equal(row.body,'');
+  res=await post(owner,{action:'modDelete',id:'없는번호'});assert.equal(res.status,404);
+  // 정지된 사람은 보내지 못한다
+  const {state,version}=await repository.load();const after=structuredClone(state);
+  command(after,owner,{type:'suspendUser',userId:'player',days:3,reason:'도배'},Date.now());await repository.commit(state,after,version);
+  res=await post(member,{action:'send',room:'team:'+f.a,body:'또 보냄'});assert.equal(res.status,403);
+  assert.match((await res.json()).error,/이용을 정지/);
+  res=await post(A,{action:'send',room:'team:'+f.a,body:'괜찮아요'});assert.equal(res.status,200,'다른 사람은 그대로');
 });

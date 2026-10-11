@@ -34,6 +34,16 @@ export async function deleteMessage(messageId:string,accountId:string){
  await db().prepare(`UPDATE chat_messages SET deleted=1, body='' WHERE id=?`).bind(messageId).run();
 }
 
+// 1.28 운영자 삭제: 누가 보냈든 지운다(권한 확인은 부르는 쪽 /api/chat 에서 운영자인지 본다).
+// 신고 시점 내용은 chat_reports 에 90일 남아 운영자가 근거로 볼 수 있다.
+export async function moderateMessage(messageId:string){
+ const row=await db().prepare(`SELECT id,deleted FROM chat_messages WHERE id=?`).bind(messageId).first<{id:string;deleted:number}>();
+ ensure(row,"메시지를 찾을 수 없어요.",404);
+ if(row!.deleted)return false;
+ await db().prepare(`UPDATE chat_messages SET deleted=1, body='' WHERE id=?`).bind(messageId).run();
+ return true;
+}
+
 export async function findMessage(messageId:string){
  return db().prepare(`SELECT id,room,account_id,name,body,at,deleted FROM chat_messages WHERE id=?`).bind(messageId).first<ChatRow>();
 }

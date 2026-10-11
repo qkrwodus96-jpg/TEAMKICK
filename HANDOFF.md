@@ -16,6 +16,12 @@ PR #21 은 2026-09-18 병합 완료(T39-T62), PR #20 은 2026-09-17 병합 완�
 - **팀이 수천 개가 되기 전에 "팀별로 나눠 읽기"를 한다.** 지금은 요청마다 공용 문서 전체를 한 번에 읽는다(1.24·1.25 로 줄였을 뿐). Cloudflare 로 옮길 때 팀별 SELECT 로 바꾼다 — 자세한 내용은 `ARCHITECTURE.md` "저장과 동시성".
 - 차단/신고는 1.26.0 에서 넣었다(TASKS T90). 두 기기 확인은 기기가 생기면.
 
+### 2026-10-11 (48) Play 출시 준비 — TWA 앱·스토어 자료 (TASKS T98)
+
+- 앱은 `android/`(TWA). 키·빌드는 GitHub Actions 버튼(Android upload key / Android build). 순서·스토어 글·데이터 보안 초안은 `docs/store/README.md`.
+- 막힌 것: 이 세션은 GitHub 비밀값을 넣을 수 없다(프록시 403). 사장님이 `ANDROID_KEY_PASSWORD` 를 넣어야 키를 만든다.
+- assetlinks: 지금 `[]`. 업로드 키 지문(키 만들 때 로그) + Play 앱 서명 키 지문(Play Console 앱 무결성)을 넣어야 주소창 없이 열린다.
+
 ### 2026-10-11 (47) 1.29.0 웹 계정 삭제 안내 · 정지 회피 재가입 막기 (TASKS T97)
 
 - https://teamkick.co.kr/delete-account — Play 데이터 보안 양식에 적을 주소.

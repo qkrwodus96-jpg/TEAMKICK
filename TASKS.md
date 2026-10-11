@@ -6,12 +6,22 @@
 `BLOCKED` / `DONE`(실제 실행 결과로 확인). 요구사항 본문은
 `PROJECT_CONTEXT.md`, 구조는 `ARCHITECTURE.md`를 본다.
 
+## T96 1.28.0 — 운영자 관리 도구(2026-10-11)
+
+- [x] 이용 정지(`suspendUser`·`unsuspendUser`, 운영자만, 운영자·본인 불가, 3·7·30일·기간 없음). 정지 중에는 `applyCommand` 가 허용 목록(알림 읽기·설정, 1:1 문의, 탈퇴, 팀 나가기·가입 취소·용병 신청 철회, 차단·신고, 채팅방 숨기기) 말고 모두 403. 채팅 보내기·사진 올리기도 막음. 기간이 끝나면 자동 해제, 정리 때 기록 삭제.
+- [x] 모집글 내리기(`takedownListing`): 매칭·용병 모집을 닫고 대기 신청도 닫음, `takenDown` 표시로 팀이 다시 못 엶, 팀 운영진에게 사유 알림.
+- [x] 채팅 메시지 삭제(`/api/chat` `modDelete`, 운영자인지 서버에서 확인).
+- [x] 화면: 신고 목록 각 신고에 [메시지 삭제]·[이용 정지(기간 고르기)]·[모집글 내리기]·[팀 정지] + 확인 단계, 조치 내용이 처리 결과 칸에 자동으로 들어감. 아래 "이용 정지 중" 목록과 [해제]. 정지된 사람 화면 맨 위 빨간 안내 + [1:1 문의].
+- [x] 약관 제5조·처리방침 1·3항, LEGAL 2-25, 검토 묶음 질문 35번.
+- 검증: 테스트 231/231(새 3개: 정지 권한·허용 명령·자동 해제, 모집글 내리기, 채팅 운영자 삭제·정지 중 보내기 403), tsc, lint 74/21. 로컬 화면(운영자 신고 목록 → 정지 7일 → 메시지 삭제 → 정지 목록, 정지된 팀원 화면 안내, API 403) 확인 후 정지 해제.
+- 남은 것: 새 문구 번역(영·일·중·베)은 번역 작업 때 함께.
+
 ## T95 1.27.3 — 예약 실행을 Cloudflare Cron Triggers 로(2026-10-11)
 
 - [x] 원인: 이전 뒤 cron-job.org → `https://teamkick.co.kr/api/cron` 이 22:00부터 403(56~497ms, 팀킥 코드는 그 주소에서 403 을 내지 않음, 브라우저로 열면 401 정상, Cloudflare 보안 이벤트 없음). Cloudflare 입구가 외부 자동 요청을 거른 것으로 판단.
 - [x] `scripts/cron-entry.mjs`: 빌드 결과를 감싸는 입구(`cron-entry.js`)를 만들어 `scheduled` 에서 같은 worker 의 `/api/cron` 을 안에서 부른다(인증·잠금·일 내용 그대로). 배포가 `triggers.crons=["*/10 * * * *"]` 로 등록.
 - 검증: workerd 로컬(`wrangler dev`, 정적 파일 끔 — wrangler 로컬은 정적 파일이 있으면 scheduled 를 넘기지 못함)에서 scheduled → `/api/cron` 200 `{"ok":true,...}` 확인, 밖에서 비밀값 없이 부르면 401 그대로. 테스트 228/228(새 1개: 배포 설정 cron·scheduled 가 /api/cron 을 비밀값으로 부름), tsc 통과, lint 74/21(그대로).
-- [ ] 배포 뒤: Cloudflare → teamkick → 설정 → 트리거(또는 "도메인 및 경로" 옆 Cron 트리거)에 `*/10 * * * *` 확인, 로그에 `TeamKick scheduled 200`. 사장님: cron-job.org 작업 끄기.
+- [x] 배포 확인(2026-10-11 22:50 KST): Check production 버튼 — health 1.27.3, `/api/cron` 비밀값 없이 401, 예약 실행 `*/10 * * * *` outcome=ok, `TeamKick scheduled 200 {"ok":true,...}`. 사장님이 cron-job.org 작업 끔.
 
 ## T94 1.27.2 — Cloudflare 이전 완료 · 처리방침 호스팅 업체 변경(2026-10-11)
 

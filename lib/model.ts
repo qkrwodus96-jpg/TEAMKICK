@@ -83,6 +83,8 @@ export function prune(s:State,now=Date.now()){
  s.inquiries=sweep(s.inquiries,r=>r.status==="open"?Infinity:KEEP.inquiry);
  // 신고도 처리 전에는 지우지 않는다. 처리한 신고는 신고일로부터 1년.
  s.reports=sweep(s.reports,r=>r.status==="open"?Infinity:KEEP.report);
+ // 1.28 기간이 끝난 이용 정지는 지운다(정지 기록은 정지 중에만 둔다. 운영 기록은 audit 90일).
+ for(const u of s.users)if(u.suspended?.until&&Date.parse(u.suspended.until)<=now)delete u.suspended;
  return PRUNE_LIMIT-budget;
 }
 export const setupIncomplete=(e:unknown)=>/no such table|no such column/i.test(String(e));
@@ -411,6 +413,20 @@ function inviteCode(){const b=new Uint8Array(6);crypto.getRandomValues(b);return
 // 용병 신청·매칭 신청·경기 대화를 보내지 못하게 한다. 상대에게 차단 사실을 알리지 않는다(거절 문구도 일반 문구).
 export const BLOCK_MAX=300;
 export const REPORT_REASONS=["욕설·비하","노쇼·약속 불이행","허위 모집·기록","사기·금전 요구","광고·도배","기타"] as const;
+// --- 1.28 운영자 이용 정지 ---
+// 계정 줄(users[].suspended)에 {until, reason, at}. until 이 "" 이면 기간 없음. 정지 중에는 아래 명령만 된다:
+// 알림 읽기·알림 설정, 1:1 문의(이의 제기), 탈퇴, 팀 나가기·가입 신청 취소·내 용병 신청 철회, 차단·신고, 채팅방 숨기기.
+export const SUSPEND_DAYS=[3,7,30,0] as const;
+const SUSPEND_ALLOWED=new Set(["readNotifications","setNotifyPrefs","askSupport","closeAccount","leaveTeam","cancelJoin","withdrawGuest","blockUser","unblockUser","blockTeam","unblockTeam","report","chatReported","hideChat"]);
+export function activeSuspension(row:Row|undefined,now=Date.now()):Row|null{
+ const x=row?.suspended;if(!x||typeof x!=="object")return null;
+ if(x.until&&!(Date.parse(String(x.until))>now))return null;
+ return x;
+}
+const kstDay=(v:string)=>{const d=new Date(Date.parse(v)+9*3600e3);return d.getUTCFullYear()+"."+(d.getUTCMonth()+1)+"."+d.getUTCDate()};
+export function suspensionMessage(x:Row){
+ return "운영자가 이용을 정지한 계정이에요"+(x.until?"("+kstDay(String(x.until))+"까지)":"")+". 사유: "+String(x.reason||"운영 정책 위반")+". 이의가 있으면 MY → 고객센터 → 1:1 문의로 알려주세요.";
+}
 type BlockBook={users:Record<string,{name:string;at:string}>;teams:Record<string,{name:string;at:string}>};
 export function blockedOf(s:State,userId:string):BlockBook{const b=s.users.find(x=>x.id===userId)?.blocked;return {users:{...(b?.users??{})},teams:{...(b?.teams??{})}}}
 // 이 팀의 주장·운영진 중 한 명이라도 그 사람(또는 그 사람이 속한 팀)을 막았는가. 신청을 받는 쪽이 운영진이라 운영진 기준이다.
@@ -434,6 +450,9 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  const type=textValue(c.type,50),t=String(c.teamId??""),stamp=iso(now);let output:any={};
  if(!s.users.find(u=>u.id===a.id))s.users.push({id:a.id,name:a.name,at:stamp});
  const owner=isOwner(s,a.id);
+ // 1.28 이용 정지 중이면 허용된 명령 말고는 막는다. 화면이 아니라 여기서 막아야 우회할 수 없다.
+ const ban=owner?null:activeSuspension(s.users.find(u=>u.id===a.id),now);
+ if(ban&&!SUSPEND_ALLOWED.has(type))throw new AppError(suspensionMessage(ban),403);
  if(type==="setupOwner"){const current=s.settings.find(x=>x.id==="owner");ensure(!current||a.ownerReset,"운영자 설정이 이미 완료되었어요.",409);ensure(a.ownerSetup,"초기 설정 코드가 올바르지 않아요.",403);if(current)current.userId=a.id;else s.settings.push({id:"owner",userId:a.id});}
  else if(type==="createTeam"){
   ensure(a.verified!==false,"이메일 확인을 먼저 해주세요. 받은 편지함에서 확인 링크를 눌러주세요.",403);
@@ -671,7 +690,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   // 1.20 끝난 경기는 취소할 수 없다(기록을 지우는 데 악용될 수 있어서 — 사장님 요청). 잘못 만든 경기는 시작 전에 취소한다.
   if(type==="cancelGame"){ensure(g!.status==="scheduled"&&now<Date.parse(g!.end),"이미 끝난 경기는 취소할 수 없어요. 기록이 틀렸다면 기록 정정 요청을 써 주세요.",409);g!.status="cancelled";g!.reason=textValue(c.reason,300);g!.listing="cancelled";g!.change=null;for(const r of s.requests.filter(x=>x.gameId===g!.id&&x.status==="pending"))r.status="closed";for(const z of s.sides.filter(x=>x.gameId===g!.id))if(guestStatusOf(z)==="open")z.guestStatus="closed";for(const r of s.guests.filter(x=>x.gameId===g!.id&&x.status==="pending"))r.status="closed";for(const tid of [g!.home,g!.away].filter(Boolean))notice(s,tid,"경기 취소",g!.reason,g!.id);}
   if(type==="setOpponent"){ensure(!g!.away&&g!.listing!=="open"&&!g!.result?.status,"외부 상대팀을 입력할 수 없는 경기예요.");g!.external=textValue(c.external,60);}
-  if(type==="openListing"){ensure(g!.home===t&&!g!.away&&!g!.external&&Date.parse(g!.start)>now&&g!.status==="scheduled","상대팀 모집을 열 수 없는 경기예요.");g!.listing="open";}
+  if(type==="openListing"){ensure(g!.home===t&&!g!.away&&!g!.external&&Date.parse(g!.start)>now&&g!.status==="scheduled","상대팀 모집을 열 수 없는 경기예요.");ensure(!g!.takenDown,"운영자가 내린 모집글이라 다시 열 수 없어요. 고객센터로 문의해주세요.",403);g!.listing="open";}
   if(type==="closeListing"){ensure(g!.home===t&&!g!.away,"확정된 매칭은 경기 취소로 처리해주세요.");g!.listing="closed";for(const r of s.requests.filter(x=>x.gameId===g!.id&&x.status==="pending"))r.status="closed";}
   if(type==="attendance"){
    ensure(g!.status==="completed","경기 완료 처리 후 출석을 확정해주세요.");const roster=rosterFor(s,side!,g!);const values=c.values;ensure(values&&typeof values==="object","출석 정보를 확인해주세요.");
@@ -821,6 +840,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    requireTeam(s,t,a.id,"manager");
    if(type==="openGuests"){
     ensure(upcoming(),"시작 전 예정 경기에만 용병을 모집할 수 있어요.");
+    ensure(!side!.takenDown,"운영자가 내린 모집글이라 다시 열 수 없어요. 고객센터로 문의해주세요.",403);
     // 1.17: 포지션별 인원(스쿼디처럼), 참가비, 최소 출전 보장. 포지션별 인원을 적으면 그 합이 모집 인원이다.
     const pos:Record<string,number>={};for(const k of GUEST_POS){const n=integer(c.positions?.[k]??0,0,11);if(n)pos[k]=n;}
     const sum=Object.values(pos).reduce((x,y)=>x+y,0);
@@ -961,6 +981,35 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   r!.status="closed";r!.result=textValue(c.result,300);r!.closedAt=stamp;
   if(r!.userId)userNotice(s,r!.userId,"신고 처리 결과",r!.result.slice(0,120),undefined,"modal:help");
  }
+ // --- 1.28 운영자 조치: 이용 정지·해제, 모집글 내리기 (채팅 메시지 삭제는 /api/chat modDelete) ---
+ else if(type==="suspendUser"){
+  ensure(owner,"서비스 운영자만 처리할 수 있어요.",403);
+  const uid=String(c.userId??"");const row=s.users.find(x=>x.id===uid);ensure(row,"이용자를 찾을 수 없어요.",404);
+  ensure(uid!==a.id&&!isOwner(s,uid),"운영자 계정은 정지할 수 없어요.");
+  const days=Number(c.days);ensure((SUSPEND_DAYS as readonly number[]).includes(days),"정지 기간을 골라주세요.");
+  const reason=textValue(c.reason,200);
+  row!.suspended={until:days?iso(now+days*864e5):"",reason,at:stamp};
+  userNotice(s,uid,"이용 정지 안내",suspensionMessage(row!.suspended).slice(0,200),undefined,"modal:help");
+  output={until:row!.suspended.until};
+ }
+ else if(type==="unsuspendUser"){
+  ensure(owner,"서비스 운영자만 처리할 수 있어요.",403);
+  const row=s.users.find(x=>x.id===String(c.userId??""));ensure(row&&row.suspended,"정지된 이용자가 아니에요.",404);
+  delete row!.suspended;userNotice(s,row!.id,"이용 정지 해제","이용 정지가 풀렸어요. 다시 모든 기능을 쓸 수 있어요.",undefined,"home");
+ }
+ else if(type==="takedownListing"){
+  ensure(owner,"서비스 운영자만 처리할 수 있어요.",403);
+  const g=s.games.find(x=>x.id===String(c.gameId??""));ensure(g,"모집글을 찾을 수 없어요.",404);
+  const tid=t||String(g!.home);ensure(containsTeam(g!,tid),"이 경기의 팀이 아니에요.",404);
+  const reason=textValue(c.reason,200),mark={reason,at:stamp};let n=0;
+  if(g!.home===tid&&!g!.away&&g!.listing==="open"){g!.listing="closed";g!.takenDown=mark;n++;for(const r of s.requests.filter(x=>x.gameId===g!.id&&x.status==="pending"))r.status="closed";}
+  const side=sideOf(s,g!.id,tid);
+  if(side&&guestStatusOf(side)==="open"){side.guestStatus="closed";side.takenDown=mark;n++;for(const x of s.guests.filter(x=>x.gameId===g!.id&&x.teamId===tid&&x.status==="pending"))x.status="closed";}
+  ensure(n>0,"이미 내려간 모집글이에요.",409);
+  for(const m of s.members.filter(x=>x.teamId===tid&&["captain","manager"].includes(x.role)&&x.status==="active"))
+   userNotice(s,m.userId,"모집글 내림 안내","운영자가 "+whenRange(g!.start,g!.end)+" 모집글을 내렸어요. 사유: "+reason+". 이의가 있으면 고객센터로 알려주세요.",tid,"modal:help");
+  output={closed:n};
+ }
  // --- 서비스 공지 (팀 공지와 다르다. 모든 사용자에게 보인다) ---
  else if(type==="postAnnouncement"){
   ensure(owner,"서비스 운영자만 올릴 수 있어요.",403);
@@ -1077,6 +1126,9 @@ export function visibleState(s:State,userId:string,selected?:string){
   // 1.26 내 차단 목록(설정 → 차단 목록에서 해제). 신고는 운영자만 전부, 신고한 사람은 자기 것만(처리 결과 포함).
   blocked:{users:Object.entries(bk.users).map(([id,x])=>({id,name:x.name,at:x.at})),teams:Object.entries(bk.teams).map(([id,x])=>({id,name:x.name,at:x.at}))},
   reports:s.reports.filter(x=>owner||(x.userId&&x.userId===userId)).sort((x,y)=>String(y.at).localeCompare(String(x.at))).slice(0,owner?300:50).map(x=>owner?{...x,mine:x.userId===userId}:{id:x.id,kind:x.kind,targetName:x.targetName,reason:x.reason,detail:x.detail,status:x.status,result:x.result??"",at:x.at,closedAt:x.closedAt??"",mine:true}),
+  // 1.28 내 이용 정지(화면 맨 위 안내). 운영자는 정지 중인 사람 목록(해제용).
+  mySuspension:(()=>{const x=activeSuspension(s.users.find(u=>u.id===userId));return x?{until:x.until??"",reason:x.reason??"",message:suspensionMessage(x)}:null})(),
+  suspendedUsers:owner?s.users.filter(u=>activeSuspension(u)).map(u=>({id:u.id,name:u.name??"",until:u.suspended.until??"",reason:u.suspended.reason??"",at:u.suspended.at??""})):[],
   setupNeeded:!s.settings.some(x=>x.id==="owner"),games,// 승인된 용병도 그 경기에 뛰는 사람이다. 예전에는 참여 인원에서 빠져 있어
  // "9명 참여 예정" 이 실제와 달랐다. 팀원 명단(roster)과는 따로 둔다 —
  // 용병은 팀원이 아니고 출석·선수 통계에도 넣지 않는다(ASM-04).

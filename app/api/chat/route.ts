@@ -2,9 +2,9 @@ import {currentUser} from "@/lib/auth";
 import {assertWritable} from "@/lib/migrate";
 import {load} from "@/lib/store";
 import {loadRoomState,loadSome} from "@/lib/store-some";
-import {AppError,chatRoom,chatRooms,ensure,type State} from "@/lib/model";
+import {AppError,chatRoom,chatRooms,ensure,isOwner,activeSuspension,suspensionMessage,type State} from "@/lib/model";
 import {ensureSchema} from "@/lib/schema";
-import {listMessages,sendMessage,deleteMessage,findMessage,reportMessage,markRead,roomSummaries} from "@/lib/chat-server";
+import {listMessages,sendMessage,deleteMessage,moderateMessage,findMessage,reportMessage,markRead,roomSummaries} from "@/lib/chat-server";
 export const dynamic="force-dynamic";
 const json=(x:unknown,status=200)=>Response.json(x,{status,headers:{"Cache-Control":"no-store"}});
 const failed=(e:unknown)=>{
@@ -70,6 +70,9 @@ export async function POST(req:Request){
   let c:Record<string,unknown>;try{c=JSON.parse(raw)}catch{throw new AppError("입력 형식을 확인해주세요.")}
   const action=String(c.action??"");
   if(action==="send"){
+   // 1.28 이용 정지 중이면 보내지 못한다(지우기·신고는 된다).
+   const me=(await loadSome([{kind:"users",ids:[user.userId]}])).users[0];const ban=activeSuspension(me);
+   if(ban)throw new AppError(suspensionMessage(ban),403);
    const {state,r}=await room(user.userId,String(c.room??""));
    // 1.26 경기·용병 대화방(다른 팀과의 대화)에서 상대가 나(또는 우리 팀)를 차단했으면 보내지 못한다. 차단 사실은 알리지 않는다.
    if(r.kind!=="team"){const others=r.members.filter(u=>u!==user.userId),mine=r.teamOf(user.userId);
@@ -84,6 +87,12 @@ export async function POST(req:Request){
    return json({ok:true,message:{id:row.id,name:row.name,body:row.body,deleted:false,at:row.at,mine:true}});
   }
   if(action==="delete"){await deleteMessage(String(c.id??""),user.userId);return json({ok:true})}
+  // 1.28 운영자가 신고된 메시지를 지운다. 운영자인지는 저장된 상태로 서버에서 본다.
+  if(action==="modDelete"){
+   const {state}=await load();ensure(isOwner(state,user.userId),"서비스 운영자만 지울 수 있어요.",403);
+   const removed=await moderateMessage(String(c.id??"").slice(0,80));
+   return json({ok:true,removed});
+  }
   if(action==="report"){
    const msg=await findMessage(String(c.id??""));ensure(msg,"메시지를 찾을 수 없어요.",404);
    await room(user.userId,msg!.room);ensure(msg!.account_id!==user.userId,"내 메시지는 신고할 수 없어요.");

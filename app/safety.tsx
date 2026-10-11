@@ -3,7 +3,7 @@
 // 차단은 나에게만 영향이 있다(내 화면에서 가리고, 그 사람·팀이 나에게 신청·대화를 못 보내게). 상대에게 알리지 않는다.
 // 신고는 운영자만 전부 보고, 신고한 사람은 자기 신고와 처리 결과만 본다. 실제 판단과 조치는 운영자가 한다.
 import {useState,type ReactNode} from "react";
-import {Ban,Flag,LifeBuoy,MessageCircle,Megaphone,FileText,ShieldCheck} from "lucide-react";
+import {Ban,Flag,LifeBuoy,MessageCircle,Megaphone,FileText,ShieldCheck,Trash2,UserX,EyeOff} from "lucide-react";
 import {type Row} from "@/lib/model";
 import {CONTACT} from "@/lib/legal";
 import {localDay} from "./teamkick";
@@ -66,6 +66,54 @@ export function BlockedList({v,busy,save}:{v:Row;busy:boolean;save:Save}){
 }
 
 const KIND_LABEL:Record<string,string>={user:"사람",team:"팀",listing:"모집글",chat:"채팅"};
+// 1.28 운영자 조치. 정지 기간 0 은 "기간 없음"(해제할 때까지). lib/model.SUSPEND_DAYS 와 같아야 한다.
+const SUSPEND_CHOICES:[number,string][]=[[3,"3일"],[7,"7일"],[30,"30일"],[0,"기간 없음"]];
+const untilText=(x:string)=>x?localDay(x)+"까지":"기간 없음";
+
+function ReportActions({r,v,busy,save,note}:{r:Row;v:Row;busy:boolean;save:Save;note:(t:string)=>void}){
+ const [ask,setAsk]=useState(""),[days,setDays]=useState(7),[msg,setMsg]=useState(""),[working,setWorking]=useState(false);
+ const suspended=(v.suspendedUsers??[]).find((x:Row)=>x.id===r.targetUserId);
+ const team=(v.teams??[]).find((t:Row)=>t.id===r.targetTeamId);
+ const done=(t:string)=>{setAsk("");setMsg(t);note(t)};
+ async function removeMessage(){
+  setWorking(true);setMsg("");
+  try{const res=await fetch("/api/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"modDelete",id:r.messageId})});
+   const j=(await res.json().catch(()=>({}))) as {error?:string;removed?:boolean};if(!res.ok)throw new Error(j.error||"지우지 못했어요.");done(j.removed?"신고된 메시지를 삭제했어요.":"이미 지워진 메시지예요.")}
+  catch(e){setMsg(e instanceof Error?e.message:"지우지 못했어요.")}finally{setWorking(false)}
+ }
+ const confirmRow=(label:string,go:()=>void)=><div className="row" style={{gap:8,flexWrap:"wrap"}}><button type="button" className="btn btn-danger" disabled={busy||working} onClick={go}>{label}</button><button type="button" className="btn" onClick={()=>setAsk("")}>취소</button></div>;
+ return <div className="mod-actions">
+  <div className="row" style={{gap:8,flexWrap:"wrap"}}>
+   {r.kind==="chat"&&r.messageId&&<button type="button" className="btn" disabled={busy||working} onClick={()=>setAsk("message")}><Trash2 size={15}/>메시지 삭제</button>}
+   {r.targetUserId&&!suspended&&<button type="button" className="btn" disabled={busy} onClick={()=>setAsk("suspend")}><UserX size={15}/>이용 정지</button>}
+   {r.kind==="listing"&&r.gameId&&<button type="button" className="btn" disabled={busy} onClick={()=>setAsk("takedown")}><EyeOff size={15}/>모집글 내리기</button>}
+   {(r.kind==="team"||r.kind==="listing")&&team&&team.status==="active"&&<button type="button" className="btn" disabled={busy} onClick={()=>setAsk("team")}><Ban size={15}/>팀 정지</button>}
+  </div>
+  {suspended&&<p className="data-note">이 사람은 이용 정지 중이에요({untilText(suspended.until)}). 아래 ‘이용 정지 중’에서 풀 수 있어요.</p>}
+  {ask==="message"&&<div className="safety-box"><p>메시지 내용을 지우고 대화방에는 ‘삭제된 메시지’로 보여요. 신고 때 남긴 원문은 90일 보관돼요.</p>{confirmRow("삭제하기",removeMessage)}</div>}
+  {ask==="suspend"&&<div className="safety-box">
+   <p><b>{String(r.targetName||"").split(" · ")[0]||"이 사람"}</b> 이용 정지 — 정지 중에는 저장·채팅·사진 올리기가 막히고, 알림 읽기·1:1 문의·탈퇴만 돼요. 본인에게 사유와 함께 알려요.</p>
+   <div className="chip-row" role="radiogroup" aria-label="정지 기간">{SUSPEND_CHOICES.map(([d,l])=><button type="button" key={d} role="radio" aria-checked={days===d} className={"chip-mini"+(days===d?" on":"")} onClick={()=>setDays(d)}>{l}</button>)}</div>
+   {confirmRow("정지하기",()=>save({type:"suspendUser",userId:r.targetUserId,days,reason:r.reason},()=>done("이용 정지("+(SUSPEND_CHOICES.find(x=>x[0]===days)?.[1])+")했어요.")))}
+  </div>}
+  {ask==="takedown"&&<div className="safety-box"><p>매칭·용병 모집을 닫고 대기 중인 신청도 닫아요. 팀은 이 모집을 다시 열 수 없어요. 팀 운영진에게 사유와 함께 알려요.</p>
+   {confirmRow("내리기",()=>save({type:"takedownListing",gameId:r.gameId,teamId:r.targetTeamId,reason:r.reason},()=>done("모집글을 내렸어요.")))}</div>}
+  {ask==="team"&&<div className="safety-box"><p>팀 전체를 정지해요(팀 화면·모집이 멈춰요). 서비스 관리 → 팀에서 다시 풀 수 있어요.</p>
+   {confirmRow("팀 정지",()=>save({type:"suspendTeam",teamId:r.targetTeamId,reason:r.reason},()=>done("팀을 정지했어요.")))}</div>}
+  {msg&&<p className="data-note" role="status">{msg}</p>}
+ </div>;
+}
+
+function SuspendedList({v,busy,save}:{v:Row;busy:boolean;save:Save}){
+ const list=v.suspendedUsers??[];const [ask,setAsk]=useState("");
+ if(!list.length)return null;
+ return <section className="safety-box"><h3><UserX size={16}/>이용 정지 중 <span className="small muted">{list.length}</span></h3>
+  {list.map((x:Row)=><div className="attendance-item" key={x.id}><div><strong>{x.name||"이용자"}</strong><p className="data-note">{untilText(x.until)} · {x.reason}</p></div>
+   {ask===x.id?<div className="row" style={{gap:6}}><button className="btn btn-green" disabled={busy} onClick={()=>save({type:"unsuspendUser",userId:x.id},()=>setAsk(""))}>해제</button><button className="btn" onClick={()=>setAsk("")}>취소</button></div>
+    :<button className="btn" disabled={busy} onClick={()=>setAsk(x.id)}>해제…</button>}</div>)}
+ </section>;
+}
+
 export function ReportsAdmin({v,busy,save}:{v:Row;busy:boolean;save:Save}){
  const [tab,setTab]=useState<"open"|"closed">("open"),[notes,setNotes]=useState<Record<string,string>>({});
  const list=(v.reports??[]).filter((r:Row)=>tab==="open"?r.status==="open":r.status!=="open");
@@ -75,12 +123,14 @@ export function ReportsAdmin({v,busy,save}:{v:Row;busy:boolean;save:Save}){
    <div className="row between"><strong><span className="badge">{KIND_LABEL[r.kind]??r.kind}</span> {r.targetName||"대상 미상"}</strong><span className="small muted">{localDay(r.at)}</span></div>
    <p><b>{r.reason}</b>{r.detail?" · "+r.detail:""}</p>
    <span>신고: {r.reporterName||"이용자"}{r.kind==="chat"?" · 메시지 원문은 신고 후 90일 보관(chat_reports)":""}</span>
+   {r.status==="open"&&<ReportActions r={r} v={v} busy={busy} save={save} note={t=>setNotes(n=>({...n,[r.id]:n[r.id]?n[r.id]+" "+t:t}))}/>}
    {r.status==="open"?<form className="form-grid" style={{marginTop:10}} onSubmit={e=>{e.preventDefault();save({type:"resolveReport",reportId:r.id,result:notes[r.id]},()=>setNotes(n=>({...n,[r.id]:""})))}}>
     <label>처리 결과(신고한 사람에게 보내져요)<textarea required maxLength={300} value={notes[r.id]??""} onChange={e=>setNotes(n=>({...n,[r.id]:e.target.value}))} placeholder="예: 확인 후 해당 이용자에게 경고했어요."/></label>
     <button className="btn btn-green" type="submit" disabled={busy}>처리 완료</button>
    </form>:<div className="detail-meta" style={{marginTop:10}}><strong>처리 결과</strong><p>{r.result}</p>{r.closedAt&&<span className="small muted">{localDay(r.closedAt)}</span>}</div>}
   </div>)}
   {!list.length&&<p className="data-note">{tab==="open"?"처리할 신고가 없어요.":"처리한 신고가 없어요."}</p>}
+  <SuspendedList v={v} busy={busy} save={save}/>
   <p className="data-note">신고는 처리 전까지 보관하고, 신고일로부터 1년이 지나면 처리한 것부터 지워요.</p>
  </div>;
 }

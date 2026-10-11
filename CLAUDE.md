@@ -64,6 +64,14 @@ pnpm db:generate                        # 스키마 변경 시 migration 생성
 로컬에서도 앱 화면에서 직접 회원가입해 여러 계정을 만들 수 있다.
 다중 사용자 권한·동시성 검증은 여전히 `tests/core.test.mjs`가 기준이다.
 
+**운영 사이트 직접 확인(2026-10-11부터)**: 사장님이 환경 네트워크를 "사용자 지정"으로 바꾸고
+`teamkick.co.kr`·`teamkick.qkrwodus96.workers.dev`(+GitHub 주소)를 허용했다. `curl` 은 바로 된다.
+브라우저(Playwright Chromium)는 컨테이너마다 한 번 프록시 인증서를 넣어야 한다:
+`apt-get install -y libnss3-tools` → `/root/.ccr/ca-bundle.crt` 에서 "agent-proxy" 인증서를 골라
+`certutil -A -d sql:/root/.pki/nssdb -t C,, -n ccr-agent-proxy -i <파일>`, 실행 때 `proxy:{server:process.env.HTTPS_PROXY}`.
+운영 사이트에서는 읽기·화면 확인만 한다(가입·저장·발송 금지, 필요하면 사장님에게 먼저 묻는다).
+GitHub Actions **Check production** 버튼은 예약 실행 로그 확인용으로 그대로 쓴다.
+
 **이 개발 환경은 외부 API 접속이 막혀 있다.** dapi.kakao.com, api.brevo.com,
 api.resend.com 모두 프록시가 CONNECT 를 거부한다(403). 그래서 외부 연동은
 **성공 경로를 여기서 검증할 수 없고** 실패 경로(키 없음·오류 처리·화면 대체)만

@@ -11,7 +11,7 @@
 - [x] 원인: 이전 뒤 cron-job.org → `https://teamkick.co.kr/api/cron` 이 22:00부터 403(56~497ms, 팀킥 코드는 그 주소에서 403 을 내지 않음, 브라우저로 열면 401 정상, Cloudflare 보안 이벤트 없음). Cloudflare 입구가 외부 자동 요청을 거른 것으로 판단.
 - [x] `scripts/cron-entry.mjs`: 빌드 결과를 감싸는 입구(`cron-entry.js`)를 만들어 `scheduled` 에서 같은 worker 의 `/api/cron` 을 안에서 부른다(인증·잠금·일 내용 그대로). 배포가 `triggers.crons=["*/10 * * * *"]` 로 등록.
 - 검증: workerd 로컬(`wrangler dev`, 정적 파일 끔 — wrangler 로컬은 정적 파일이 있으면 scheduled 를 넘기지 못함)에서 scheduled → `/api/cron` 200 `{"ok":true,...}` 확인, 밖에서 비밀값 없이 부르면 401 그대로. 테스트 228/228(새 1개: 배포 설정 cron·scheduled 가 /api/cron 을 비밀값으로 부름), tsc 통과, lint 74/21(그대로).
-- [ ] 배포 뒤: Cloudflare → teamkick → 설정 → 트리거(또는 "도메인 및 경로" 옆 Cron 트리거)에 `*/10 * * * *` 확인, 로그에 `TeamKick scheduled 200`. 사장님: cron-job.org 작업 끄기.
+- [x] 배포 확인(2026-10-11 22:50 KST): Check production 버튼 — health 1.27.3, `/api/cron` 비밀값 없이 401, 예약 실행 `*/10 * * * *` outcome=ok, `TeamKick scheduled 200 {"ok":true,...}`. 사장님이 cron-job.org 작업 끔.
 
 ## T94 1.27.2 — Cloudflare 이전 완료 · 처리방침 호스팅 업체 변경(2026-10-11)
 

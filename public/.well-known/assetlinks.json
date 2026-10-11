@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "kr.co.teamkick",
+      "sha256_cert_fingerprints": [
+        "CE:0D:EB:3B:71:FE:16:6C:F3:F8:76:B7:69:C9:AE:F7:CA:BD:58:ED:D5:C4:96:A3:AF:88:3B:9E:A3:BA:83:3A"
+      ]
+    }
+  }
+]

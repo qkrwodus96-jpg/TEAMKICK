@@ -18,7 +18,7 @@ PR #21 은 2026-09-18 병합 완료(T39-T62), PR #20 은 2026-09-17 병합 완�
 
 ### 2026-10-12 (52) ⑯ 도메인 메일 설정 완료 (TASKS T101)
 
-- Brevo 인증 + MAIL_FROM=noreply@teamkick.co.kr, 운영자 health 확인. 남은 것: 네이버로 비밀번호 찾기 메일 수신 확인.
+- Brevo 도메인 인증 + Senders 에 noreply@teamkick.co.kr 등록 + MAIL_FROM. 네이버에서 보낸 사람 noreply@teamkick.co.kr 확인(사장님). 회신 주소(Reply-To)는 아직 문의처 jyp7296@naver.com — help@teamkick.co.kr(Cloudflare Email Routing) 만들면 `lib/legal.ts` CONTACT 교체 가능.
 
 ### 2026-10-12 (51) 1.31.1 풋살 화면 점검 고침 (TASKS T100a)
 

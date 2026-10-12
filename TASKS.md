@@ -9,7 +9,7 @@
 ## T101 ⑯ 팀킥 도메인 메일(설정만, 2026-10-12)
 
 - [x] 사장님: Brevo 도메인 teamkick.co.kr Authenticated, Cloudflare `MAIL_FROM` = 팀킥 <noreply@teamkick.co.kr>. 운영자 health 에서 `mailFromDomain: teamkick.co.kr`, `mailReady: true` 확인(사장님 화면).
-- [ ] 비밀번호 찾기 메일을 네이버 주소로 받아 보낸 사람·스팸함 확인(사장님).
+- [x] 처음엔 보낸 사람이 jyp7296@naver.com 으로 나옴 → Brevo **Senders** 에 `팀킥 <noreply@teamkick.co.kr>` 를 추가하니 noreply@teamkick.co.kr 로 옴(사장님 네이버 확인, 2026-10-12). 도메인 인증만으로는 부족하고 보내는 주소를 Senders 에 등록해야 한다.
 
 ## T100a 1.31.1 — 풋살 모드 전체 화면 점검 후 고침(2026-10-12, 사장님 요청)
 

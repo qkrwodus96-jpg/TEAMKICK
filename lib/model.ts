@@ -50,6 +50,9 @@ function dissolveTeam(s:State,t:string,stamp:string){
  team.status="closed";team.reason="주장이 탈퇴해 해산했어요.";
  // 1.19 회비 장부는 팀 운영용이라 해산하면 지운다(처리방침).
  delete team.dues;delete team.duesPaid;delete team.duesReported;delete team.duesReminded;
+ // 1.30 사진(팀 로고·팀 사진·선수 사진)도 지운다. 여기서는 연결을 끊고, 저장소 파일은 예약 실행이 지운다(purgeClosedTeamImages).
+ team.logo="";team.photos=[];
+ for(const m of s.members.filter(x=>x.teamId===t))m.photo="";
  for(const m of s.members.filter(x=>x.teamId===t&&x.status==="pending"))m.status="left";
  for(const v of s.invites.filter(x=>x.teamId===t))v.active=false;
  for(const r of s.requests.filter(x=>x.teamId===t&&x.status==="pending"))r.status="closed";
@@ -435,6 +438,16 @@ export function activeSuspension(row:Row|undefined,now=Date.now()):Row|null{
  return x;
 }
 const kstDay=(v:string)=>{const d=new Date(Date.parse(v)+9*3600e3);return d.getUTCFullYear()+"."+(d.getUTCMonth()+1)+"."+d.getUTCDate()};
+// 1.30 해산한 팀 중 저장소 사진을 아직 안 지운 팀(한 번에 최대 n팀). 예약 실행이 파일을 지운 뒤 markTeamImagesPurged 로 표시한다.
+export const teamsToPurge=(s:State,n=5)=>s.teams.filter(t=>t.status==="closed"&&!t.imagesPurgedAt).slice(0,n).map(t=>String(t.id));
+export function markTeamImagesPurged(s:State,ids:string[],now=Date.now()){
+ let n=0;
+ for(const team of s.teams.filter(t=>ids.includes(String(t.id))&&t.status==="closed")){
+  team.imagesPurgedAt=iso(now);team.logo="";team.photos=[];n++;
+  for(const m of s.members.filter(x=>x.teamId===team.id))m.photo="";
+ }
+ return n;
+}
 // 기간이 끝난 팀 정지를 푼다. 저장할 때마다(prune)와 예약 실행(10분마다)에서 부른다. 푼 팀 수를 돌려준다.
 export function restoreExpiredTeams(s:State,now=Date.now()){
  let n=0;

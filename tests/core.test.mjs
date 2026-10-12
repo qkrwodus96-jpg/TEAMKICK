@@ -52,7 +52,8 @@ compile('lib/unlink.ts','unlink.mjs',s=>s.replace('"./social"','"./social.mjs"')
 compile('lib/store-some.ts','store-some.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/chat-server.ts','chat-server.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/cron.ts','cron.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;'));
-compile('app/api/cron/route.ts','cron-api.mjs',s=>s.replace('import {saveDueWeather} from "@/lib/weather-keep";','const saveDueWeather=async()=>globalThis.__teamkickTestWeather??{saved:0};').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {wakeDevices} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0,results:[]}};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/cron"','"./cron.mjs"'));
+compile('lib/images.ts','images.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
+compile('app/api/cron/route.ts','cron-api.mjs',s=>s.replace('"@/lib/images"','"./images.mjs"').replace('import {saveDueWeather} from "@/lib/weather-keep";','const saveDueWeather=async()=>globalThis.__teamkickTestWeather??{saved:0};').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {wakeDevices} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);return {sent:ids.length,failed:0,results:[]}};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/cron"','"./cron.mjs"'));
 compile('app/api/migrate/route.ts','migrate-api.mjs',s=>s.replace('"@/lib/model"','"./model.mjs"').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};'));
 compile('app/api/chat/route.ts','chat-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store-some"','"./store-some.mjs"').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/chat-server"','"./chat-server.mjs"'));
 compile('lib/close.ts','close.mjs',s=>s.replace('"./store"','"./store.mjs"').replace('"./model"','"./model.mjs"').replace('"./auth"','"./auth.mjs"').replace('"./unlink"','"./unlink.mjs"'));
@@ -3629,7 +3630,7 @@ test('예약 실행(/api/cron): 비밀값이 맞을 때만, 알림은 한 번만
   globalThis.__teamkickTestWoken=[];
   const first=await call('Bearer '+secret);assert.equal(first.status,200);
   const body=await first.json();assert.equal(body.reminded,1);assert.equal(body.people,2);
-  assert.deepEqual(Object.keys(body).sort(),['at','birthdays','failed','ok','people','reminded','restored','sent','weather'],'누구에게 보냈는지는 담지 않는다(숫자만)');
+  assert.deepEqual(Object.keys(body).sort(),['at','birthdays','failed','ok','people','purged','reminded','restored','sent','weather'],'누구에게 보냈는지는 담지 않는다(숫자만)');
   assert.deepEqual([...globalThis.__teamkickTestWoken].sort(),['a','player'],'저장 뒤 기기를 깨운다');
   // 1.25 알림은 받는 사람별 표(user_notifications)에 저장된다.
   assert.equal(db.prepare("SELECT body FROM user_notifications").all().map(r=>JSON.parse(r.body)).filter(x=>/^오늘/.test(x.title)).length,2,'DB에 저장된다');
@@ -4228,7 +4229,7 @@ test('1.26.1 나간 팀의 알림은 지금 팀 알림을 읽을 때 함께 읽�
 
 // --- 1.27 서버 이전 도구 ---
 function memBucket(){const m=new Map();return {m,
-  async list({cursor,limit=1000}={}){const keys=[...m.keys()].sort();const start=cursor?Number(cursor):0;const page=keys.slice(start,start+limit);const more=start+limit<keys.length;return {objects:page.map(key=>({key})),truncated:more,cursor:more?String(start+limit):undefined}},
+  async list({prefix='',cursor,limit=1000}={}){const keys=[...m.keys()].filter(k=>k.startsWith(prefix)).sort();const start=cursor?Number(cursor):0;const page=keys.slice(start,start+limit);const more=start+limit<keys.length;return {objects:page.map(key=>({key})),truncated:more,cursor:more?String(start+limit):undefined}},
   async get(key){const o=m.get(key);return o?{body:o.data,httpMetadata:{contentType:o.type},customMetadata:o.custom}:null},
   async put(key,data,opt={}){m.set(key,{data:new Uint8Array(data),type:opt.httpMetadata?.contentType,custom:opt.customMetadata??{}})},
   async delete(keys){for(const k of [].concat(keys))m.delete(k)}}}
@@ -4449,4 +4450,22 @@ test('1.29 다시 가입한 계정의 남은 정지는 첫 저장 때 한 번만
   // 이미 끝난 정지는 걸지 않는다
   const late={id:'late',name:'늦게',hold:{until:iso(NOW-DAY),reason:'x'}};
   command(f.s,late,{type:'joinTeam',teamId:f.b,name:'늦게',position:'MF',number:8});
+});
+
+test('1.30 팀이 해산되면 사진 연결을 바로 끊고, 예약 실행이 저장소의 그 팀 사진만 지운다(한 번만)',async()=>{
+  localDatabase();const f=fixture();
+  const team=f.s.teams.find(t=>t.id===f.c);team.logo='teams/'+f.c+'/logo.png';team.photos=[{id:'p1',key:'teamphotos/'+f.c+'/a.jpg',caption:'',at:iso(NOW)}];
+  const cap=f.s.members.find(m=>m.teamId===f.c&&m.userId==='c');cap.photo='members/'+f.c+'/'+cap.id+'/x.jpg';
+  command(f.s,C,{type:'closeAccount'});
+  assert.equal(team.status,'closed');assert.equal(team.logo,'');assert.deepEqual(team.photos,[]);assert.equal(cap.photo,'');
+  await repository.commit(blank(),f.s,0);
+  const bucket=memBucket();for(const k of ['teams/'+f.c+'/logo.png','teamphotos/'+f.c+'/a.jpg','members/'+f.c+'/m1/x.jpg','teams/'+f.a+'/logo.png','members/'+f.a+'/m2/y.jpg'])await bucket.put(k,new Uint8Array([1]));
+  const E=globalThis.__teamkickTestEnv;const before=E.BUCKET;E.BUCKET=bucket;E.CRON_SECRET='test-cron-secret-0123456789';
+  try{
+    const call=()=>cronApi.GET(new Request('https://teamkick.test/api/cron',{headers:{authorization:'Bearer test-cron-secret-0123456789'}}));
+    const r1=await (await call()).json();assert.equal(r1.purged,1);
+    assert.deepEqual([...bucket.m.keys()].sort(),['members/'+f.a+'/m2/y.jpg','teams/'+f.a+'/logo.png'],'다른 팀 사진은 그대로');
+    const {state}=await repository.load();assert.ok(state.teams.find(t=>t.id===f.c).imagesPurgedAt);
+    const r2=await (await call()).json();assert.ok(!r2.purged,'한 번 지운 팀은 다시 하지 않는다');
+  }finally{E.BUCKET=before;if(before===undefined)delete E.BUCKET}
 });

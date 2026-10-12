@@ -1,6 +1,7 @@
 import {load,commit,cleanupNotifications} from "@/lib/store";
 import {frozen} from "@/lib/migrate";
-import {gameReminders,birthdayNotices,iso,pushTargets,restoreExpiredTeams} from "@/lib/model";
+import {gameReminders,birthdayNotices,iso,pushTargets,restoreExpiredTeams,teamsToPurge,markTeamImagesPurged} from "@/lib/model";
+import {storageReady,removeTeamImages} from "@/lib/images";
 import {ensureSchema} from "@/lib/schema";
 import {wakeDevices} from "@/lib/push";
 import {cronAuthorized,cronReady} from "@/lib/cron";
@@ -29,13 +30,17 @@ async function run(req:Request){
    const {sides}=gameReminders(after,now);const {people:birthdays}=birthdayNotices(after,now);
    // 1.28.1 기간이 끝난 팀 정지를 푼다(아무도 저장하지 않아도 10분 안에 풀리게).
    const restored=restoreExpiredTeams(after,now);
-   if(!sides&&!birthdays&&!restored)return json({ok:true,at:iso(now),reminded:0,birthdays:0,people:0,weather:wx.saved});
+   // 1.30 해산한 팀의 사진 파일을 저장소에서 지운다(지우기는 여러 번 해도 같다). 지운 팀만 표시한다.
+   const purgeIds:string[]=[];
+   if(storageReady())for(const t of teamsToPurge(after)){try{await removeTeamImages(t);purgeIds.push(t)}catch(e){console.error("TeamKick cron purge",e instanceof Error?e.message:"error")}}
+   const purged=markTeamImagesPurged(after,purgeIds,now);
+   if(!sides&&!birthdays&&!restored&&!purged)return json({ok:true,at:iso(now),reminded:0,birthdays:0,people:0,weather:wx.saved});
    try{await commit(state,after,version)}
    catch(e){if(String(e).includes("revision_matches")||String(e).includes("CHECK constraint")){if(attempt<3)continue}throw e}
    const had=new Set(state.notifications.map(x=>x.id));
    const woken=pushTargets(after,after.notifications.filter(x=>!had.has(x.id)),now);
    const d=woken.length?await wakeDevices(woken).catch(e=>{console.error("TeamKick cron push",e);return null}):null;
-   return json({ok:true,at:iso(now),reminded:sides,birthdays,restored,people:woken.length,sent:d?.sent??0,failed:d?.failed??0,weather:wx.saved});
+   return json({ok:true,at:iso(now),reminded:sides,birthdays,restored,purged,people:woken.length,sent:d?.sent??0,failed:d?.failed??0,weather:wx.saved});
   }
   return json({ok:false,error:"busy"},409);
  }catch(e){console.error("TeamKick cron",e);return json({ok:false,error:"cron failed"},503)}

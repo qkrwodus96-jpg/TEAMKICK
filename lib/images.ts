@@ -46,6 +46,22 @@ export async function pruneOthers(prefix:string,keep:string){
  for(const object of listed.objects)if(object.key!==keep)await need().delete(object.key);
 }
 
+// 1.30 한 자리(접두어) 아래 파일을 모두 지운다. 팀 해산 때 로고·팀 사진·선수 사진을 지우는 데 쓴다. 지운 개수를 돌려준다.
+export async function removePrefix(prefix:string){
+ let cursor:string|undefined,n=0;
+ do{
+  const listed=await need().list({prefix,cursor,limit:500});
+  const keys=listed.objects.map(o=>o.key);
+  if(keys.length){await need().delete(keys);n+=keys.length}
+  cursor=listed.truncated?listed.cursor:undefined;
+ }while(cursor);
+ return n;
+}
+export async function removeTeamImages(teamId:string){
+ ensure(/^[A-Za-z0-9_-]+$/.test(teamId),"팀 번호를 확인해주세요.");
+ return (await removePrefix(teamLogoPrefix(teamId)))+(await removePrefix(teamPhotoPrefix(teamId)))+(await removePrefix("members/"+teamId+"/"));
+}
+
 export async function getImage(key:string){
  const object=await need().get(key);
  if(!object)return null;

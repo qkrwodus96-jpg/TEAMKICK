@@ -855,3 +855,8 @@ body{word-break:keep-all;overflow-wrap:break-word}
 @media (max-width:380px){.help-grid{grid-template-columns:1fr}}
 .chat-menu-ask{align-self:center;font-size:12.5px;font-weight:600;color:#4d5d53}
 .safety-row{display:flex;justify-content:flex-end;margin-top:6px}
+/* 1.31 축구|풋살 전환 — 팀 고르기 옆(모바일)·아래(넓은 화면) */
+.team-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.sport-seg{min-width:150px}
+.team-select .sport-seg{display:grid;width:100%}
+.lu-pitch.futsal{aspect-ratio:100/180;max-width:380px}

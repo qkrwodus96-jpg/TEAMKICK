@@ -1,5 +1,5 @@
 import {cleanNewsTeams,NEWS_TEAMS_MAX} from "./news";
-import {FORMATIONS} from "./formations";
+import {FORMATIONS,formationsFor} from "./formations";
 import {whenRange,whenText} from "./when";
 export type Row={id:string;[key:string]:any};
 export type State={users:Row[];teams:Row[];members:Row[];games:Row[];sides:Row[];requests:Row[];guests:Row[];notices:Row[];notifications:Row[];invites:Row[];audit:Row[];receipts:Row[];settings:Row[];inquiries:Row[];announcements:Row[];reports:Row[]};
@@ -130,6 +130,15 @@ export function requireTeam(s:State,t:string,u:string,level="member",write=true)
 // 매칭·검색에서 같은 지역이 갈라진다.
 // 상대팀을 고를 때 보이는 값들. 목록 밖 값이 들어오면 매칭 화면이 깨진다.
 export const FORMATS=["11인제","8인제","6인제","5인제"];
+// 1.31 풋살 모드(사장님 결정 A): 같은 팀이 화면 맨 위에서 축구|풋살을 바꿔 본다. 경기마다 종목(sport)을 두고
+// 일정·출석·기록·랭킹·매칭 목록은 종목별로 따로 센다(팀원 명단은 같다). 예전 경기(sport 없음)는 축구다.
+export const SPORTS=["soccer","futsal"] as const;
+export type Sport=typeof SPORTS[number];
+export const SPORT_NAME:Record<Sport,string>={soccer:"축구",futsal:"풋살"};
+export const sportOf=(g:unknown):Sport=>(g as Row|null)?.sport==="futsal"?"futsal":"soccer";
+export const FUTSAL_FORMATS=["4인제","5인제","6인제"];
+// 라인업 칸 수: 축구는 4쿼터, 풋살은 전·후반(2).
+export const defaultPeriods=(g:unknown)=>sportOf(g)==="futsal"?2:4;
 // 1.17: 최하·하·중·상·최상 다섯 단계(사장님 요청). 예전 값은 아래 OLD_LEVELS 로 맞춘다.
 export const LEVELS=["최하","하","중","상","최상"];
 // 주로 뛰는 때. "주말" 은 예전 기본값이라 목록에 남겨 둔다.
@@ -207,7 +216,13 @@ export function guestPositionsLeft(s:State,side:Row){
 }
 export const gameMoved=(g:Row,change:Record<string,unknown>)=>change.start!==g.start||change.end!==g.end||String(change.venue??"")!==String(g.venue??"")||String(change.address??"")!==String(g.address??"");
 function resetVotes(s:State,g:Row,roster=false){for(const z of s.sides.filter(x=>x.gameId===g.id)){z.voteArchive=[...(z.voteArchive??[]),z.votes];z.votes={};z.deadline=g.start;if(roster){z.roster=null;z.attendanceFinal=false;}}}
-export function newSide(g:Row,t:string):Row{return {id:g.id+":"+t,gameId:g.id,teamId:t,deadline:g.start,meeting:"",note:"",needed:11,votes:{},attendance:{},attendanceFinal:false,records:{},recordsFinal:false,guestNeeded:0,guestStatus:"none"}}
+// 1.31 경기 종목·형식. 풋살은 4·5·6인제 중에서만 고른다. 축구는 예전처럼 형식 글자를 그대로 받는다.
+function gameKind(c:Row){
+ ensure(c.sport==null||c.sport===""||(SPORTS as readonly string[]).includes(String(c.sport)),"종목을 확인해주세요.");
+ if(c.sport==="futsal")return {sport:"futsal",format:pick(c.format||"5인제",FUTSAL_FORMATS,"풋살 경기 형식")};
+ return {sport:"soccer",format:textValue(c.format||"11인제",20)};
+}
+export function newSide(g:Row,t:string):Row{return {id:g.id+":"+t,gameId:g.id,teamId:t,deadline:g.start,meeting:"",note:"",needed:sportOf(g)==="futsal"?Number(String(g.format).match(/^\d+/)?.[0]??5):11,votes:{},attendance:{},attendanceFinal:false,records:{},recordsFinal:false,guestNeeded:0,guestStatus:"none"}}
 // 알림 문구에 들어갈 경기 시각. 저장은 UTC 로 두고 보여줄 때만 Asia/Seoul 로 바꾼다.
 // 화면 쪽 koreanDate·time 과 같은 모양("9월 22일 (화) 10:00")을 만든다. Workers 런타임의
 // Intl 표준 시간대 자료에 기대지 않도록 9시간을 직접 더해 계산한다.
@@ -362,9 +377,9 @@ export const NATIONAL_LIMIT=50;
 // MVP 는 시간이 지나 마감되므로 10분 단위로도 새로 센다.
 type RankBase=Record<string,{uid:string;mid:string;name:string;team:string;goals:number;assists:number;points:number;mvp:number;attend:number;card:Record<string,unknown>|null}[]>;
 const rankMemo=new Map<string,RankBase>();
-function rankingBase(s:State,now:number,region:string):RankBase{
+function rankingBase(s:State,now:number,region:string,sport:Sport="soccer"):RankBase{
  const rev=(s as unknown as {__rev?:number}).__rev;
- const key=rev==null?"":rev+"|"+region+"|"+RANK_PERIODS.map(p=>periodRange(p,now).from).join(",")+"|"+Math.floor(now/600e3);
+ const key=rev==null?"":rev+"|"+sport+"|"+region+"|"+RANK_PERIODS.map(p=>periodRange(p,now).from).join(",")+"|"+Math.floor(now/600e3);
  if(key){const hit=rankMemo.get(key);if(hit)return hit}
  const open=new Set(s.users.filter(u=>u.rankPublic===true).map(u=>u.id as string));
  const games=new Map(s.games.map(g=>[g.id,g])),members=new Map(s.members.map(m=>[m.id,m])),teams=new Map(s.teams.map(t=>[t.id,t]));
@@ -374,7 +389,7 @@ function rankingBase(s:State,now:number,region:string):RankBase{
   const people=new Map<string,{mid:string;name:string;teams:Map<string,number>;goals:number;assists:number;mvp:number;attend:number}>();
   for(const side of s.sides){
    const g=games.get(side.gameId);
-   if(!g||g.status!=="completed"||g.start<from||g.start>=to)continue;
+   if(!g||g.status!=="completed"||g.start<from||g.start>=to||sportOf(g)!==sport)continue;
    const team=teams.get(side.teamId);if(team?.status!=="active"||(region&&team.region!==region))continue;
    const winners=mvpWinners(side,now);
    for(const r of (side.roster??[]) as Row[]){
@@ -396,8 +411,8 @@ function rankingBase(s:State,now:number,region:string):RankBase{
  if(key){if(rankMemo.size>200)rankMemo.clear();rankMemo.set(key,out)}
  return out;
 }
-export function nationalRanking(s:State,userId:string,now=Date.now(),region=""){
- const base=rankingBase(s,now,region);
+export function nationalRanking(s:State,userId:string,now=Date.now(),region="",sport:Sport="soccer"){
+ const base=rankingBase(s,now,region,sport);
  const out:Record<string,Record<string,Row[]>>={};
  for(const period of RANK_PERIODS){
   const rows=(base[period]??[]).map(r=>({...r,me:r.uid===userId}));
@@ -635,10 +650,10 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
  }
  else if(type==="createGame"){
   requireTeam(s,t,a.id,"manager");const d=dates(c.start,c.end);checkConflict(s,t,d.start,d.end,"");
-  const g={id:id(),home:t,away:null,external:textValue(c.external,60,false),...d,venue:textValue(c.venue,100),address:textValue(c.address,200),lat:coord(c.lat,90),lng:coord(c.lng,180),region:regionValue(c.region||teamOf(s,t)!.region),format:textValue(c.format||"11인제",20),secured:c.secured!==false,cost:integer(c.cost??0,0,10000000),opponentCost:integer(c.opponentCost??0,0,10000000),status:"scheduled",listing:c.listing?"open":"none",revision:1,result:null,at:stamp};
+  const g={id:id(),home:t,away:null,external:textValue(c.external,60,false),...d,venue:textValue(c.venue,100),address:textValue(c.address,200),lat:coord(c.lat,90),lng:coord(c.lng,180),region:regionValue(c.region||teamOf(s,t)!.region),...gameKind(c),secured:c.secured!==false,cost:integer(c.cost??0,0,10000000),opponentCost:integer(c.opponentCost??0,0,10000000),status:"scheduled",listing:c.listing?"open":"none",revision:1,result:null,at:stamp};
   if(c.kind==="intra"){ensure(!c.listing&&!g.external,"자체전은 상대팀 없이 우리 팀끼리 하는 경기예요.");Object.assign(g,{kind:"intra",squads:integer(c.squads??2,2,4)});}
   const voteCloses=c.deadline?Date.parse(String(c.deadline)):0;if(c.deadline)ensure(Number.isFinite(voteCloses)&&voteCloses>now&&voteCloses<=Date.parse(g.start),"투표 마감은 지금 이후, 경기 시작 시각까지로 정해주세요.");ensure(!g.external||!c.listing,"수기 상대팀과 모집을 동시에 설정할 수 없어요.");ensure(!c.listing||Date.parse(g.start)>now,"지난 경기로 모집할 수 없어요.");
-  if(c.listing)requireTeam(s,t,a.id,"captain");s.games.push(g);const side=newSide(g,t);side.needed=integer(c.needed??11,1,50);side.note=textValue(c.note,500,false);if(voteCloses)side.deadline=iso(voteCloses);
+  if(c.listing)requireTeam(s,t,a.id,"captain");s.games.push(g);const side=newSide(g,t);side.needed=integer(c.needed??side.needed,1,50);side.note=textValue(c.note,500,false);if(voteCloses)side.deadline=iso(voteCloses);
   s.sides.push(side);notice(s,t,"새 경기 일정",whenRange(g.start,g.end)+" "+g.venue,g.id);output={gameId:g.id};
  }
  else if(type==="applyMatch"||type==="withdrawMatch"||type==="acceptMatch"||type==="rejectMatch"){
@@ -672,8 +687,8 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   ensure(g!.status!=="cancelled","취소된 경기예요.",409);const side=sideOf(s,g!.id,t);ensure(side,"경기 팀 정보를 찾을 수 없어요.",404);
   if(type==="setQuarters"){const q=integer(c.quarters,1,6);side!.quarters=q;side!.lineups=(side!.lineups??[]).slice(0,q);}
   else{
-   const quarters=side!.quarters??4,qi=integer(c.quarter,1,quarters)-1;
-   const formation=String(c.formation??"");ensure(FORMATIONS[formation],"포메이션을 목록에서 골라주세요.");
+   const quarters=side!.quarters??defaultPeriods(g),qi=integer(c.quarter,1,quarters)-1;
+   const formation=String(c.formation??"");ensure(FORMATIONS[formation]&&formationsFor(g).includes(formation),"포메이션을 목록에서 골라주세요.");
    const keys=new Set(FORMATIONS[formation].map(x=>x.k));const raw=(c.slots&&typeof c.slots==="object"?c.slots:{}) as Record<string,Row>;
    const slots:Record<string,Record<string,unknown>>={};const used=new Set<string>();
    for(const [k,val] of Object.entries(raw)){
@@ -1114,12 +1129,12 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
 }
 // 캘린더 파일처럼 경기 하나만 따로 볼 때: 그 경기 팀의 활동 중인 팀원이거나 승인된 용병만.
 // 다른 지역 랭킹도 볼 수 있게: 참여를 켠 선수가 뛰는(활동 중인) 팀이 있는 지역만 계산한다.
-export function regionRankings(s:State,userId:string,now=Date.now()){
+export function regionRankings(s:State,userId:string,now=Date.now(),sport:Sport="soccer"){
  const open=new Set(s.users.filter(u=>u.rankPublic===true).map(u=>u.id as string));
  const regions=new Set<string>();
  for(const m of s.members)if(m.userId&&open.has(m.userId)&&m.status==="active"){const t=teamOf(s,m.teamId);if(t?.status==="active"&&t.region)regions.add(String(t.region))}
  const out:Record<string,ReturnType<typeof nationalRanking>>={};
- for(const r of REGIONS)if(regions.has(r))out[r]=nationalRanking(s,userId,now,r);
+ for(const r of REGIONS)if(regions.has(r))out[r]=nationalRanking(s,userId,now,r,sport);
  return out;
 }
 export function canSeeGame(s:State,userId:string,gameId:string){
@@ -1150,13 +1165,15 @@ export function visibleState(s:State,userId:string,selected?:string){
  // 모집 완료(1.17): 모집글로 매칭이 확정된 다가오는 경기. 팀 이름·시간·구장 등 모집글에 원래 공개하던 것만 보낸다.
  const matchedListings=activeAccess?s.games.filter(g=>g.listing==="matched"&&g.away&&g.status==="scheduled"&&Date.parse(g.end)>Date.now()-864e5&&teamOf(s,g.home)?.status==="active"&&teamOf(s,g.away)?.status==="active"&&!hidTeam(g.home)&&!hidTeam(g.away))
   .sort((x,y)=>String(x.start).localeCompare(String(y.start))).slice(0,40)
-  .map(g=>({id:g.id,home:g.home,away:g.away,start:g.start,end:g.end,venue:g.venue,address:g.address,region:g.region,format:g.format,cost:g.cost,opponentCost:g.opponentCost,listing:g.listing})):[];
+  .map(g=>({id:g.id,home:g.home,away:g.away,start:g.start,end:g.end,venue:g.venue,address:g.address,region:g.region,format:g.format,sport:sportOf(g),cost:g.cost,opponentCost:g.opponentCost,listing:g.listing})):[];
  const members=tid?s.members.filter(m=>m.teamId===tid&&(m.status==="active"||m.status==="left"||m.status==="removed"||team.role==="captain")).map(m=>({...m,profile:profileView(s,m.userId)})):[];
  const myGuestRows=s.guests.filter(x=>x.userId===userId);const guestGame=(gid:string)=>s.games.find(y=>y.id===gid);
  return {teams:publicTeams,members,mine:my,ownTeams,teamId:tid??"",role:team?.role??"",isOwner:owner,retired:owner?retiredPeople(s):[],
-  myTotals:myTotals(s,userId),
+  myTotals:myTotals(s,userId,"soccer"),
   rankPublic:s.users.find(x=>x.id===userId)?.rankPublic===true,profilePublic:s.users.find(x=>x.id===userId)?.profilePublic===true,national:nationalRanking(s,userId),
   newsTeams:cleanNewsTeams(s.users.find(x=>x.id===userId)?.newsTeams),myRegion:String(teamOf(s,tid??"")?.region??""),regional:teamOf(s,tid??"")?.region?nationalRanking(s,userId,Date.now(),String(teamOf(s,tid??"")!.region)):null,regions:regionRankings(s,userId),
+  // 1.31 풋살 기록·랭킹(화면에서 풋살로 바꾸면 위 축구 값 대신 쓴다 — sportView).
+  futsal:{myTotals:myTotals(s,userId,"futsal"),national:nationalRanking(s,userId,Date.now(),"","futsal"),regional:teamOf(s,tid??"")?.region?nationalRanking(s,userId,Date.now(),String(teamOf(s,tid??"")!.region),"futsal"):null,regions:regionRankings(s,userId,Date.now(),"futsal")},
   // 문의는 본인 것만 본다. 운영자는 답변해야 하므로 전부 본다.
   inquiries:s.inquiries.filter(x=>owner||x.userId===userId).sort((x,y)=>String(y.at).localeCompare(String(x.at))).map(x=>({...x,mine:x.userId===userId})),
   announcements:[...s.announcements].sort((x,y)=>String(y.at).localeCompare(String(x.at))),
@@ -1176,13 +1193,13 @@ export function visibleState(s:State,userId:string,selected?:string){
  // 차례(=오래된 것 먼저) 그대로 나가서 새 공지가 아래에 묻혔다.
  notices:s.notices.filter(x=>x.teamId===tid).sort((x,y)=>(y.pinned?1:0)-(x.pinned?1:0)||String(y.at).localeCompare(String(x.at))),notifications:s.notifications.filter(n=>n.userId===userId&&(!n.teamId||active.some(m=>m.teamId===n.teamId)||my.some(m=>m.teamId===n.teamId))),
  // 용병 신청을 받은 팀의 운영진은 신청자 스펙(포지션·주발·지역·팀킥 기록)을, 주장은 키·몸무게까지 본다(2A).
- guests:tid?s.guests.filter(x=>x.teamId===tid&&!(x.status==="pending"&&bk.users[String(x.userId??"")])).map(x=>["captain","manager"].includes(team?.role)?{...x,spec:guestSpec(s,x.userId,team?.role==="captain")}:x):[],
+ guests:tid?s.guests.filter(x=>x.teamId===tid&&!(x.status==="pending"&&bk.users[String(x.userId??"")])).map(x=>["captain","manager"].includes(team?.role)?{...x,spec:guestSpec(s,x.userId,team?.role==="captain",sportOf(guestGame(x.gameId)))}:x):[],
  myProfile:s.users.find(x=>x.id===userId)?.profile??null,chatRooms:chatRooms(s,userId),
  myNotify:s.users.find(x=>x.id===userId)?.notify??{off:[],quiet:false},
  // 오늘 생일인 우리 팀 팀원(이름만). 공지 위에 축하 카드로 보여준다.
  birthdaysToday:tid?s.members.filter(m=>m.teamId===tid&&m.status==="active"&&birthdayToday(s.users.find(u=>u.id===m.userId)?.profile)).map(m=>m.name):[],
- myGuests:myGuestRows.map(x=>{const gm=guestGame(x.gameId);return {...x,teamName:teamOf(s,x.teamId)?.name??"",start:gm?.start??"",end:gm?.end??"",venue:gm?.venue??"",gameStatus:gm?.status??""}}),
- guestListings:s.sides.filter(z=>{const gm=guestGame(z.gameId);return guestStatusOf(z)==="open"&&!!gm&&gm.status==="scheduled"&&Date.parse(gm.start)>Date.now()&&teamOf(s,z.teamId)?.status==="active"&&!hidTeam(z.teamId)}).map(z=>{const gm=guestGame(z.gameId)!;return {id:z.id,gameId:gm.id,teamId:z.teamId,teamName:teamOf(s,z.teamId)?.name??"",start:gm.start,end:gm.end,venue:gm.venue,address:gm.address,region:gm.region,format:gm.format,cost:gm.cost,secured:gm.secured,needed:z.guestNeeded??0,approved:approvedGuests(s,gm.id,z.teamId),fee:z.guestFee??0,feeNote:z.guestFeeNote??"",deposit:z.guestDeposit??0,minPlay:z.guestMinPlay??"",positions:z.guestPositions??null,positionsLeft:guestPositionsLeft(s,z),applied:myGuestRows.find(x=>x.gameId===gm.id&&x.teamId===z.teamId&&["pending","approved"].includes(x.status))?.status??""}}),
+ myGuests:myGuestRows.map(x=>{const gm=guestGame(x.gameId);return {...x,teamName:teamOf(s,x.teamId)?.name??"",start:gm?.start??"",end:gm?.end??"",venue:gm?.venue??"",gameStatus:gm?.status??"",sport:sportOf(gm)}}),
+ guestListings:s.sides.filter(z=>{const gm=guestGame(z.gameId);return guestStatusOf(z)==="open"&&!!gm&&gm.status==="scheduled"&&Date.parse(gm.start)>Date.now()&&teamOf(s,z.teamId)?.status==="active"&&!hidTeam(z.teamId)}).map(z=>{const gm=guestGame(z.gameId)!;return {id:z.id,gameId:gm.id,teamId:z.teamId,teamName:teamOf(s,z.teamId)?.name??"",start:gm.start,end:gm.end,venue:gm.venue,address:gm.address,region:gm.region,format:gm.format,sport:sportOf(gm),cost:gm.cost,secured:gm.secured,needed:z.guestNeeded??0,approved:approvedGuests(s,gm.id,z.teamId),fee:z.guestFee??0,feeNote:z.guestFeeNote??"",deposit:z.guestDeposit??0,minPlay:z.guestMinPlay??"",positions:z.guestPositions??null,positionsLeft:guestPositionsLeft(s,z),applied:myGuestRows.find(x=>x.gameId===gm.id&&x.teamId===z.teamId&&["pending","approved"].includes(x.status))?.status??""}}),
  invites:s.invites.filter(x=>x.teamId===tid&&team?.role==="captain"),audit:owner?s.audit.slice(-100).reverse():[]};
 }
 // --- 채팅(1.16) ---
@@ -1274,8 +1291,8 @@ export function chatRooms(s:State,userId:string,now=Date.now()){
  return [...new Set(out)].map(r=>chatRoom(s,userId,r)).filter(Boolean).map(x=>({room:x!.room,kind:x!.kind,title:x!.title,sub:x!.sub,hiddenAt:String(hidden[x!.room]??""),
   request:"request" in x!&&x!.request?{message:x!.request.message,at:x!.request.at,teamName:x!.request.teamName,status:x!.request.status,pending:!!x!.canDecide}:null}));
 }
-export function guestSpec(s:State,userId:string,body:boolean){
- const t=myTotals(s,userId);return {...(profileView(s,userId,body)??{}),played:t.played,goals:t.goals,assists:t.assists};
+export function guestSpec(s:State,userId:string,body:boolean,sport?:Sport){
+ const t=myTotals(s,userId,sport);return {...(profileView(s,userId,body)??{}),played:t.played,goals:t.goals,assists:t.assists};
 }
 // MVP 투표를 화면에 보낼 모양. 표(누가 누구를 뽑았는지)는 보내지 않는다 — 비밀 투표.
 // 마감 전: 내가 고른 사람과 몇 명이 투표했는지만. 마감 후: 사람별 득표 수와 MVP.
@@ -1288,13 +1305,14 @@ export function mvpView(side:Row,me?:string,now=Date.now()){
 }
 // 내가 뛴 모든 팀의 기록을 합산한다. 팀별 화면(summaries)과 달리 팀 경계를 넘는다.
 // 팀을 옮기거나 여러 팀에서 뛰어도 "내가 쌓은 것"은 하나로 보여야 한다.
-export function myTotals(s:State,userId:string){
+// 1.31 sport 를 주면 그 종목 경기만 센다(축구·풋살 기록은 따로).
+export function myTotals(s:State,userId:string,sport?:Sport){
  const mine=s.members.filter(m=>m.userId===userId&&m.status!=="rejected");
  const ids=new Set(mine.map(m=>m.id));
  let played=0,attend=0,eligible=0,goals=0,assists=0;
  for(const side of s.sides){
   const game=s.games.find(g=>g.id===side.gameId);
-  if(!game||game.status!=="completed")continue;
+  if(!game||game.status!=="completed"||(sport&&sportOf(game)!==sport))continue;
   const me=rosterFor(s,side,game).find((r:Row)=>ids.has(r.id));
   if(!me)continue;
   played++;
@@ -1312,4 +1330,23 @@ export function summaries(v:any,from:string,to:string){
  for(const g of scored){const own=g.home===v.teamId?g.result.a:g.result.b,other=g.home===v.teamId?g.result.b:g.result.a;goals+=own;against+=other;if(own>other)wins++;else if(own===other)draws++;else losses++;}
  const attendanceGames=allGames.filter((g:Row)=>v.sides.some((s:Row)=>s.gameId===g.id&&s.attendanceFinal));const players:Row[]=v.members.filter((m:Row)=>m.status!=="pending"&&m.status!=="rejected").map((m:Row)=>{let attend=0,eligible=0,g=0,a=0,mvp=0;for(const side of v.sides){if(!allGames.some((x:Row)=>x.id===side.gameId))continue;if(side.attendanceFinal&&(side.roster??[]).some((r:any)=>r.id===m.id)){eligible++;if(side.attendance[m.id])attend++;}if(side.recordsFinal&&recorded.some((x:Row)=>x.id===side.gameId)){g+=side.records[m.id]?.goals??0;a+=side.records[m.id]?.assists??0;}if((side.mvp?.winners??[]).includes(m.id))mvp++;}return {...m,attend,eligible,rate:eligible?Math.round(attend/eligible*100):null,goals:g,assists:a,points:g+a,mvp}});
  return {played:games.length,intra,scored:scored.length,wins,draws,losses,goals,against,winRate:scored.length?+(wins/scored.length*100).toFixed(1):null,players,attendanceConfirmed:attendanceGames.length,average:attendanceGames.length?+(players.reduce((sum,p)=>sum+p.attend,0)/attendanceGames.length).toFixed(1):null,pending:games.length-scored.length};
+}
+
+// 1.31 화면 맨 위 축구|풋살 전환: 서버가 준 화면 상태에서 고른 종목의 경기·참여·매칭 목록만 남기고,
+// 랭킹·내 기록은 그 종목 것으로 바꾼다. 그 아래 화면(홈·일정·기록·매칭)은 고칠 필요 없이 이 값만 본다.
+export function sportView<T extends Record<string,unknown>>(v:T,sport:Sport):T&{sport:Sport}{
+ const want=(x:Row)=>sportOf(x)===sport;
+ const games=((v.games??[]) as Row[]).filter(want),ids=new Set(games.map(g=>g.id));
+ const other=new Set([...((v.games??[]) as Row[]),...((v.listings??[]) as Row[]),...((v.matchedListings??[]) as Row[])].filter(g=>!want(g)).map(g=>g.id));
+ const f=sport==="futsal"?((v.futsal??{}) as Row):null;
+ return {...v,sport,games,sides:((v.sides??[]) as Row[]).filter(z=>ids.has(z.gameId)),
+  listings:((v.listings??[]) as Row[]).filter(want),matchedListings:((v.matchedListings??[]) as Row[]).filter(want),
+  guestListings:((v.guestListings??[]) as Row[]).filter(want),myGuests:((v.myGuests??[]) as Row[]).filter(want),
+  requests:((v.requests??[]) as Row[]).filter(r=>!other.has(r.gameId)),guests:((v.guests??[]) as Row[]).filter(x=>!other.has(x.gameId)),
+  ...(f?{myTotals:f.myTotals??null,national:f.national??null,regional:f.regional??null,regions:f.regions??{}}:{})};
+}
+// 종목을 처음 고를 때: 다가오는 첫 경기 → 가장 최근 경기의 종목, 경기가 없으면 축구.
+export function defaultSport(games:Row[]|undefined,now=Date.now()):Sport{
+ const list=[...(games??[])].filter(g=>g.status!=="cancelled").sort((a,b)=>String(a.start).localeCompare(String(b.start)));
+ const next=list.find(g=>Date.parse(g.end)>now);return sportOf(next??list[list.length-1]);
 }

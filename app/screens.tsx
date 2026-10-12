@@ -8,7 +8,7 @@ import {Table,TableHeader,TableHead,TableBody,TableRow,TableCell} from "@/compon
 import {toast} from "sonner";
 import {Upload,Plus,Search,MapPin,CalendarDays,Clock,Users,ShieldCheck,Copy,ExternalLink,Settings,CheckCircle2,X,ArrowLeft,LogOut,Download,LoaderCircle,Goal,Handshake,Bell,Navigation,Megaphone,MessageCircle,Home,BarChart3,Shield,Wallet,Image as ImageIcon,ChevronRight,Flag,Ban,LifeBuoy} from "lucide-react";
 import {Picker,Crest,imageUrl,Empty,GameBadge,GuestBadge,PlayerPhoto,Vote,koreanDate,time,localDay,inputTime,fromInput,opponent,scoreText,IntraVersus,started,backNo,backNoOr,NoticeList,noticeTitle} from "./teamkick";
-import {summaries,currentVote,guestStatusOf,REGIONS,LEVELS,DAYS,levelOf,levelChip,formatLabel,isIntra,POSITION_GROUPS,FEET,positionName,SQUAD_NAMES,RULES_MAX,GUEST_POS,MIN_PLAY,type Row} from "@/lib/model";
+import {summaries,currentVote,guestStatusOf,REGIONS,LEVELS,DAYS,levelOf,levelChip,formatLabel,isIntra,FORMATS,FUTSAL_FORMATS,SPORT_NAME,POSITION_GROUPS,FEET,positionName,SQUAD_NAMES,RULES_MAX,GUEST_POS,MIN_PLAY,type Row} from "@/lib/model";
 import {Stepper,SquadBoard,MvpPanel,RulesPanel,RULE_TEMPLATES,InviteShare} from "./team-play";
 import {openWelcome} from "./welcome";
 import {TeamProfile} from "./team-profile";
@@ -668,7 +668,7 @@ export function MyHub({v,busy,setModal}:{v:Row;busy:boolean;setModal:(m:{kind:st
  const reportsOpen=v.isOwner?(v.reports??[]).filter((x:Row)=>x.status==="open").length:0;
  return <>
   <section className="panel">
-   <div className="panel-title"><h2>내 전체 기록</h2><span className="small muted">{t.teams}개 팀 합산</span></div>
+   <div className="panel-title"><h2>내 전체 기록{v.sport==="futsal"?" · 풋살":""}</h2><span className="small muted">{t.teams}개 팀 합산</span></div>
    <div className="stats-grid">
     {[{label:"뛴 경기",value:t.played,unit:"경기"},
       {label:"출석률",value:t.rate??"—",unit:t.rate===null?"":"%"},
@@ -733,7 +733,7 @@ export function AppDialogs(p:any){
   let f:any={};if(modal.kind==="createGame"){const d=new Date(Date.now()+7*864e5);const day=inputTime(d.toISOString()).slice(0,10);
   // 미리 채워둔 끝 시각도 "자동으로 정해진 값"으로 표시해 둔다. 그래야 시작을
   // 바꿨을 때 따라 움직인다. 사용자가 손대면 그 값을 지킨다.
-  f={start:day+"T10:00",end:day+"T12:00",autoEnd:day+"T12:00",format:"11인제",secured:true,needed:11,cost:0,listing:modal.listing??false,external:"",region:team?.region??"",kind:modal.kind0??"match",squads:2};}
+  f={start:day+"T10:00",end:day+"T12:00",autoEnd:day+"T12:00",sport:v.sport==="futsal"?"futsal":"soccer",format:v.sport==="futsal"?"5인제":"11인제",secured:true,needed:v.sport==="futsal"?5:11,cost:0,listing:modal.listing??false,external:"",region:team?.region??"",kind:modal.kind0??"match",squads:2};}
   // 1.19: 끝 시각도 "자동" 으로 표시해 둔다. 시작을 바꾸면 끝이 2시간 뒤로 따라온다(예전에는 그대로 남아 시작보다 앞서기도 했다).
   if(modal.kind==="changeGame"){const end=inputTime(game.end);f={...game,start:inputTime(game.start),end,autoEnd:end};}
   if(modal.kind==="attendance")f={values:{...(z.attendanceFinal?z.attendance:z.draft)}};
@@ -896,6 +896,8 @@ export function AppDialogs(p:any){
  {modal?.kind==="setOpponent"&&<form className="form-grid" onSubmit={e=>{e.preventDefault();save({type:"setOpponent",teamId:v.teamId,gameId:modal.gameId,external:form.external})}}>{label("상대팀 이름","external")}{submit("상대팀 저장")}</form>}
  {modal?.kind==="createGame"&&<form className="form-grid" onSubmit={e=>{e.preventDefault();const intra=form.kind==="intra";save({...form,type:"createGame",teamId:v.teamId,start:fromInput(form.start),end:fromInput(form.end),deadline:form.deadline?fromInput(form.deadline):"",...(intra?{kind:"intra",squads:form.squads,listing:false,external:""}:{kind:undefined,squads:undefined})})}}>
  <div className="field-block"><span className="field-label">경기 종류</span><div className="chip-row" role="radiogroup" aria-label="경기 종류">{[{k:"match",t:"상대팀과 경기",d:"다른 팀·외부 팀"},{k:"intra",t:"자체전",d:"우리 팀끼리 나눠서"}].map(x=><button type="button" role="radio" aria-checked={(form.kind??"match")===x.k} key={x.k} className={"chip-option"+((form.kind??"match")===x.k?" on":"")} onClick={()=>{field("kind",x.k);if(x.k==="intra"){field("listing",false);field("external","")}}}><strong>{x.t}</strong><small>{x.d}</small></button>)}</div></div>
+ {/* 1.31 종목은 화면 맨 위 축구|풋살에서 정한다. 형식을 고르면 필요 인원도 그 인원으로 맞춘다. */}
+ <div className="field-block"><span className="field-label">{SPORT_NAME[form.sport==="futsal"?"futsal":"soccer"]} 경기 형식</span><div className="chip-row" role="radiogroup" aria-label="경기 형식">{(form.sport==="futsal"?FUTSAL_FORMATS:FORMATS).map((x:string)=><button type="button" role="radio" aria-checked={form.format===x} key={x} className={"chip-num"+(form.format===x?" on":"")} onClick={()=>{field("format",x);field("needed",Number(x.match(/^\d+/)?.[0]??11))}}>{formatLabel(x)}</button>)}</div>{form.sport==="futsal"?<p className="data-note">풋살 경기로 만들어요. 축구 경기는 화면 맨 위에서 <strong>축구</strong>로 바꾼 뒤 만들어 주세요.</p>:<p className="data-note">풋살 경기는 화면 맨 위에서 <strong>풋살</strong>로 바꾼 뒤 만들어 주세요.</p>}</div>
  {form.kind==="intra"&&<div className="field-block"><span className="field-label">몇 팀으로 나눌까요?</span><div className="chip-row" role="radiogroup" aria-label="팀 수">{[2,3,4].map(n=><button type="button" role="radio" aria-checked={form.squads===n} key={n} className={"chip-num"+(form.squads===n?" on":"")} onClick={()=>field("squads",n)}>{n}팀</button>)}</div><p className="data-note">{SQUAD_NAMES.slice(0,form.squads??2).join(" · ")}. 경기 상세의 <strong>팀 나누기</strong>에서 참여자를 자동으로 나눌 수 있어요. 자체전은 팀 전적(승률)에는 들어가지 않고 개인 기록에는 들어가요.</p></div>}
  {whenFields("경기 시작","경기 종료")}<VenuePicker v={v} field={field} ready={v.placeSearchReady!==false} demo={demo}/>{label("구장 이름","venue")}{label("구장 전체 주소","address")}{label("필요 인원","needed","number")}{deadlineField("deadline",false)}{whenNote(form.deadline,"",true)}<p className="data-note">비워두면 경기 시작 시각에 마감돼요. 경기 시작보다 늦게는 정할 수 없어요.</p><div className="two-col fields"><label>지역<Picker value={form.region} onChange={(x:string)=>field("region",x)} options={REGIONS}/></label>{label("전체 구장비 (원)","cost","number")}</div>{form.kind!=="intra"&&<>{label("상대팀 부담 구장비 (원)","opponentCost","number",false)}<p className="data-note">매칭 모집 글에 <strong>상대팀 구장비</strong>로 보여요. 없으면 0.</p></>}<label className="row"><Checkbox checked={form.secured} onCheckedChange={x=>field("secured",x===true)}/>구장을 확보했어요</label>{form.kind!=="intra"&&captain&&<label className="row"><Checkbox checked={form.listing} onCheckedChange={x=>{field("listing",x===true);if(x)field("external","")}}/>상대팀을 모집할게요</label>}{form.kind!=="intra"&&!form.listing&&label("외부 상대팀 이름 (없으면 미정)","external","text",false)}{/* 1.19: 상대팀을 모집하는 경기는 팀 안내 칸을 뺀다(나중에 경기 상세에서 쓸 수 있다) */}{!form.listing&&<label>팀 안내<textarea value={form.note??""} onChange={e=>field("note",e.target.value)}/></label>}{submit("경기 등록하기")}</form>}
  {modal?.kind==="editTeam"&&!demo&&<div style={{marginBottom:18}}><ImageField title="팀 로고" ready={v.storageReady!==false} current={team?.logo} kind="teamLogo" teamId={v.teamId} disabled={busy} onSaved={(key:string)=>action({type:"setTeamLogo",teamId:v.teamId,key})}/></div>}

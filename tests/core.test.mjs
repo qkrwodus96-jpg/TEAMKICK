@@ -130,11 +130,11 @@ function localDatabase(){
 // 넣으면 알림이 **아예 보이지 않게** 된다(보이는 알림은 teamId 로 걸러진다).
 const VIEWS=['home','schedule','matching','records','team','admin'];
 // 목적지는 "화면" 또는 "화면:탭" 이다. 매칭은 탭이 여럿이라 탭까지 적는다.
-const TABS=['guest','received','mine','open','confirmed'];
+const TABS=['guest','received','mine','open','confirmed','manage'];
 // chat:·modal: 은 화면 대신 창을 연다(teamkick.go 와 screens.openNotification 이 처리). 둘 다 MY(team) 위에 뜬다.
-const viewPart=to=>{const v=String(to||'').split(':')[0];return v==='chat'||v==='modal'?'team':v};
+const viewPart=to=>{const v=String(to||'').split(':')[0];return v==='chat'||v==='modal'?'team':v==='game'?'schedule':v==='invite'?'matching':v};
 const tabPart0=to=>String(to||'').split(':')[1]||'';
-const tabPart=to=>/^(chat|modal):/.test(String(to||''))?'':tabPart0(to);
+const tabPart=to=>/^(chat|modal|invite|game):/.test(String(to||''))?'':tabPart0(to);
 test('모든 알림이 갈 화면을 들고 있고, 화면 이름이 teamId 자리에 섞이지 않는다',()=>{
   const {s,a,b}=fixture();
   const m=addPlayer(s,a);
@@ -3040,7 +3040,7 @@ test('MVP 투표는 출석 확정 때 열리고, 출석한 팀원만 자기 말�
   assert.ok(z.mvp,'출석 확정과 함께 열린다');
   const opened=f.s.notifications.slice(before).filter(n=>n.title==='MVP 투표가 열렸어요');
   assert.equal(opened.length,Object.keys(values).length,'출석한 사람 모두에게 알림');
-  assert.ok(opened.every(n=>n.to==='schedule'&&n.gameId===f.gameId&&n.teamId===f.a));
+  assert.ok(opened.every(n=>n.to==='game:'+f.gameId+':mvp'&&n.gameId===f.gameId&&n.teamId===f.a));
   assert.throws(()=>command(f.s,{id:'p1',name:'선수1'},{type:'mvpVote',teamId:f.a,gameId:f.gameId,candidate:f.p1.id}),/자기 자신/);
   assert.throws(()=>command(f.s,{id:'p1',name:'선수1'},{type:'mvpVote',teamId:f.a,gameId:f.gameId,candidate:'없는 사람'}),/출석한 팀원 중/);
   command(f.s,{id:'p1',name:'선수1'},{type:'mvpVote',teamId:f.a,gameId:f.gameId,candidate:f.p2.id});
@@ -4684,4 +4684,18 @@ test('1.35 경기 뒤 순서: 점수만 먼저 올리고 상대가 확인하면 
   assert.equal(z.recordsFinal,true);assert.deepEqual(z.records[p1.id].minutes,[12,40]);
   assert.deepEqual(z.goalLog,[{by:p1.id,assist:p2.id,min:12},{by:p1.id,min:40}]);
   assert.equal(g.result.status,'confirmed','개인 기록을 넣어도 확정 점수는 그대로');
+});
+
+test('1.35.1 알림을 누르면 그 창으로: 결과 확인 요청·확정은 경기 기록 탭, 정정 요청은 그 경기, 참여 투표 알림은 그 경기, 문의 답변은 문의 창',()=>{
+  const f=matchFixture();const g=f.s.games.find(x=>x.id===f.gameId);const later=Date.parse(g.end)+3600e3;
+  command(f.s,A,{type:'completeGame',teamId:f.a,gameId:f.gameId},later);
+  command(f.s,A,{type:'result',teamId:f.a,gameId:f.gameId,own:1,opponent:0},later);
+  const ask=f.s.notifications.filter(n=>n.teamId===f.b&&n.title==='경기 결과 확인 요청').at(-1);
+  assert.equal(ask.to,'game:'+f.gameId+':record');assert.equal(ask.gameId,f.gameId);
+  command(f.s,B,{type:'confirmResult',teamId:f.b,gameId:f.gameId,revision:g.resultProposal.revision,agree:true},later);
+  assert.equal(f.s.notifications.filter(n=>n.teamId===f.a&&n.title==='경기 결과 확정').at(-1).to,'game:'+f.gameId+':record');
+  command(f.s,A,{type:'correctRequest',teamId:f.a,gameId:f.gameId,message:'골 수가 달라요'},later);
+  const cr=f.s.notifications.filter(n=>n.title==='기록 정정 요청').at(-1);assert.equal(cr.to,'game:'+f.gameId+':record');assert.equal(cr.gameId,f.gameId);
+  command(f.s,A,{type:'correctRequest',teamId:f.a,gameId:'없는경기',message:'x'},later);
+  assert.equal(f.s.notifications.filter(n=>n.title==='기록 정정 요청').at(-1).to,'records','다른 팀 경기면 기록 화면');
 });

@@ -210,7 +210,7 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  // 이미 열려 있는 창에는 메시지로 알려 준다. 둘 다 받아 탭을 옮긴다.
  const VIEWS=["home","schedule","matching","records","team","admin"];
  useEffect(()=>{
-  const go=(name?:string|null)=>{if(name?.startsWith("chat:")){setActualView("team");setModalRaw({kind:"chat",room:name.slice(5)});return}if(name?.startsWith("modal:")){setActualView("team");setModalRaw({kind:name.slice(6)});return}if(name&&VIEWS.includes(name))setActualView(name)};
+  const go=(name?:string|null)=>{if(name?.startsWith("chat:")){setActualView("team");setModalRaw({kind:"chat",room:name.slice(5)});return}if(name?.startsWith("modal:")){setActualView("team");setModalRaw({kind:name.slice(6)});return}if(name?.startsWith("invite:")){const [,gameId,teamId]=name.split(":");setActualView("matching");setModalRaw({kind:"guestInvite",gameId,teamId});return}if(name&&VIEWS.includes(name))setActualView(name)};
   // 1.25 다른 팀 소식이면 그 팀으로 바꾼 뒤 연다.
   const teamOf=(q:URLSearchParams)=>{const tm=q.get("team");if(tm&&tm!==viewTeamRef.current)refresh(tm).catch(()=>{})};
   teamOf(new URLSearchParams(window.location.search));

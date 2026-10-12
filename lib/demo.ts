@@ -36,7 +36,7 @@ export function demoState():State{
  const day=new Date(Date.now()-5*864e5);day.setUTCHours(11,0,0,0);const fpast=day.getTime();
  const fg:Row={id:"game-futsal-1",home:"team-a",away:null,external:"마포 풋살 클럽",sport:"futsal",start:iso(fpast),end:iso(fpast+2*3600e3),venue:"상암 풋살파크",address:"서울 마포구 월드컵북로 400",region:"서울",format:"5인제",secured:true,cost:60000,opponentCost:0,status:"completed",listing:"none",revision:1,result:{a:6,b:4,status:"confirmed",revision:1}};
  const fz:Row=newSide(fg,"team-a");const fr=roster.filter((_,j)=>j<8||j===11);fz.roster=fr;fz.attendance=Object.fromEntries(fr.map(m=>[m.id,true]));fz.attendanceFinal=true;
- fz.records={"a-p0":{goals:2,assists:1},"a-p1":{goals:2,assists:0},"a-p2":{goals:1,assists:2},"a-p4":{goals:1,assists:1}};fz.recordsFinal=true;
+ fz.records={"a-p0":{goals:2,assists:1,minutes:[5,31]},"a-p1":{goals:2,assists:0,minutes:[12,38]},"a-p2":{goals:1,assists:2,minutes:[22]},"a-p4":{goals:1,assists:1,minutes:[35]}};fz.recordsFinal=true;
  const who=(i:number)=>{const m=active[i];return {memberId:m.id,name:m.name,number:m.number}};
  fz.lineups=[{formation:"1-2-1",slots:{GK:who(11),FX:who(7),LA:who(3),RA:who(4),PV:who(1)},at:iso(fpast),by:"demo-a"},{formation:"2-2",slots:{GK:who(11),LFX:who(5),RFX:who(6),LPV:who(0),RPV:who(2)},at:iso(fpast),by:"demo-a"}];
  s.games.push(fg);s.sides.push(fz);

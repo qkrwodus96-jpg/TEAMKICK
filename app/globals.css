@@ -896,3 +896,12 @@ body{word-break:keep-all;overflow-wrap:break-word}
 .invite-game span{display:flex;flex-direction:column;gap:2px}.invite-game small{color:var(--muted-foreground);font-size:12px}
 .invite-game.off{opacity:.55}
 .invite-game input{width:auto;margin-top:3px}
+/* 1.34 골 시간 · 경기 영상 · 용병 안내 창 */
+.goal-mins{display:flex;flex-direction:column;gap:8px}
+.goal-min-row{display:grid;grid-template-columns:minmax(0,1fr) 140px;align-items:center;gap:10px;font-weight:500}
+.goal-min-row input{margin:0;padding:8px 10px}
+.goal-line{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:13.5px}
+.goal-line span{white-space:nowrap}
+.video-link{display:inline-flex;align-items:center;gap:6px;font-weight:650;color:#c4302b}
+.invite-pop .info-row{padding:10px 0}
+.game-extras{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}

@@ -530,9 +530,28 @@ function notifyFavVenues(s:State,g:Row,kind:"match"|"guest",t:string,actor:strin
   if(blockedOf(s,u.id).teams[t]||staffBlocks(s,t,u.id)||activeSuspension(u))continue;
   if(!favs.some(f=>favSportOk(f,g)&&sameVenue(f,g)))continue;
   if(done.has(u.id))continue;done.add(u.id);
-  userNotice(s,u.id,"관심 구장 새 모집",body,undefined,kind==="match"?"matching":"matching:guest");if(++n>=500)break;
+  userNotice(s,u.id,"관심 구장 새 모집",body,undefined,kind==="match"?"matching":"invite:"+g.id+":"+t);if(++n>=500)break;
  }
  if(n)g.favTo={...sentTo,[key]:[...done]};
+}
+// --- 1.34 골 시간 · 경기 영상 ---
+// 골 시간(분): 선수마다 넣은 골 수만큼까지, 1~150분. "12, 34" 같은 글이나 숫자 배열을 받는다. 비우면 저장하지 않는다.
+export function goalMinutes(v:unknown,goals:number):{minutes?:number[]}{
+ const raw=Array.isArray(v)?v:String(v??"").split(/[\s,·/]+/);
+ const list=raw.map(x=>String(x).replace(/['′분]/g,"").trim()).filter(Boolean).map(x=>Number(x));
+ if(!list.length)return {};
+ ensure(list.every(x=>Number.isInteger(x)&&x>=1&&x<=150),"골 시간은 1~150 사이 분으로 적어주세요.");
+ ensure(list.length<=goals,"골 시간은 넣은 골 수보다 많을 수 없어요.");
+ return {minutes:[...list].sort((a,b)=>a-b)};
+}
+// 경기 영상: 유튜브 주소만 받는다(youtube.com/watch·youtu.be·shorts·live). 화면은 링크로만 보여 준다(퍼오기 없음).
+export function youtubeUrl(v:unknown){
+ const x=String(v??"").trim();if(!x)return "";
+ let u:URL;try{u=new URL(x)}catch{throw new AppError("유튜브 주소를 확인해주세요.",400)}
+ const host=u.hostname.replace(/^(www|m)\./,"");
+ const id=host==="youtu.be"?u.pathname.slice(1):host==="youtube.com"?(u.searchParams.get("v")??u.pathname.match(/^\/(shorts|live)\/([^/]+)/)?.[2]??""):"";
+ ensure(u.protocol==="https:"&&/^[A-Za-z0-9_-]{6,20}$/.test(id),"유튜브 영상 주소만 넣을 수 있어요.");
+ return "https://youtu.be/"+id;
 }
 // --- 1.33 용병 가능 등록 ---
 // 선수가 "이 날 이 시간대에 용병 뛸 수 있어요"를 최대 3개 올린다(오늘부터 30일 안). 내 계정 행(users[].avail)에 둔다.
@@ -552,7 +571,7 @@ function notifyAvail(s:State,g:Row,t:string,actor:string,now:number){
   if(u.id===actor)continue;const hit=liveAvail(u,now).find(x=>availFits(x,g)&&(x.regions??[]).includes(g.region)&&!(x.alerted??[]).includes(g.id+":"+t));if(!hit)continue;
   if(s.members.some(m=>m.teamId===t&&m.userId===u.id&&["active","pending"].includes(m.status))||blockedOf(s,u.id).teams[t]||staffBlocks(s,t,u.id)||activeSuspension(u,now))continue;
   hit.alerted=[...(hit.alerted??[]),g.id+":"+t];u.avail=[...(u.avail??[])];
-  userNotice(s,u.id,"용병 모집 알림","올려 둔 시간에 맞는 용병 모집이 열렸어요 · "+(sportOf(g)==="futsal"?"[풋살] ":"")+whenRange(g.start,g.end)+" "+String(g.venue||"")+" · "+team.name,undefined,"matching:guest");if(++n>=300)break;
+  userNotice(s,u.id,"용병 모집 알림","올려 둔 시간에 맞는 용병 모집이 열렸어요 · "+(sportOf(g)==="futsal"?"[풋살] ":"")+whenRange(g.start,g.end)+" "+String(g.venue||"")+" · "+team.name,undefined,"invite:"+g.id+":"+t);if(++n>=300)break;
  }
 }
 export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
@@ -604,7 +623,13 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   ensure(!blockedOf(s,u.id).teams[t]&&!activeSuspension(u,now),"지금은 초대할 수 없어요.",403);
   ensure(!(entry.invited??[]).includes(g!.id),"이 경기로 이미 초대했어요.",409);
   entry.invited=[...(entry.invited??[]),g!.id];u.avail=[...(u.avail??[])];
-  userNotice(s,u.id,"용병 초대",team.name+"에서 "+(sportOf(g)==="futsal"?"[풋살] ":"")+whenRange(g!.start,g!.end)+" "+String(g!.venue||"")+" 경기에 용병으로 초대했어요. 용병 탭에서 신청해 주세요.",undefined,"matching:guest");
+  userNotice(s,u.id,"용병 초대",team.name+"에서 "+(sportOf(g)==="futsal"?"[풋살] ":"")+whenRange(g!.start,g!.end)+" "+String(g!.venue||"")+" 경기에 용병으로 초대했어요. 눌러서 경기 안내를 보고 신청해 주세요.",undefined,"invite:"+g!.id+":"+t);
+ }
+ // 1.34 경기 영상 링크: 우리 팀 경기의 운영진이 넣고 바꾼다(팀별로 따로). 비우면 지운다.
+ else if(type==="setGameVideo"){
+  const g=s.games.find(x=>x.id===c.gameId);ensure(g&&containsTeam(g,t),"팀 경기를 찾을 수 없어요.",404);requireTeam(s,t,a.id,"manager");
+  const side=sideOf(s,g!.id,t);ensure(side,"경기 팀 정보를 찾을 수 없어요.",404);
+  const url=youtubeUrl(c.url);if(url)side!.video=url;else delete side!.video;
  }
  else if(type==="createTeam"){
   ensure(a.verified!==false,"이메일 확인을 먼저 해주세요. 받은 편지함에서 확인 링크를 눌러주세요.",403);
@@ -912,11 +937,11 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    ensure(g!.status==="completed","경기 완료 처리 후 기록을 입력해주세요.");
    ensure(side!.attendanceFinal,"출석 확정을 먼저 해주세요.");
    ensure(c.values&&typeof c.values==="object"&&!Array.isArray(c.values),"선수 기록을 확인해주세요.");
-   const n=Number(g!.squads)||2,values:Record<string,{goals:number;assists:number}>={};
+   const n=Number(g!.squads)||2,values:Record<string,{goals:number;assists:number;minutes?:number[]}>={};
    for(const [k,row] of Object.entries(c.values as Record<string,{goals?:unknown;assists?:unknown}>)){
     ensure(side!.attendance[k]===true,"출석 확정된 선수만 기록할 수 있어요.");
     ensure(row&&typeof row==="object","선수 기록을 확인해주세요.");
-    values[k]={goals:integer(row.goals),assists:integer(row.assists)};
+    values[k]={goals:integer(row.goals),assists:integer(row.assists),...goalMinutes((row as Row).minutes,integer(row.goals))};
     // 골을 넣은 사람은 어느 팀이었는지 알아야 조별 점수를 셀 수 있다.
     if(values[k].goals)ensure(typeof side!.squads?.[k]==="number","골을 넣은 선수가 몇 팀인지 먼저 나눠주세요.");
    }
@@ -934,11 +959,11 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    ensure(side!.attendanceFinal,"출석 확정을 먼저 해주세요.");
    ensure(g!.away||g!.external,"상대팀을 먼저 설정해주세요.");
    ensure(c.values&&typeof c.values==="object"&&!Array.isArray(c.values),"선수 기록을 확인해주세요.");
-   const values:Record<string,{goals:number;assists:number}>={};
+   const values:Record<string,{goals:number;assists:number;minutes?:number[]}>={};
    for(const [k,row] of Object.entries(c.values as Record<string,{goals?:unknown;assists?:unknown}>)){
     ensure(side!.attendance[k]===true,"출석 확정된 선수만 기록할 수 있어요.");
     ensure(row&&typeof row==="object","선수 기록을 확인해주세요.");
-    values[k]={goals:integer(row.goals),assists:integer(row.assists)};
+    values[k]={goals:integer(row.goals),assists:integer(row.assists),...goalMinutes((row as Row).minutes,integer(row.goals))};
    }
    const list=Object.values(values) as {goals:number;assists:number}[];
    const scored=list.reduce((sum,x)=>sum+x.goals,0),assists=list.reduce((sum,x)=>sum+x.assists,0);
@@ -1454,7 +1479,7 @@ export function sportView<T extends Record<string,unknown>>(v:T,sport:Sport):T&{
  // allGames: 알림·대화방에서 다른 종목 경기를 열 때 찾는 용도(그때 화면 종목을 그 경기 종목으로 바꾼다).
  return {...v,sport,allGames:(v.games??[]) as Row[],games,sides:((v.sides??[]) as Row[]).filter(z=>ids.has(z.gameId)),
   listings:((v.listings??[]) as Row[]).filter(want),matchedListings:((v.matchedListings??[]) as Row[]).filter(want),
-  guestListings:((v.guestListings??[]) as Row[]).filter(want),myGuests:((v.myGuests??[]) as Row[]).filter(want),
+  guestListings:((v.guestListings??[]) as Row[]).filter(want),allGuestListings:(v.guestListings??[]) as Row[],myGuests:((v.myGuests??[]) as Row[]).filter(want),
   availPlayers:((v.availPlayers??[]) as Row[]).filter(x=>x.sport==="both"||x.sport===sport),
   requests:((v.requests??[]) as Row[]).filter(r=>!other.has(r.gameId)),guests:((v.guests??[]) as Row[]).filter(x=>!other.has(x.gameId)),
   ...(f?{myTotals:f.myTotals??null,national:f.national??null,regional:f.regional??null,regions:f.regions??{}}:{})};

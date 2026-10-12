@@ -656,6 +656,7 @@ html[data-theme="dark"] .avail-row{border:1px solid var(--border)}
 html[data-theme="dark"] .avail-card{border:1px solid var(--border);background:var(--card)}
 html[data-theme="dark"] .invite-game{border:1px solid var(--border)}
 html[data-theme="dark"] .invite-game small{color:var(--muted-foreground)}
+html[data-theme="dark"] .video-link{color:#d9807d}
 html[data-theme="dark"]{--band:#08080a}
 html[data-theme="dark"] .switch::after{background:#ececee}
 html[data-theme="dark"] .seg{background:#232328}

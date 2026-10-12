@@ -199,11 +199,11 @@ export function ShareStudio({v,team,kind,memberId}:{v:Row;team:Row;kind:"roster"
  const data:Data=useMemo(()=>{
   const act:Row[]=(v.members??[]).filter((m:Row)=>m.status==="active");
   const players=act.map(m=>({name:m.name,number:m.number??null,position:m.position??"",group:positionGroup(m.position),photo:m.photo}));
-  // 가장 가까운 다음 경기의 1쿼터 라인업(있으면 축구장 그림에 그대로)
+  // 가장 가까운 다음 경기의 1쿼터 라인업(있으면 축구장 그림에 그대로). 풋살 경기 라인업은 축구장 그림에 안 맞아 쓰지 않는다(1.31.1).
   const next=(v.games??[]).filter((g:Row)=>g.status==="scheduled"&&Date.parse(g.end)>Date.now()).sort((a:Row,b:Row)=>String(a.start).localeCompare(String(b.start)))[0];
   const side=next?(v.sides??[]).find((z:Row)=>z.gameId===next.id):null;
   const who=memberId?players[act.findIndex(m=>m.id===memberId)]:undefined;
-  return {team:{name:team?.name??"우리 팀",color:team?.color??"",logo:team?.logo,region:team?.region},players,date:today(),lineup:side?.lineups?.[0]??null,who};
+  return {team:{name:team?.name??"우리 팀",color:team?.color??"",logo:team?.logo,region:team?.region},players,date:today(),lineup:next?.sport==="futsal"?null:side?.lineups?.[0]??null,who};
  },[v,team,memberId]);
  useEffect(()=>{let live=true;const c=ref.current;if(!c)return;const ctx=c.getContext("2d")!;
   (async()=>{setBusy(true);try{await document.fonts?.load('900 40px "Pretendard Variable"').catch(()=>null);ctx.clearRect(0,0,W,H);ctx.save();

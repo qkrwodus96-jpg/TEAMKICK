@@ -342,7 +342,7 @@ function AdminTeams({v,busy,run,setModal}:{v:Row;busy:boolean;run:(c:Record<stri
    <div className="admin-sum" role="table" aria-label="종목별 합계">
     <div role="row" className="head"><span role="columnheader"/><span role="columnheader">전체</span><span role="columnheader">축구</span><span role="columnheader">풋살</span><span role="columnheader">둘 다</span></div>
     <div role="row"><b role="rowheader">팀</b><span>{all.length}</span><span>{sc("soccer")}</span><span>{sc("futsal")}</span><span>{sc("both")}</span></div>
-    {gs&&[["경기(취소 제외)",gs.games],["다가오는 경기",gs.upcoming],["모집 중",gs.listings]].map(([n,x]:any)=><div role="row" key={n}><b role="rowheader">{n}</b><span>{x.total}</span><span>{x.soccer}</span><span>{x.futsal}</span><span>—</span></div>)}
+    {gs&&([["경기(취소 제외)",gs.games],["다가오는 경기",gs.upcoming],["모집 중",gs.listings]] as [string,{total:number;soccer:number;futsal:number}][]).map(([n,x])=><div role="row" key={n}><b role="rowheader">{n}</b><span>{x.total}</span><span>{x.soccer}</span><span>{x.futsal}</span><span>—</span></div>)}
    </div>
   </div>
   <div className="stats-grid" style={{marginBottom:18}}>{TEAM_TABS.map(x=><button type="button" key={x.key} className={"stat-card stat-tab"+(tab===x.key?" is-on":"")} aria-pressed={tab===x.key} onClick={()=>pick(x.key)}><div className="stat-label">{x.label}</div><div className="stat-value">{count(x.key)}</div></button>)}</div>

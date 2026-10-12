@@ -13,7 +13,7 @@ const setting=(name:string)=>(env as unknown as Record<string,string|undefined>)
 // 환경변수 이름이 사이트마다 다를 수 있어 흔한 이름을 모두 본다.
 const publicKey=()=>setting("VAPID_PUBLIC_KEY")||setting("VAPID_PUBLIC")||setting("NEXT_PUBLIC_VAPID_PUBLIC_KEY");
 const privateKey=()=>setting("VAPID_PRIVATE_KEY")||setting("VAPID_PRIVATE");
-const subject=()=>setting("VAPID_SUBJECT")||"mailto:jyp7296@naver.com";
+const subject=()=>setting("VAPID_SUBJECT")||"mailto:help@teamkick.co.kr";
 
 export const pushReady=()=>!!publicKey()&&!!privateKey();
 export const pushPublicKey=()=>publicKey();

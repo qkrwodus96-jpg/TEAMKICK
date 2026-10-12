@@ -84,6 +84,7 @@ api.resend.com 모두 프록시가 CONNECT 를 거부한다(403). 그래서 외�
 SPF/DKIM 인증을 붙일 수 없다. 회신은 코드가 `lib/legal.ts`의 문의처로 돌려준다.
 지금 값은 `팀킥 <noreply@teamkick.co.kr>`(2026-10-12). Brevo 는 도메인 인증만으로는 부족하고 **Senders 에 그 주소를
 등록해야** 그 주소로 나간다(안 하면 계정 기본 주소로 바뀌어 나갔다).
+회신·문의 주소는 `help@teamkick.co.kr`(Cloudflare Email Routing 이 운영자 메일함으로 전달, 2026-10-12).
 구장 검색은 `KAKAO_REST_KEY` 환경변수가 있어야 동작한다. 로컬에서는 `.dev.vars`에
 넣고(이 파일은 git에 올리지 않는다), 없으면 검색만 막히고 수기 입력은 그대로 된다.
 

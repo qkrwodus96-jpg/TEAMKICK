@@ -36,7 +36,7 @@ const fullText=(t)=>{let bold=false;return t.split("\n").map(l=>{const parts=l.s
 
 const cover=table(["항목","내용"],[
  ["요청자","박재연 (서비스 운영자)"],
- ["연락처","jyp7296@naver.com"],
+ ["연락처","help@teamkick.co.kr"],
  ["작성일",DATE+" (앱 버전 "+VERSION+")"],
  ["검토 대상","이용약관·개인정보처리방침 "+LEGAL_VERSION+" 초안 (부록 A·B 전문)"],
  ["이전 판","2026-09-25 판을 보내지 않았다면 이 판만 보시면 됩니다. 0장에 그 뒤 바뀐 점을 모았습니다."],

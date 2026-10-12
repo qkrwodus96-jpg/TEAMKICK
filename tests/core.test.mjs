@@ -4469,3 +4469,61 @@ test('1.30 팀이 해산되면 사진 연결을 바로 끊고, 예약 실행이 
     const r2=await (await call()).json();assert.ok(!r2.purged,'한 번 지운 팀은 다시 하지 않는다');
   }finally{E.BUCKET=before;if(before===undefined)delete E.BUCKET}
 });
+
+test('1.31 풋살 경기는 종목·형식·포메이션을 따로 검사하고, 기록·랭킹·화면 목록이 축구와 섞이지 않는다',()=>{
+  const {sportView,defaultSport,sportOf,myTotals}=modelLib;
+  const f=fixture();const p1=addPlayer(f.s,f.a,{id:'p1',name:'선수1'});
+  const make=(extra,start)=>command(f.s,A,{type:'createGame',teamId:f.a,start:iso(start),end:iso(start+7200e3),venue:'구장',address:'서울 마포구',external:'외부 FC',...extra},start-DAY).gameId;
+  assert.throws(()=>make({sport:'futsal',format:'11인제'},NOW+5*DAY),/풋살 경기 형식/,'풋살은 4·5·6인제만');
+  assert.throws(()=>make({sport:'basketball'},NOW+5*DAY),/종목/);
+  const soccer=make({},NOW-4*DAY),fut1=make({sport:'futsal',format:'5인제'},NOW-3*DAY),fut2=make({sport:'futsal',format:'4인제'},NOW-2*DAY);
+  const g=id=>f.s.games.find(x=>x.id===id);
+  assert.equal(sportOf(g(soccer)),'soccer');assert.equal(g(fut1).sport,'futsal');assert.equal(g(fut1).format,'5인제');
+  assert.equal(sideOf(f.s,fut1,f.a).needed,5,'풋살 필요 인원 기본값은 형식 인원');
+  // 포메이션: 풋살 5인제는 5인제 풋살 포메이션만, 축구는 축구 포메이션만. 풋살은 전·후반(2칸).
+  command(f.s,A,{type:'setLineup',teamId:f.a,gameId:fut1,quarter:1,formation:'1-2-1',slots:{FX:{memberId:p1.id}}});
+  assert.equal(sideOf(f.s,fut1,f.a).lineups[0].slots.FX.name,'선수1');
+  for(const bad of ['4-4-2','2-1'])assert.throws(()=>command(f.s,A,{type:'setLineup',teamId:f.a,gameId:fut1,quarter:1,formation:bad,slots:{}}),/포메이션/);
+  assert.throws(()=>command(f.s,A,{type:'setLineup',teamId:f.a,gameId:soccer,quarter:1,formation:'1-2-1',slots:{}}),/포메이션/);
+  assert.throws(()=>command(f.s,A,{type:'setLineup',teamId:f.a,gameId:fut1,quarter:3,formation:'1-2-1',slots:{}}),/숫자 범위/,'전반·후반뿐');
+  for(const id of [soccer,fut1,fut2]){
+    command(f.s,A,{type:'completeGame',teamId:f.a,gameId:id});
+    const z=sideOf(f.s,id,f.a);command(f.s,A,{type:'attendance',teamId:f.a,gameId:id,values:Object.fromEntries(rosterFor(f.s,z,g(id)).map(x=>[x.id,true]))});
+  }
+  // 내 기록: 축구 1경기, 풋살 2경기
+  assert.equal(myTotals(f.s,'p1','soccer').played,1);assert.equal(myTotals(f.s,'p1','futsal').played,2);assert.equal(myTotals(f.s,'p1').played,3,'종목을 안 주면 전체');
+  command(f.s,{id:'p1',name:'선수1'},{type:'setRankPublic',on:true});
+  const v=visibleState(f.s,'p1',f.a);
+  assert.equal(v.myTotals.played,1,'기본(축구) 내 기록');assert.equal(v.futsal.myTotals.played,2,'풋살 내 기록');
+  assert.equal(v.national.year.attend.find(r=>r.me).value,1,'축구 랭킹 출석');
+  assert.equal(v.futsal.national.year.attend.find(r=>r.me).value,2,'풋살 랭킹 출석');
+  assert.equal(v.futsal.regional.year.attend.find(r=>r.me).value,2,'풋살 내 지역 랭킹');
+  // 화면 전환: 고른 종목의 경기·참여만 남고 팀 기록 집계도 따로 나온다
+  const vs=sportView(v,'soccer'),vf=sportView(v,'futsal');
+  assert.deepEqual(vs.games.map(x=>x.id),[soccer]);assert.deepEqual(vf.games.map(x=>x.id).sort(),[fut1,fut2].sort());
+  assert.ok(vf.sides.every(z=>[fut1,fut2].includes(z.gameId)));
+  assert.equal(vf.national.year.attend.find(r=>r.me).value,2);assert.equal(vf.myTotals.played,2);
+  const all=['1970-01-01T00:00:00.000Z','2100-01-01T00:00:00.000Z'];
+  assert.equal(summaries(vs,...all).players.find(x=>x.id===p1.id).attend,1);
+  assert.equal(summaries(vf,...all).players.find(x=>x.id===p1.id).attend,2);
+  // 처음 고를 종목: 가장 최근(또는 다음) 경기의 종목
+  assert.equal(defaultSport(v.games,NOW),'futsal');assert.equal(defaultSport([],NOW),'soccer');
+});
+
+test('1.31 풋살 모집글·용병 모집은 풋살 목록에만, 신청 팀은 경기 종목을 그대로 받는다',()=>{
+  const {sportView}=modelLib;
+  const f=fixture();
+  const fut=command(f.s,A,{type:'createGame',teamId:f.a,sport:'futsal',format:'6인제',start:iso(NOW+3*DAY),end:iso(NOW+3*DAY+7200e3),venue:'풋살장',address:'서울 마포구',listing:true},NOW).gameId;
+  const soc=game(f.s,f.a,{listing:true,start:NOW+4*DAY});
+  command(f.s,A,{type:'openGuests',teamId:f.a,gameId:fut,needed:2});
+  const v=visibleState(f.s,B.id,f.b);
+  assert.deepEqual(sportView(v,'futsal').listings.map(x=>x.id),[fut]);
+  assert.deepEqual(sportView(v,'soccer').listings.map(x=>x.id),[soc]);
+  assert.equal(sportView(v,'futsal').guestListings.length,1);assert.equal(sportView(v,'soccer').guestListings.length,0);
+  command(f.s,B,{type:'applyMatch',teamId:f.b,gameId:fut});
+  const va=visibleState(f.s,A.id,f.a);
+  assert.equal(sportView(va,'futsal').requests.length,1);assert.equal(sportView(va,'soccer').requests.length,0,'받은 신청도 종목별');
+  command(f.s,A,{type:'acceptMatch',teamId:f.a,gameId:fut,requestId:f.s.requests[0].id});
+  assert.equal(sideOf(f.s,fut,f.b).needed,6,'상대 팀 참여 인원도 풋살 형식대로');
+  assert.deepEqual(sportView(visibleState(f.s,B.id,f.b),'futsal').games.map(x=>x.id),[fut],'상대 팀 일정에도 풋살로');
+});

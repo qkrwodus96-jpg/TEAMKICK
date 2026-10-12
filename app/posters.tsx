@@ -8,7 +8,7 @@ import {useEffect,useMemo,useRef,useState} from "react";
 import {Download,Share2,LoaderCircle,Star,Palette} from "lucide-react";
 import {toast} from "sonner";
 import {positionGroup,currentVote,type Row} from "@/lib/model";
-import {FORMATIONS,FORMATION_NAMES,slotGroup,placeByPosition,LINE_ORDER} from "@/lib/formations";
+import {FORMATIONS,FORMATION_NAMES,formationsFor,slotGroup,placeByPosition,LINE_ORDER} from "@/lib/formations";
 import {imageUrl,opponent} from "./teamkick";
 import {cutout} from "./cutout";
 
@@ -228,9 +228,9 @@ function placeOnFormation(d:D){
  return slots.filter(s=>placed[s.k]).map(s=>({s,p:placed[s.k]}));
 }
 // 참여 인원의 포지션 수에 가장 가까운 포메이션(라인업 탭에 정한 게 없을 때 처음 고른다)
-export function autoFormation(ps:P[]){
- const cnt=(g:string)=>ps.filter(p=>p.group===g).length;let best="4-4-2",score=1e9;
- for(const name of FORMATION_NAMES){const sl=FORMATIONS[name];const c=(g:string)=>sl.filter(x=>slotGroup(x.k)===g).length;
+export function autoFormation(ps:P[],names:string[]=FORMATION_NAMES){
+ const cnt=(g:string)=>ps.filter(p=>p.group===g).length;let best=names[0],score=1e9;
+ for(const name of names){const sl=FORMATIONS[name];const c=(g:string)=>sl.filter(x=>slotGroup(x.k)===g).length;
   const sc=Math.abs(c("DF")-cnt("DF"))+Math.abs(c("MF")-cnt("MF"))+Math.abs(c("FW")-cnt("FW"));if(sc<score){score=sc;best=name}}
  return best;
 }
@@ -343,19 +343,21 @@ export function PosterStudio({v,team,gameId}:{v:Row;team:Row;gameId?:string}){
  const staff=["captain","manager"].includes(v.role)||!!v.isOwner;
  const game=(v.games??[]).find((g:Row)=>g.id===gameId)??null;
  const side=game?(v.sides??[]).find((z:Row)=>z.gameId===game.id):null;
+ // 1.31 풋살 경기면 선발 인원(형식 인원)과 포메이션 목록이 풋살 것이다.
+ const names=formationsFor(game),xiCount=game?.sport==="futsal"?Number(String(game.format).match(/^\d+/)?.[0]??5):11;
  const people:P[]=useMemo(()=>((v.members??[]) as Row[]).filter(m=>m.status==="active").map(m=>({id:m.id,name:String(m.name),number:m.number??null,position:String(m.position??""),group:positionGroup(m.position),photo:m.photo,captain:m.role==="captain"})),[v.members]);
  // 경기 이미지는 "참여" 투표한 사람(5명 이상일 때)을, 명단 이미지는 전원을 처음 고른다. 11명이 넘으면 나머지는 교체.
  const initial=useMemo(()=>{const yes=side?people.filter(p=>currentVote(side,p.id)==="yes"):[];const base=yes.length>=5?yes:people; // 투표가 아직 덜 모였으면 전원에서 시작
   const ordered=[...base].sort((a,b)=>["GK","DF","MF","FW"].indexOf(a.group)-["GK","DF","MF","FW"].indexOf(b.group)||(a.number??999)-(b.number??999));
-  const m:Record<string,Pick>={};people.forEach(p=>m[p.id]="out");ordered.forEach((p,i)=>m[p.id]=i<11?"xi":"sub");return m},[people,side]);
+  const m:Record<string,Pick>={};people.forEach(p=>m[p.id]="out");ordered.forEach((p,i)=>m[p.id]=i<xiCount?"xi":"sub");return m},[people,side,xiCount]);
  const [pick,setPick]=useState<Record<string,Pick>>(initial);
  const [featured,setFeatured]=useState<string>(()=>people.find(p=>p.photo&&initial[p.id]==="xi")?.id??people.find(p=>p.captain)?.id??"");
  const [th,setTh]=useState<Theme>(()=>themeOf(team));
  // 경기 없이 연 명단 이미지에는 MATCHDAY 를 빼고 보여준다(상대·날짜가 없으면 빈칸이 생긴다).
  const list=useMemo(()=>POSTERS.filter(x=>game||x[0]!=="matchday"),[game]);
  const [tpl,setTpl]=useState(game?3:0),[busy,setBusy]=useState(true),[open,setOpen]=useState<""|"color"|"players">("");
- const lineup=side?.lineups?.[0]&&Object.keys(side.lineups[0].slots??{}).length>=8?side.lineups[0]:null;
- const [formation,setFormation]=useState<string>(()=>lineup?.formation??autoFormation(people.filter(p=>initial[p.id]==="xi")));
+ const lineup=side?.lineups?.[0]&&Object.keys(side.lineups[0].slots??{}).length>=Math.min(8,xiCount)&&names.includes(side.lineups[0].formation)?side.lineups[0]:null;
+ const [formation,setFormation]=useState<string>(()=>lineup?.formation??autoFormation(people.filter(p=>initial[p.id]==="xi"),names));
  const [photos,setPhotos]=useState<Photos>("cut");
  const ref=useRef<HTMLCanvasElement>(null);
  const oppTeam:Team|null=useMemo(()=>{if(!game)return null;const oid=game.home===v.teamId?game.away:game.home;const t=(v.teams??[]).find((x:Row)=>x.id===oid);
@@ -375,7 +377,7 @@ export function PosterStudio({v,team,gameId}:{v:Row;team:Row;gameId?:string}){
   }finally{if(live)setBusy(false)}})();
   return()=>{live=false}},[tpl,data,list]);
  const nXI=Object.values(pick).filter(x=>x==="xi").length;
- function setP(id:string,x:Pick){setPick(m=>{if(x==="xi"&&m[id]!=="xi"&&Object.values(m).filter(y=>y==="xi").length>=11){toast("선발은 11명까지예요. 다른 선수를 먼저 교체로 바꿔주세요.");return m}return {...m,[id]:x}})}
+ function setP(id:string,x:Pick){setPick(m=>{if(x==="xi"&&m[id]!=="xi"&&Object.values(m).filter(y=>y==="xi").length>=xiCount){toast("선발은 "+xiCount+"명까지예요. 다른 선수를 먼저 교체로 바꿔주세요.");return m}return {...m,[id]:x}})}
  async function blob(){return new Promise<Blob|null>(res=>ref.current?.toBlob(res,"image/png"))}
  const fileName=()=>"teamkick-"+list[tpl][0]+".png";
  async function share(){const b=await blob();if(!b){toast.error("이미지를 만들지 못했어요.");return}
@@ -395,7 +397,7 @@ export function PosterStudio({v,team,gameId}:{v:Row;team:Row;gameId?:string}){
    <div><span>포인트</span>{sw(ACCENT_SWATCH,th.accent,c=>setTh(t=>({...t,accent:c})))}</div>
    <div><span>유니폼</span>{sw(SHIRT_SWATCH,th.shirt,c=>setTh(t=>({...t,shirt:c})))}</div>
    <div><span>줄무늬</span>{sw(["#ffffff","#141414","#b3121b","#1d3fbf","#f2c94c"],th.stripe,c=>setTh(t=>({...t,stripe:c})),true)}</div>
-   {list[tpl][0]==="lineup"&&<div><span>포메이션</span><div className="chip-row">{FORMATION_NAMES.map(x=><button key={x} type="button" className={"chip-btn"+(formation===x?" on":"")} onClick={()=>setFormation(x)}>{x}</button>)}</div>{lineup&&<small className="muted">{lineup.formation} 은 라인업 탭에 정해 둔 자리 그대로 그려요.</small>}</div>}
+   {list[tpl][0]==="lineup"&&<div><span>포메이션</span><div className="chip-row">{names.map(x=><button key={x} type="button" className={"chip-btn"+(formation===x?" on":"")} onClick={()=>setFormation(x)}>{x}</button>)}</div>{lineup&&<small className="muted">{lineup.formation} 은 라인업 탭에 정해 둔 자리 그대로 그려요.</small>}</div>}
    {staff&&<button type="button" className="btn" onClick={saveKit}>이 색을 팀 기본으로 저장</button>}
   </div>}
   {open==="players"&&<div className="poster-panel">

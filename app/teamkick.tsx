@@ -15,7 +15,7 @@ import {Select,SelectTrigger,SelectValue,SelectContent,SelectItem} from "@/compo
 import {Toaster} from "@/components/ui/sonner";
 import {toast} from "sonner";
 import {demoState} from "@/lib/demo";
-import {applyCommand,visibleState,summaries,currentVote,isIntra,SQUAD_NAMES,collections,type Row,type State} from "@/lib/model";
+import {applyCommand,visibleState,summaries,currentVote,isIntra,SQUAD_NAMES,collections,sportView,defaultSport,SPORTS,SPORT_NAME,type Row,type State,type Sport} from "@/lib/model";
 import {AuthPanel,SocialConsent,Management,Matching,AppDialogs,MyHub} from "./screens";
 import {MvpPrompt,Rankings} from "./team-play";
 import {RecordsTable} from "./player-sheet";
@@ -136,6 +136,9 @@ function optimistic(real:Row|null,c:Row){
 const TEAM_KEY="teamkick_team";
 const storedTeam=()=>{try{return localStorage.getItem(TEAM_KEY)??""}catch{return ""}};
 const rememberTeam=(t:string)=>{try{if(t)localStorage.setItem(TEAM_KEY,t)}catch{}};
+// 1.31 팀마다 마지막으로 고른 종목(축구|풋살). 이 기기의 보기 설정일 뿐이고 저장되는 데이터는 아니다.
+const SPORT_KEY="teamkick.sport";
+const storedSports=():Record<string,string>=>{try{return typeof window==="undefined"?{}:JSON.parse(localStorage.getItem(SPORT_KEY)||"{}")}catch{return {}}};
 // 초대 링크로 들어와 로그인(특히 카카오·구글·네이버처럼 다른 사이트를 거치는 로그인)을 하면 주소의
 // ?invite= 가 사라진다. 7일 동안 이 기기에 들고 있다가 로그인 뒤에 가입 신청 창을 띄운다.
 const INVITE_KEY="teamkick_invite";
@@ -158,7 +161,13 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  const [period,setPeriod]=useState("month"),[recordTab,setRecordTab]=useState("players"),[rank,setRank]=useState("goals"),[fromCustom,setFromCustom]=useState(today.slice(0,7)+"-01"),[toCustom,setToCustom]=useState(today);
  // 1.20: 기간은 드롭다운 대신 한눈에 보이는 탭(이번 달·올해·전체·기간 선택). 기록 맨 위와 선수 기록 표 위에 같은 것을 둔다.
  const periodTabs=<div className="period-tabs"><div className="seg" role="tablist" aria-label="기록 기간">{[["month","이번 달"],["year","올해"],["all","전체"],["custom","기간 선택"]].map(([k,l])=><button key={k} type="button" role="tab" aria-selected={period===k} className={period===k?"on":""} onClick={()=>setPeriod(k)}>{l}</button>)}</div>{period==="custom"&&<div className="period-range"><input aria-label="시작일" type="date" value={fromCustom} onChange={e=>setFromCustom(e.target.value)}/><span>~</span><input aria-label="종료일" type="date" value={toCustom} onChange={e=>setToCustom(e.target.value)}/></div>}</div>;
- const v=demo?{...visibleState(samples,demoActor,demoTeam),user:{id:demoActor,name:"샘플 주장"}}:{teams:[],members:[],mine:[],games:[],sides:[],notices:[],notifications:[],requests:[],listings:[],ownTeams:[],invites:[],...real};
+ const v0=demo?{...visibleState(samples,demoActor,demoTeam),user:{id:demoActor,name:"샘플 주장"}}:{teams:[],members:[],mine:[],games:[],sides:[],notices:[],notifications:[],requests:[],listings:[],ownTeams:[],invites:[],...real};
+ // 1.31 축구|풋살: 아래 모든 화면은 고른 종목의 경기·기록만 담은 v 를 본다(lib/model.ts sportView).
+ const [sportPick,setSportPick]=useState<Record<string,string>>(storedSports);
+ const sportKey=String(v0.teamId||"_"),picked=sportPick[sportKey];
+ const sport:Sport=picked==="futsal"||picked==="soccer"?picked:defaultSport(v0.games);
+ const setSport=(x:Sport)=>setSportPick(p=>{const n={...p,[sportKey]:x};try{localStorage.setItem(SPORT_KEY,JSON.stringify(n))}catch{}return n});
+ const v=sportView(v0,sport);
  const team=v.teams?.find((t:Row)=>t.id===v.teamId),manager=["captain","manager"].includes(v.role),captain=v.role==="captain";
  async function refresh(teamId?:string){const params=new URLSearchParams();if(teamId)params.set("team",teamId);const invite=pendingInvite();if(invite)params.set("invite",invite);const r=await fetch("/api/app?"+params,{cache:"no-store"});const data:any=await r.json();if(!r.ok)throw Error(data.error);setReal(data);rememberTeam(String(data.teamId??""));return data}
  useEffect(()=>{refresh(storedTeam()||undefined).then(r=>{
@@ -263,7 +272,7 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  const [homeTab,setHomeTab]=useState("team");
  toolState.current={v,setModal,setView};
  // 매칭 탭의 빨간 숫자: 우리 팀 모집글에 온 대기 중 신청 수(주장에게만 서버가 보낸다).
- const inbox=(v.requests??[]).filter((r:Row)=>r.status==="pending"&&v.games?.some((g:Row)=>g.id===r.gameId&&g.home===v.teamId)).length;
+ const inbox=(v0.requests??[]).filter((r:Row)=>r.status==="pending"&&v0.games?.some((g:Row)=>g.id===r.gameId&&g.home===v0.teamId)).length;
  useEffect(()=>{const mc=(document as any).modelContext;if(!mc?.registerTool)return;const lifecycle=new AbortController();const tools=[{name:"read_team_schedule",description:"Read the currently selected team and its visible match schedule.",inputSchema:{type:"object",properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:true},execute:()=>{const x=toolState.current.v;return {teamId:x.teamId,games:x.games.map((g:Row)=>({id:g.id,start:g.start,venue:g.venue,status:g.status}))}}},{name:"open_match_details",description:"Open a match already visible in the selected team. Does not edit or create a match.",inputSchema:{type:"object",properties:{gameId:{type:"string"}},required:["gameId"],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:false},execute:async(input:any)=>{const x=toolState.current;if(typeof input?.gameId!=="string"||!x.v.games.some((g:Row)=>g.id===input.gameId))throw Error("경기를 찾을 수 없어요.");x.setModal({kind:"game",id:input.gameId});await new Promise(resolve=>requestAnimationFrame(resolve));return {opened:input.gameId}}}];for(const tool of tools){try{Promise.resolve(mc.registerTool(tool,{signal:lifecycle.signal})).catch(()=>{})}catch{}}return()=>lifecycle.abort()},[]);
  function toActual(){setDemo(false);setView("team");setModal(null);}
  function switchTeam(t:string){if(demo){setDemoTeam(t);setDemoActor(t==="team-b"?"demo-b":"demo-a")}else refresh(t).catch(e=>setError(e.message));setModal(null)}
@@ -277,7 +286,7 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  const stats=summaries({...v,games:v.games??[],members:v.members??[],sides:v.sides??[]},scope[0],scope[1]);
  const monthStats=summaries({...v,games:v.games??[],members:v.members??[],sides:v.sides??[]},isoDay(today.slice(0,7)+"-01"),new Date(Date.UTC(Number(today.slice(0,4)),Number(today.slice(5,7)),1)-9*3600e3).toISOString());
  const [jumpTab,setJumpTab]=useState("");
- const common={v,team,demo,busy,action,run,setModal,setView,toActual,manager,captain,setJumpTab,chatUnread};
+ const common={v,team,demo,busy,action,run,setModal,setView,toActual,manager,captain,setJumpTab,chatUnread,sport};
  const goDate=(day:string)=>{setSelected(day);setMonth(day.slice(0,7));setDateFilter(true);setView("schedule")};
  // 빨간 점만으로는 몇 건인지, 무슨 일인지 알 수 없었다. 개수와 가장 최근 소식을 함께 보여준다.
  // 1.25 팀별 알림 보기(사장님 요청): 지금 고른 팀 알림과 팀 없는 개인 알림만 이 팀 화면에 보인다.
@@ -291,6 +300,7 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  const otherTotal=otherUnread.reduce((x,y)=>x+y.count,0);
  // v-1250 사장님 요청: 위쪽 숫자만으로는 어느 팀 알림인지 몰라서 팀 고르기 목록의 팀 이름 옆에도 숫자를 붙인다.
  const teamPickerBase=<Picker value={v.teamId||"none"} onChange={switchTeam} options={pickTeams.map((t:Row)=>{const c=otherUnread.find(x=>x.teamId===t.id)?.count??0;return {value:t.id,label:c?<span className="opt-with-alert">{t.name}<i className="opt-alert" aria-label={"새 알림 "+c+"개"}>{c>99?"99+":c}</i></span>:t.name}}).concat(v.teamId?[]:[{value:"none",label:"소속 팀 없음"}])}/>;
+ const sportSwitch=team&&view!=="admin"?<div className="seg two sport-seg" role="radiogroup" aria-label="종목">{SPORTS.map(x=><button key={x} type="button" role="radio" aria-checked={sport===x} className={sport===x?"on":""} onClick={()=>{setSport(x);setStep(0)}}>{SPORT_NAME[x]}</button>)}</div>:null;
  const teamPicker=<span className="team-picker-wrap">{teamPickerBase}{otherTotal>0&&<span className="team-alert" title="다른 팀 새 알림" aria-label={"다른 팀 새 알림 "+otherTotal+"개"}>{otherTotal>99?"99+":otherTotal}</span>}</span>;
  const openTeamNotifications=(t:string)=>{refresh(t).then(()=>{setModal({kind:"notifications"});run({type:"readNotifications",teamId:t})}).catch(e=>setError(e.message))};
  const unreadList=(v.notifications??[]).filter((n:Row)=>!n.read&&inTeam(n));
@@ -309,7 +319,7 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  function leaveReset(showDemo=false){setActiveReset("");setDemo(showDemo);window.history.replaceState(null,"","/")}
  if(activeReset)return <main className="page-content"><AuthPanel resetToken={activeReset} onResetCancel={()=>leaveReset()} onDemo={()=>leaveReset(true)} mailReady={real?.mailReady!==false} kakaoReady={real?.kakaoReady===true} googleReady={real?.googleReady===true} naverReady={real?.naverReady===true} emailSignupEnabled={real?.emailSignupEnabled===true}/></main>;
  if(loading)return <div className="app-booting" aria-busy="true" aria-label="불러오는 중"/>;
- return <><SidebarProvider style={{"--sidebar-width":"232px"} as React.CSSProperties}><Sidebar collapsible="none" className="nav-side hidden md:flex sticky top-0 h-svh"><button className="brand" aria-label="홈으로" onClick={()=>setView("home")}><BrandMark/></button><div className="team-select"><div className="nav-label" style={{padding:"0 0 10px"}}>MY TEAM</div>{teamPicker}</div><SidebarContent><div><div className="nav-label">TEAM SPACE</div><SidebarMenu>{nav.map(n=><SidebarMenuItem key={n.id}><SidebarMenuButton className="nav-item" isActive={view===n.id} onClick={()=>setView(n.id)}><n.icon/><span>{n.label}</span>{n.id==="matching"&&inbox>0&&<i className="red-dot">{inbox}</i>}</SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></div></SidebarContent><div className="side-note"><ShieldCheck size={19} style={{color:"#45955e",marginBottom:8}}/><strong>함께 뛰는 우리 팀</strong><p className="muted">경기 일정부터 기록까지<br/>한 곳에서 이어가세요.</p></div><div className="nav-bottom">{v.isOwner&&<button className="btn btn-ghost" onClick={()=>setView("admin")}><ShieldCheck/>서비스 관리</button>}<button className="btn btn-ghost" onClick={()=>setModal({kind:"settings"})}><Settings/>설정</button></div></Sidebar><div className="workspace"><header className="topbar"><div className="breadcrumb"><Home size={15}/><ChevronRight size={13}/><span>{team?.name??"팀 공간"}</span><ChevronRight size={13}/><strong>{nav.find(n=>n.id===view)?.label??"서비스 관리"}</strong></div><button className="brand mobile-brand" aria-label="홈으로" onClick={()=>setView("home")}><BrandMark/></button>{latestUnread&&<button className="notice-peek" onClick={openNotifications} title={latestUnread.title+" · "+latestUnread.body}><strong>{latestUnread.title}</strong><span>{latestUnread.body}</span></button>}<div className="top-actions"><span className="small muted desktop-only">{koreanDate(new Date().toISOString())}</span><button className="icon-button" aria-label={unread?"알림 "+unread+"개":"알림"} onClick={openNotifications}><Bell size={20}/>{unread>0&&<i className="notification-count">{unread>99?"99+":unread}</i>}</button><button className="row" onClick={()=>setModal({kind:"settings"})}><span className="avatar">{demo?"샘플":v.user?.name?.slice(-2)||"MY"}</span><span className="small top-user-name">{demo?"샘플 주장":v.user?.name||"내 계정"}</span></button></div></header><main className="page-content">
+ return <><SidebarProvider style={{"--sidebar-width":"232px"} as React.CSSProperties}><Sidebar collapsible="none" className="nav-side hidden md:flex sticky top-0 h-svh"><button className="brand" aria-label="홈으로" onClick={()=>setView("home")}><BrandMark/></button><div className="team-select"><div className="nav-label" style={{padding:"0 0 10px"}}>MY TEAM</div>{teamPicker}{sportSwitch&&<div style={{marginTop:10}}>{sportSwitch}</div>}</div><SidebarContent><div><div className="nav-label">TEAM SPACE</div><SidebarMenu>{nav.map(n=><SidebarMenuItem key={n.id}><SidebarMenuButton className="nav-item" isActive={view===n.id} onClick={()=>setView(n.id)}><n.icon/><span>{n.label}</span>{n.id==="matching"&&inbox>0&&<i className="red-dot">{inbox}</i>}</SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></div></SidebarContent><div className="side-note"><ShieldCheck size={19} style={{color:"#45955e",marginBottom:8}}/><strong>함께 뛰는 우리 팀</strong><p className="muted">경기 일정부터 기록까지<br/>한 곳에서 이어가세요.</p></div><div className="nav-bottom">{v.isOwner&&<button className="btn btn-ghost" onClick={()=>setView("admin")}><ShieldCheck/>서비스 관리</button>}<button className="btn btn-ghost" onClick={()=>setModal({kind:"settings"})}><Settings/>설정</button></div></Sidebar><div className="workspace"><header className="topbar"><div className="breadcrumb"><Home size={15}/><ChevronRight size={13}/><span>{team?.name??"팀 공간"}</span><ChevronRight size={13}/><strong>{nav.find(n=>n.id===view)?.label??"서비스 관리"}</strong></div><button className="brand mobile-brand" aria-label="홈으로" onClick={()=>setView("home")}><BrandMark/></button>{latestUnread&&<button className="notice-peek" onClick={openNotifications} title={latestUnread.title+" · "+latestUnread.body}><strong>{latestUnread.title}</strong><span>{latestUnread.body}</span></button>}<div className="top-actions"><span className="small muted desktop-only">{koreanDate(new Date().toISOString())}</span><button className="icon-button" aria-label={unread?"알림 "+unread+"개":"알림"} onClick={openNotifications}><Bell size={20}/>{unread>0&&<i className="notification-count">{unread>99?"99+":unread}</i>}</button><button className="row" onClick={()=>setModal({kind:"settings"})}><span className="avatar">{demo?"샘플":v.user?.name?.slice(-2)||"MY"}</span><span className="small top-user-name">{demo?"샘플 주장":v.user?.name||"내 계정"}</span></button></div></header><main className="page-content">
  {error&&<div className="error-bar">{error} <button onClick={()=>refresh(v.teamId).then(()=>setError("")).catch(e=>setError(e.message))}>다시 시도</button></div>}
  {verifyNote&&<div className="data-note" role="status" style={{marginBottom:14}}>{verifyNote}</div>}
  {!demo&&v.user&&v.mySuspension&&<div className="error-bar" role="alert">{v.mySuspension.message} <button onClick={()=>setModal({kind:"support"})}>1:1 문의</button></div>}
@@ -317,7 +327,7 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  {view==="home"&&homeTab==="team"&&!demo&&<AppSetup signedIn={!!v.user}/>}
  {!demo&&v.user&&<KeepSubscription/>}
  {demo&&<div className="demo-strip"><span>샘플 팀 둘러보기 · 변경 사항은 실제 팀에 저장되지 않아요.</span><button onClick={toActual}>우리 팀 시작하기 <span aria-hidden>↗</span></button></div>}
- <div className="md:hidden" style={{marginBottom:20}}>{teamPicker}</div>
+ <div className="md:hidden team-row" style={{marginBottom:20}}>{teamPicker}{sportSwitch}</div>
  {!demo&&!v.user&&pendingSignup?<SocialConsent provider={pendingSignup} onCancel={()=>setPendingSignup("")}/>:!demo&&!v.user?<AuthPanel inviteTeam={real?.invitedTeamName??""} onDemo={()=>setDemo(true)} mailReady={real?.mailReady!==false} kakaoReady={real?.kakaoReady===true} googleReady={real?.googleReady===true} naverReady={real?.naverReady===true} emailSignupEnabled={real?.emailSignupEnabled===true}/>:
  // 팀이 없으면 온보딩을 보여준다. 다만 MY 는 팀과 상관없는 내 것들이라
  // 팀이 없어도 아래에 함께 보여준다. 안 그러면 문의·공지·버전을 볼 길이 없다.

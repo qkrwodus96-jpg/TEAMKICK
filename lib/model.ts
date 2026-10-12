@@ -653,7 +653,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   const g={id:id(),home:t,away:null,external:textValue(c.external,60,false),...d,venue:textValue(c.venue,100),address:textValue(c.address,200),lat:coord(c.lat,90),lng:coord(c.lng,180),region:regionValue(c.region||teamOf(s,t)!.region),...gameKind(c),secured:c.secured!==false,cost:integer(c.cost??0,0,10000000),opponentCost:integer(c.opponentCost??0,0,10000000),status:"scheduled",listing:c.listing?"open":"none",revision:1,result:null,at:stamp};
   if(c.kind==="intra"){ensure(!c.listing&&!g.external,"자체전은 상대팀 없이 우리 팀끼리 하는 경기예요.");Object.assign(g,{kind:"intra",squads:integer(c.squads??2,2,4)});}
   const voteCloses=c.deadline?Date.parse(String(c.deadline)):0;if(c.deadline)ensure(Number.isFinite(voteCloses)&&voteCloses>now&&voteCloses<=Date.parse(g.start),"투표 마감은 지금 이후, 경기 시작 시각까지로 정해주세요.");ensure(!g.external||!c.listing,"수기 상대팀과 모집을 동시에 설정할 수 없어요.");ensure(!c.listing||Date.parse(g.start)>now,"지난 경기로 모집할 수 없어요.");
-  if(c.listing)requireTeam(s,t,a.id,"captain");s.games.push(g);const side=newSide(g,t);side.needed=integer(c.needed??11,1,50);side.note=textValue(c.note,500,false);if(voteCloses)side.deadline=iso(voteCloses);
+  if(c.listing)requireTeam(s,t,a.id,"captain");s.games.push(g);const side=newSide(g,t);side.needed=integer(c.needed??side.needed,1,50);side.note=textValue(c.note,500,false);if(voteCloses)side.deadline=iso(voteCloses);
   s.sides.push(side);notice(s,t,"새 경기 일정",whenRange(g.start,g.end)+" "+g.venue,g.id);output={gameId:g.id};
  }
  else if(type==="applyMatch"||type==="withdrawMatch"||type==="acceptMatch"||type==="rejectMatch"){
@@ -1334,11 +1334,11 @@ export function summaries(v:any,from:string,to:string){
 
 // 1.31 화면 맨 위 축구|풋살 전환: 서버가 준 화면 상태에서 고른 종목의 경기·참여·매칭 목록만 남기고,
 // 랭킹·내 기록은 그 종목 것으로 바꾼다. 그 아래 화면(홈·일정·기록·매칭)은 고칠 필요 없이 이 값만 본다.
-export function sportView<T extends Record<string,any>>(v:T,sport:Sport):T&{sport:Sport}{
+export function sportView<T extends Record<string,unknown>>(v:T,sport:Sport):T&{sport:Sport}{
  const want=(x:Row)=>sportOf(x)===sport;
  const games=((v.games??[]) as Row[]).filter(want),ids=new Set(games.map(g=>g.id));
  const other=new Set([...((v.games??[]) as Row[]),...((v.listings??[]) as Row[]),...((v.matchedListings??[]) as Row[])].filter(g=>!want(g)).map(g=>g.id));
- const f=sport==="futsal"?(v.futsal??{}):null;
+ const f=sport==="futsal"?((v.futsal??{}) as Row):null;
  return {...v,sport,games,sides:((v.sides??[]) as Row[]).filter(z=>ids.has(z.gameId)),
   listings:((v.listings??[]) as Row[]).filter(want),matchedListings:((v.matchedListings??[]) as Row[]).filter(want),
   guestListings:((v.guestListings??[]) as Row[]).filter(want),myGuests:((v.myGuests??[]) as Row[]).filter(want),

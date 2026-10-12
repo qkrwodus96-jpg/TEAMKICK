@@ -152,6 +152,7 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  const [verifyNote,setVerifyNote]=useState(kakaoNote);
  const [activeReset,setActiveReset]=useState(resetToken);
  const [real,setReal]=useState<any>(null),[view,setActualView]=useState("home"),[modal,setModalRaw]=useState<any>(null),[busy,setBusy]=useState(false),[error,setError]=useState(""),[loading,setLoading]=useState(true);
+ const [jumpTab,setJumpTab]=useState("");
  // 홈 카드에서 화살표로 몇 칸 옮겨 봤는지. 기준은 늘 "다음 경기"다.
  // 다른 화면에 갔다 홈으로 돌아오면 기준으로 되돌아간다(사장님 요청).
  const [step,setStep]=useState(0);
@@ -172,6 +173,9 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  const setModal=(m:{kind?:string;id?:string;gameId?:string;[k:string]:unknown}|null)=>{const gid=m?.kind==="game"?m.id:m?.gameId;const g=gid?(v0.games??[]).find((x:Row)=>x.id===gid):null;if(g&&sportOf(g)!==sport)setSport(sportOf(g));
   // 팝업 안에서 다른 팝업으로 넘어가면 이전 팝업을 back 으로 기억해 둔다(← 뒤로). 같은 종류이거나 뒤로 가는 중이면 붙이지 않는다.
   if(m&&modal&&!m.back&&m!==modal.back&&m.kind!==modal.kind)m={...m,back:modal};setModalRaw(m)};
+ // 1.35.1 푸시로 다른 종목 경기 창이 열리면(데이터가 늦게 와도) 그 종목으로 바꾼다. 경기·데이터가 바뀔 때 한 번만 본다.
+ const [sportSeen,setSportSeen]=useState<unknown>(null);const sportKeyNow=[modal?.kind,modal?.id??modal?.gameId,(v0.games??[]).length].join("|");
+ if(sportSeen!==sportKeyNow){setSportSeen(sportKeyNow);const gid=modal?.kind==="game"?modal.id:modal?.gameId;const g=gid?(v0.games??[]).find((x:Row)=>x.id===gid):null;if(g&&sportOf(g)!==sport)setSport(sportOf(g))}
  const team=v.teams?.find((t:Row)=>t.id===v.teamId),manager=["captain","manager"].includes(v.role),captain=v.role==="captain";
  async function refresh(teamId?:string){const params=new URLSearchParams();if(teamId)params.set("team",teamId);const invite=pendingInvite();if(invite)params.set("invite",invite);const r=await fetch("/api/app?"+params,{cache:"no-store"});const data:any=await r.json();if(!r.ok)throw Error(data.error);setReal(data);rememberTeam(String(data.teamId??""));return data}
  useEffect(()=>{refresh(storedTeam()||undefined).then(r=>{
@@ -212,16 +216,16 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  // 이미 열려 있는 창에는 메시지로 알려 준다. 둘 다 받아 탭을 옮긴다.
  const VIEWS=["home","schedule","matching","records","team","admin"];
  useEffect(()=>{
-  const go=(name?:string|null)=>{if(name?.startsWith("chat:")){setActualView("team");setModalRaw({kind:"chat",room:name.slice(5)});return}if(name?.startsWith("modal:")){setActualView("team");setModalRaw({kind:name.slice(6)});return}if(name?.startsWith("invite:")){const [,gameId,teamId]=name.split(":");setActualView("matching");setModalRaw({kind:"guestInvite",gameId,teamId});return}if(name&&VIEWS.includes(name))setActualView(name)};
+  const go=(name?:string|null,game?:string|null)=>{if(name?.startsWith("game:")){const [,id,tab]=name.split(":");setActualView("schedule");setModalRaw({kind:"game",id,...(tab?{tab}:{})});return}if(name==="schedule"&&game){setActualView("schedule");setModalRaw({kind:"game",id:game});return}if(name?.startsWith("chat:")){setActualView("team");setModalRaw({kind:"chat",room:name.slice(5)});return}if(name?.startsWith("modal:")){setActualView("team");setModalRaw({kind:name.slice(6)});return}if(name?.startsWith("invite:")){const [,gameId,teamId]=name.split(":");setActualView("matching");setModalRaw({kind:"guestInvite",gameId,teamId});return}if(name?.startsWith("team:")){setActualView("team");setJumpTab(name);return}if(name&&VIEWS.includes(name))setActualView(name)};
   // 1.25 다른 팀 소식이면 그 팀으로 바꾼 뒤 연다.
   const teamOf=(q:URLSearchParams)=>{const tm=q.get("team");if(tm&&tm!==viewTeamRef.current)refresh(tm).catch(()=>{})};
   teamOf(new URLSearchParams(window.location.search));
-  go(new URLSearchParams(window.location.search).get("to"));
+  {const q0=new URLSearchParams(window.location.search);go(q0.get("to"),q0.get("game"))}
   if(window.location.search.includes("to="))window.history.replaceState(null,"","/");
   const onMessage=(e:MessageEvent)=>{
    const data=e.data as {type?:string;url?:string}|undefined;
    if(data?.type!=="teamkick-open"||!data.url)return;
-   try{const q=new URL(data.url,window.location.origin).searchParams;teamOf(q);go(q.get("to"))}catch{}
+   try{const q=new URL(data.url,window.location.origin).searchParams;teamOf(q);go(q.get("to"),q.get("game"))}catch{}
   };
   navigator.serviceWorker?.addEventListener?.("message",onMessage);
   return()=>navigator.serviceWorker?.removeEventListener?.("message",onMessage);
@@ -289,7 +293,6 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  const scope=useMemo(()=>{const y=today.slice(0,4);if(period==="all")return ["1970-01-01","2100-01-01"];if(period==="custom"){const start=fromCustom||today,end=toCustom||today;return [isoDay(start),new Date(Date.parse(isoDay(end))+864e5).toISOString()]};const start=period==="year"?y+"-01-01":today.slice(0,7)+"-01";const date=new Date(start+"T00:00:00+09:00");const end=period==="year"?Number(y)+1+"-01-01T00:00:00+09:00":new Date(Date.UTC(Number(y),Number(today.slice(5,7)),1)-9*3600e3).toISOString();return [date.toISOString(),new Date(end).toISOString()]},[period,fromCustom,toCustom,today]);
  const stats=summaries({...v,games:v.games??[],members:v.members??[],sides:v.sides??[]},scope[0],scope[1]);
  const monthStats=summaries({...v,games:v.games??[],members:v.members??[],sides:v.sides??[]},isoDay(today.slice(0,7)+"-01"),new Date(Date.UTC(Number(today.slice(0,4)),Number(today.slice(5,7)),1)-9*3600e3).toISOString());
- const [jumpTab,setJumpTab]=useState("");
  const common={v,team,demo,busy,action,run,setModal,setView,toActual,manager,captain,setJumpTab,chatUnread,sport};
  const goDate=(day:string)=>{setSelected(day);setMonth(day.slice(0,7));setDateFilter(true);setView("schedule")};
  // 빨간 점만으로는 몇 건인지, 무슨 일인지 알 수 없었다. 개수와 가장 최근 소식을 함께 보여준다.
@@ -347,7 +350,7 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  {view==="schedule"&&<><Tabs value={scheduleMode} onValueChange={setScheduleMode} className="mb-5"><TabsList><TabsTrigger value="calendar">월간 달력</TabsTrigger><TabsTrigger value="list">일정 목록</TabsTrigger></TabsList></Tabs><div className="two-col" style={{gridTemplateColumns:scheduleMode==="calendar"?undefined:"1fr"}}>{scheduleMode==="calendar"&&<Calendar large month={month} setMonth={(m:string)=>{setMonth(m);setDateFilter(false)}} selected={selected} onSelect={goDate} games={games}/>}<section className="panel"><div className="panel-title"><h2>{dateFilter?selected.replaceAll("-","."):month.replace("-","년 ")+"월 일정"}</h2><button className="text-link" onClick={()=>setDateFilter(false)}>월 전체 보기</button></div>{games.filter((g:Row)=>localDay(g.start).startsWith(dateFilter?selected:month)).map((g:Row)=><Fixture key={g.id} g={g} v={v} onClick={()=>setModal({kind:"game",id:g.id})}/>)}{!games.some((g:Row)=>localDay(g.start).startsWith(dateFilter?selected:month))&&<Empty title="등록된 경기가 없어요" description="다른 날짜를 선택하거나 새 경기를 만들어보세요."/>}</section></div></>}
  {view==="matching"&&<Matching {...common} key={"matching:"+jumpTab} initialTab={jumpTab.startsWith("matching:")?jumpTab.slice("matching:".length):""}/>}
  {view==="records"&&<><section className="rec-block">{periodTabs}<StatCards stats={stats}/><p className="data-note" style={{marginBottom:20}}>완료 {stats.played}경기 · 결과 확정 {stats.scored}경기 · 출석 확정 {stats.attendanceConfirmed}경기{stats.pending>0&&" · 결과 확인 필요 "+stats.pending+"경기"}{stats.intra>0&&" · 자체전 "+stats.intra+"경기(팀 전적에서 빼고 개인 기록에는 넣어요)"}</p></section><section className="rec-block"><Rankings v={v} busy={busy} run={run} onOpen={(p:Row)=>setModal({kind:"player",player:p})}/></section><section className="rec-block"><Tabs value={recordTab} onValueChange={setRecordTab}><TabsList className="mb-4"><TabsTrigger value="players">선수 스코어보드</TabsTrigger><TabsTrigger value="games">경기 기록</TabsTrigger><TabsTrigger value="summary">매치 요약</TabsTrigger></TabsList><TabsContent value="players"><section className="panel"><div className="panel-title"><h2>우리 팀 선수 기록</h2></div>{periodTabs}<p className="small muted" style={{margin:"-4px 0 8px"}}>머리글을 누르면 그 순서로 줄 세워요.</p>{stats.players.length?<RecordsTable players={stats.players} rank={rank} setRank={setRank} onOpen={(p:Row)=>setModal({kind:"player",player:p})}/>:<Empty title="아직 선수가 없어요"/>}<p className="data-note">골·도움은 경기 결과와 개인 기록이 모두 확정되면 반영돼요. 출석은 실제 참석 확정 기준, MVP는 마감된 투표 기준이에요.</p></section></TabsContent><TabsContent value="games"><section className="panel">{games.filter((g:Row)=>g.status==="completed"&&g.start>=scope[0]&&g.start<scope[1]).reverse().map((g:Row)=><Fixture g={g} v={v} key={g.id} onClick={()=>setModal({kind:"game",id:g.id})}/>)}{!stats.played&&!stats.intra&&<Empty title="이 기간에 완료된 경기가 없어요"/>}</section></TabsContent><TabsContent value="summary"><section className="panel"><h2 className="view-heading">{stats.scored?stats.scored+"경기에서 함께 만든 결과":"첫 기록을 기다리고 있어요"}</h2><div className="two-col"><div><div className="stat-value">{stats.wins}<small>승</small> {stats.draws}<small>무</small> {stats.losses}<small>패</small></div><p className="data-note">결과가 확정된 경기 기준</p><div style={{display:"flex",height:12,borderRadius:6,overflow:"hidden",background:"#edf2ee",marginTop:18}}><div style={{width:stats.scored?stats.wins/stats.scored*100+"%":"0",background:"#188d55"}}/><div style={{width:stats.scored?stats.draws/stats.scored*100+"%":"0",background:"#a8ce62"}}/><div style={{width:stats.scored?stats.losses/stats.scored*100+"%":"0",background:"#e2b293"}}/></div></div><div className="gap-grid small"><p>팀 득점 <strong>{stats.goals}</strong> · 팀 실점 <strong>{stats.against}</strong> · 득실차 <strong>{stats.goals-stats.against}</strong></p><p>경기당 평균 출석 <strong>{stats.average??"—"}명</strong></p><p>개인 득점 합계 <strong>{stats.players.reduce((sum:number,p:Row)=>sum+p.goals,0)}골</strong></p></div></div></section></TabsContent></Tabs></section></>}
- {(view==="team"||view==="admin")&&<Management {...common} admin={view==="admin"}/>}
+ {(view==="team"||view==="admin")&&<Management {...common} key={"m:"+jumpTab} initialTab={jumpTab.startsWith("team:")?jumpTab.slice(5):""} admin={view==="admin"}/>}
  </>}
  <footer className="footer-note"><span>TEAMKICK · 함께 뛰고, 함께 기록하다.</span><span>우리 팀의 모든 경기</span></footer>
  </main><nav className="bottom-nav">{nav.map(n=><button key={n.id} className={(view===n.id?"active":"")+" dot-host"} onClick={()=>setView(n.id)}><n.icon/>{n.label}{n.id==="matching"&&inbox>0&&<i className="red-dot nav-dot">{inbox}</i>}{n.id==="team"&&chatUnread>0&&<i className="red-dot nav-dot" aria-label={"안 읽은 채팅 "+chatUnread+"개"}>{chatUnread>99?"99+":chatUnread}</i>}</button>)}</nav></div>

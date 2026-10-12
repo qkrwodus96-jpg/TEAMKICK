@@ -311,15 +311,6 @@ async function tplMatchday(ctx:C,d:D){
  grain(ctx); brand(ctx,"rgba(255,255,255,.75)");
 }
 
-// 캔버스에 그리는 작은 축구공(흰 공 + 가운데 검은 오각형 + 테두리 조각). 글꼴 이모지는 기기마다 달라 직접 그린다.
-function ball(ctx:C,cx:number,cy:number,r:number){
- ctx.save();ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fillStyle="#fff";ctx.fill();ctx.lineWidth=1.5;ctx.strokeStyle="#111";ctx.stroke();
- const pent=(x:number,y:number,s:number,rot:number)=>{ctx.beginPath();for(let i=0;i<5;i++){const a=rot+i*2*Math.PI/5;ctx.lineTo(x+s*Math.cos(a),y+s*Math.sin(a))}ctx.closePath();ctx.fillStyle="#111";ctx.fill()};
- pent(cx,cy,r*.38,-Math.PI/2);
- ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.clip();
- for(let i=0;i<5;i++){const a=-Math.PI/2+i*2*Math.PI/5;pent(cx+Math.cos(a)*r*.98,cy+Math.sin(a)*r*.98,r*.3,a+Math.PI/5)}
- ctx.restore();
-}
 // ───────── 6. FULL TIME (1.34) — 끝난 경기의 최종 점수 · 득점자(골 시간) ─────────
 async function tplFulltime(ctx:C,d:D){
  const th=d.th,fin=d.final;backdrop(ctx,th,-.2);argyle(ctx);glow(ctx,W/2,H*.38,640,th.accent,.14);
@@ -331,17 +322,14 @@ async function tplFulltime(ctx:C,d:D){
  ctx.fillStyle="#fff";ctx.textAlign="center";fit(ctx,short(d.team.name),W*.34,34,KO);ctx.fillText(short(d.team.name),lx,cy+170);
  if(d.opp){fit(ctx,short(d.opp.name),W*.34,34,KO);ctx.fillText(short(d.opp.name),rx,cy+170)}
  if(fin){ctx.fillStyle="#fff";f(ctx,190,EN);ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(fin.ours+" : "+fin.theirs,W/2,cy+10);ctx.textBaseline="alphabetic"}
- // 1.35 득점자: 이름 옆에 골 수만큼 축구공(최대 5개 그림, 넘으면 ×n), 아래 작게 골 시간. 많으면 두 줄로 최대 10명.
+ // 득점자: 이름, 아래 작게 골 시간. 골 시간을 안 넣었으면 이름 옆에 ×골 수(2골 이상). 많으면 두 줄로 최대 10명.
  const list=(fin?.scorers??[]).slice(0,10);
  if(list.length){ctx.fillStyle=th.accent;f(ctx,30,EN);ctx.textAlign="center";ctx.fillText("GOALS",W/2,cy+260);
   const col=list.length>4?2:1,per=Math.ceil(list.length/col),rowH=col===1?64:60;
   list.forEach((x,i)=>{const c=Math.floor(i/per),r=i%per;const gx=col===1?W/2:(c===0?W*.27:W*.73),y=cy+320+r*rowH;
-   const balls=Math.min(x.n,5),br=13,gap=6,ballsW=balls*(br*2)+(balls-1)*gap+(x.n>5?44:0);
-   ctx.fillStyle="#fff";fit(ctx,x.name,col===1?W*.4:W*.2,34,KO);const nw=ctx.measureText(x.name).width;
-   const total=nw+16+ballsW,x0=gx-total/2;ctx.textAlign="left";ctx.fillText(x.name,x0,y);
-   for(let k=0;k<balls;k++)ball(ctx,x0+nw+16+br+k*(br*2+gap),y-12,br);
-   if(x.n>5){ctx.fillStyle="#fff";f(ctx,26,EN);ctx.fillText("×"+x.n,x0+nw+16+balls*(br*2+gap),y)}
-   if(x.mins.length){ctx.fillStyle="rgba(255,255,255,.65)";f(ctx,22,EN);ctx.textAlign="center";ctx.fillText(x.mins.map(m=>m+"'").join("  "),gx,y+26)}})}
+   const name=x.name+(!x.mins.length&&x.n>1?" ×"+x.n:"");
+   ctx.fillStyle="#fff";fit(ctx,name,col===1?W*.4:W*.2,34,KO);ctx.textAlign="center";ctx.fillText(name,gx,y);
+   if(x.mins.length){ctx.fillStyle="rgba(255,255,255,.65)";f(ctx,22,EN);ctx.fillText(x.mins.map(m=>m+"'").join("  "),gx,y+26)}})}
  if(d.venue){ctx.fillStyle="rgba(255,255,255,.7)";fit(ctx,d.venue,W*.8,30,KO);ctx.textAlign="center";ctx.fillText(d.venue,W/2,H-96)}
  grain(ctx);brand(ctx,"rgba(255,255,255,.75)");
 }

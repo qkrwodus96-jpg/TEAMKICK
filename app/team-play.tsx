@@ -92,9 +92,10 @@ export function RecordPrompt({v,busy,run,open}:{v:Row;busy:boolean;run:(c:Record
   const g=((v.games??[]) as Row[]).find(x=>x.id===z.gameId);
   if(!g||g.status!=="completed"||isIntra(g)||!(g.away||g.external)||now-Date.parse(g.start)>14*864e5)return null;
   const p=g.resultProposal;
+  // 확정 뒤에 상대가 점수를 고쳐 다시 보낸 것도 확인해야 한다.
+  if(captain&&p?.status==="pending"&&p.by!==v.teamId)return {g,z,step:"confirm",p};
   if(g.result?.status!=="confirmed"){
-   if(!captain)return null;
-   if(p?.status==="pending")return p.by!==v.teamId?{g,z,step:"confirm",p}:null;
+   if(!captain||p?.status==="pending")return null;
    return {g,z,step:"score",p};
   }
   if(z.recordsFinal)return null;

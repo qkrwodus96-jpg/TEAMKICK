@@ -253,7 +253,9 @@ const TEAM_STATUS:Record<string,string>={pending:"승인 대기 중이에요",ac
 // 경기가 딸린 알림은 따로 적지 않아도 일정 화면으로 간다.
 const target=(to?:string,gameId?:string)=>to??(gameId?"schedule":"home");
 function notice(s:State,t:string,title:string,body:string,gameId?:string,to?:string){for(const m of s.members.filter(x=>x.teamId===t&&x.status==="active"))s.notifications.push({id:id(),userId:m.userId,teamId:t,title,body,gameId,to:target(to,gameId),read:false,at:iso()})}
-function userNotice(s:State,u:string,title:string,body:string,t?:string,to?:string){s.notifications.push({id:id(),userId:u,teamId:t,title,body,to:target(to),read:false,at:iso()})}
+function userNotice(s:State,u:string,title:string,body:string,t?:string,to?:string,gameId?:string){s.notifications.push({id:id(),userId:u,teamId:t,title,body,gameId,to:target(to,gameId),read:false,at:iso()})}
+// 1.35.1 알림을 누르면 열 경기 창과 탭("game:<경기>:record" 처럼). 탭이 없으면 경기 정보.
+const gameTo=(g:Row,tab?:string)=>"game:"+g.id+(tab?":"+tab:"")
 
 // 경기 3시간 전 알림(1.16.1). 예약 실행(/api/cron)이 10분마다 부른다.
 // 경기의 팀마다 한 번만 보낸다(side.soonAt 에 보낸 시각을 남긴다). 받는 사람은 그 팀 활동 선수 중
@@ -673,7 +675,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   ensure(!existing||!["active","pending"].includes(existing.status),"이미 가입했거나 승인 대기 중이에요.",409);
   const data={userId:a.id,teamId:t,name:textValue(c.name||a.name,30),position:cleanPosition(c.position||s.users.find(x=>x.id===a.id)?.profile?.main||"MF"),number:integer(c.number??0,0,99),role:"member",status:"pending",at:stamp};
   if(existing)Object.assign(existing,data);else s.members.push({id:id(),periods:[],...data});
-  for(const m of s.members.filter(x=>x.teamId===t&&x.role==="captain"&&x.status==="active"))userNotice(s,m.userId,"팀원 가입 요청",data.name+"님이 가입을 신청했어요.",t,"team");
+  for(const m of s.members.filter(x=>x.teamId===t&&x.role==="captain"&&x.status==="active"))userNotice(s,m.userId,"팀원 가입 요청",data.name+"님이 가입을 신청했어요.",t,"team:manage");
  }
  else if(["approveMember","rejectMember","removeMember","setRole","editMember","transferCaptain","acceptCaptain"].includes(type)){
   if(type!=="acceptCaptain")requireTeam(s,t,a.id,"captain");
@@ -878,7 +880,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    const waiting:Row[]=rosterFor(s,side!,g!).filter((x:Row)=>currentVote(side!,x.id)==="none");
    ensure(waiting.length,"아직 응답하지 않은 선수가 없어요.");
    const targets=s.members.filter(x=>x.teamId===t&&waiting.some(y=>y.id===x.id));
-   for(const x of targets)userNotice(s,x.userId,"참여 투표 알림",teamOf(s,t)!.name+" · "+g!.venue+" 경기 참여 여부를 알려주세요.",t,"schedule");
+   for(const x of targets)userNotice(s,x.userId,"참여 투표 알림",teamOf(s,t)!.name+" · "+g!.venue+" 경기 참여 여부를 알려주세요.",t,gameTo(g!),g!.id);
    side!.remindAt=stamp;output={notified:targets.length};
   }
   if(type==="completeGame"){ensure(now>=Date.parse(g!.end),"경기가 끝난 후 완료 처리할 수 있어요.");g!.status="completed";
@@ -902,7 +904,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    if(!side!.mvp){
     side!.mvp={openAt:stamp,closesAt:iso(now+MVP_HOURS*3600e3),votes:{}};
     const voters=s.members.filter(x=>x.teamId===t&&came.includes(x.id)&&x.status==="active");
-    if(came.length>=2)for(const x of voters)s.notifications.push({id:id(),userId:x.userId,teamId:t,title:"MVP 투표가 열렸어요",body:(isIntra(g)?"자체전":opponent0(s,g!,t))+" · 오늘의 MVP를 뽑아주세요. "+MVP_HOURS+"시간 뒤 마감돼요.",gameId:g!.id,to:"schedule",read:false,at:stamp});
+    if(came.length>=2)for(const x of voters)s.notifications.push({id:id(),userId:x.userId,teamId:t,title:"MVP 투표가 열렸어요",body:(isIntra(g)?"자체전":opponent0(s,g!,t))+" · 오늘의 MVP를 뽑아주세요. "+MVP_HOURS+"시간 뒤 마감돼요.",gameId:g!.id,to:gameTo(g!,"mvp"),read:false,at:stamp});
     // 주장 화면에 "몇 명에게 알림을 보냈는지" 보여주려고 돌려준다(본인 제외).
     output={mvpNotified:came.length>=2?voters.filter(x=>x.userId!==a.id).length:0};
    }else{
@@ -926,12 +928,12 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    if(type==="remindMvp"){
     ensure(!p.remindAt||now-Date.parse(p.remindAt)>=6*3600e3,"방금 알림을 보냈어요. 6시간 뒤에 다시 보낼 수 있어요.",429);
     const waiting=people.filter(x=>!p.votes?.[x.id]);ensure(waiting.length,"모두 투표했어요.");
-    for(const x of waiting)s.notifications.push({id:id(),userId:x.userId,teamId:t,title:"MVP 투표 알림",body:"아직 MVP를 뽑지 않았어요. "+whenText(p.closesAt)+"에 마감돼요.",gameId:g!.id,to:"schedule",read:false,at:stamp});
+    for(const x of waiting)s.notifications.push({id:id(),userId:x.userId,teamId:t,title:"MVP 투표 알림",body:"아직 MVP를 뽑지 않았어요. "+whenText(p.closesAt)+"에 마감돼요.",gameId:g!.id,to:gameTo(g!,"mvp"),read:false,at:stamp});
     p.remindAt=stamp;output={notified:waiting.length};
    }else{
     p.closesAt=stamp;p.closedBy=a.id;
     const win=mvpWinners(side!,now).map(k=>(side!.roster??[]).find((r:Row)=>r.id===k)?.name).filter(Boolean);
-    for(const x of people)s.notifications.push({id:id(),userId:x.userId,teamId:t,title:"MVP 투표 결과",body:win.length?"오늘의 MVP: "+win.join(", "):"투표한 사람이 없어 MVP가 없어요.",gameId:g!.id,to:"schedule",read:false,at:stamp});
+    for(const x of people)s.notifications.push({id:id(),userId:x.userId,teamId:t,title:"MVP 투표 결과",body:win.length?"오늘의 MVP: "+win.join(", "):"투표한 사람이 없어 MVP가 없어요.",gameId:g!.id,to:gameTo(g!,"mvp"),read:false,at:stamp});
    }
   }
   if(type==="squads"){
@@ -998,7 +1000,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    g!.resultSequence=proposed.revision;
    if(!g!.away){g!.result=proposed;clearStaleRecords(s,g!);}
    else{g!.resultProposal=proposed;if(!g!.result)g!.result={status:"pending"};
-    notice(s,g!.home===t?g!.away:g!.home,"경기 결과 확인 요청",total+" : "+against+" 결과를 확인해주세요.",g!.id);}
+    notice(s,g!.home===t?g!.away:g!.home,"경기 결과 확인 요청",total+" : "+against+" 결과를 확인해주세요.",g!.id,gameTo(g!,"record"));}
    output={total,opponent:against};
   }
   if(type==="result"){
@@ -1006,12 +1008,12 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    const proposed={a:g!.home===t?own:opponent,b:g!.home===t?opponent:own,by:t,status:g!.away?"pending":"confirmed",revision:(g!.resultSequence??g!.result?.revision??0)+1,at:stamp};
    g!.resultSequence=proposed.revision;
    if(!g!.away){g!.result=proposed;clearStaleRecords(s,g!);}
-   else {g!.resultProposal=proposed;if(!g!.result)g!.result={status:"pending"};notice(s,g!.home===t?g!.away:g!.home,"경기 결과 확인 요청",own+" : "+opponent+" 결과를 확인해주세요.",g!.id);}
+   else {g!.resultProposal=proposed;if(!g!.result)g!.result={status:"pending"};notice(s,g!.home===t?g!.away:g!.home,"경기 결과 확인 요청",own+" : "+opponent+" 결과를 확인해주세요.",g!.id,gameTo(g!,"record"));}
   }
-  if(type==="confirmResult"){const p=g!.resultProposal;ensure(p&&p.by!==t&&c.revision===p.revision,"확인 가능한 상대팀의 최신 결과가 없어요.",409);if(c.agree===false){p.status="disputed";}else{g!.result={...p,status:"confirmed"};g!.resultProposal=null;clearStaleRecords(s,g!);}notice(s,p.by,c.agree===false?"경기 결과 이견":"경기 결과 확정",c.agree===false?"상대팀이 점수가 다르다고 했어요. 점수를 다시 맞춰 주세요.":"점수가 확정됐어요. 이제 개인 기록(골·도움)을 넣어 주세요.",g!.id);}
+  if(type==="confirmResult"){const p=g!.resultProposal;ensure(p&&p.by!==t&&c.revision===p.revision,"확인 가능한 상대팀의 최신 결과가 없어요.",409);if(c.agree===false){p.status="disputed";}else{g!.result={...p,status:"confirmed"};g!.resultProposal=null;clearStaleRecords(s,g!);}notice(s,p.by,c.agree===false?"경기 결과 이견":"경기 결과 확정",c.agree===false?"상대팀이 점수가 다르다고 했어요. 점수를 다시 맞춰 주세요.":"점수가 확정됐어요. 이제 개인 기록(골·도움)을 넣어 주세요.",g!.id,gameTo(g!,"record"));}
   if(type==="changeGame"){
    ensure(g!.status==="scheduled"&&now<Date.parse(g!.start),"이미 시작한 경기는 일정 변경을 할 수 없어요.");const d=dates(c.start,c.end);ensure(Date.parse(d.start)>now,"미래 일정을 선택해주세요.");const change={proposalId:id(),...d,venue:textValue(c.venue,100),address:textValue(c.address,200),lat:coord(c.lat,90),lng:coord(c.lng,180),cost:integer(c.cost??g!.cost,0,10000000),opponentCost:integer(c.opponentCost??g!.opponentCost??0,0,10000000),by:t,version:g!.revision};
-   if(g!.away){g!.change=change;notice(s,g!.home===t?g!.away:g!.home,"일정 변경 제안",whenRange(change.start,change.end)+" "+change.venue+"(으)로 바꾸자는 제안이에요. 경기 상세에서 수락하거나 거절해 주세요.",g!.id);}
+   if(g!.away){g!.change=change;notice(s,g!.home===t?g!.away:g!.home,"일정 변경 제안",whenRange(change.start,change.end)+" "+change.venue+"(으)로 바꾸자는 제안이에요. 경기 상세에서 수락하거나 거절해 주세요.",g!.id,gameTo(g!));}
    else{checkConflict(s,t,d.start,d.end,g!.id);if(g!.listing!=="open"&&!isIntra(g))g!.external=textValue(c.external??g!.external,60,false);const moved=gameMoved(g!,change);Object.assign(g!,change);g!.revision++;if(moved)resetVotes(s,g!);for(const r of s.requests.filter(x=>x.gameId===g!.id&&x.status==="pending"))r.status="changed";}
   }
   if(type==="confirmChange"){const change=g!.change;ensure(g!.status==="scheduled"&&now<Date.parse(g!.start)&&change&&now<Date.parse(change.start),"이미 시작한 경기의 변경 제안은 수락할 수 없어요.",409);ensure(change&&change.by!==t&&change.version===g!.revision&&c.proposalId===change.proposalId,"확인 가능한 최신 변경 제안이 없어요.",409);if(c.agree!==false){for(const tid of [g!.home,g!.away].filter(Boolean))checkConflict(s,tid,change.start,change.end,g!.id);const moved=gameMoved(g!,change);Object.assign(g!,change);g!.revision++;if(moved)resetVotes(s,g!,true);for(const tid of [g!.home,g!.away].filter(Boolean))notice(s,tid,moved?"경기 일정 변경":"경기 정보 변경",moved?"변경된 일정에 다시 참여 투표해주세요.":"구장비 등 경기 정보가 바뀌었어요. 참여 투표는 그대로예요.",g!.id);}g!.change=null;}
@@ -1139,7 +1141,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   const text=textValue(c.message,1000);
   row!.replies=[...(row!.replies??[]),{at:stamp,message:text}];
   row!.status="answered";
-  userNotice(s,row!.userId,"문의에 답변이 등록되었어요",text.slice(0,120),undefined,"team");
+  userNotice(s,row!.userId,"문의에 답변이 등록되었어요",text.slice(0,120),undefined,"modal:support");
  }
  // --- 1.26 차단 ---
  else if(type==="blockUser"){
@@ -1244,7 +1246,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   // 1.26.1 지금 고를 수 없는 팀(나간 팀·해산한 팀)의 알림은 개인 알림처럼 함께 읽음 처리한다. 안 그러면 영영 안 읽음으로 남는다.
   const live=new Set(s.members.filter(m=>m.userId===a.id&&m.status==="active"&&["active","suspended"].includes(teamOf(s,m.teamId)?.status)).map(m=>m.teamId));
   for(const n of s.notifications.filter(x=>x.userId===a.id&&(!tid||!x.teamId||x.teamId===tid||!live.has(x.teamId))))n.read=true;}
- else if(type==="correctRequest"){requireTeam(s,t,a.id);for(const m of s.members.filter(x=>x.teamId===t&&["captain","manager"].includes(x.role)&&x.status==="active"))userNotice(s,m.userId,"기록 정정 요청",a.name+": "+textValue(c.message,500),t,"records");}
+ else if(type==="correctRequest"){requireTeam(s,t,a.id);const cg=s.games.find(x=>x.id===c.gameId&&(x.home===t||x.away===t));for(const m of s.members.filter(x=>x.teamId===t&&["captain","manager"].includes(x.role)&&x.status==="active"))userNotice(s,m.userId,"기록 정정 요청",a.name+": "+textValue(c.message,500),t,cg?gameTo(cg,"record"):"records",cg?.id);}
  // 채팅 메시지를 보낸 뒤 화면이 부른다. 방 사람들에게 "새 메시지" 알림을 남긴다(내용은 싣지 않는다 — 잠금화면에 계좌 같은 게 뜨지 않게).
  // 읽지 않은 같은 방 알림이 10분 안에 이미 있으면 또 만들지 않는다(대화가 오갈 때 알림 폭탄 방지).
  else if(type==="chatPing"){

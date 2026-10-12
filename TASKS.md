@@ -6,6 +6,11 @@
 `BLOCKED` / `DONE`(실제 실행 결과로 확인). 요구사항 본문은
 `PROJECT_CONTEXT.md`, 구조는 `ARCHITECTURE.md`를 본다.
 
+## T101 ⑯ 팀킥 도메인 메일(설정만, 2026-10-12)
+
+- [x] 사장님: Brevo 도메인 teamkick.co.kr Authenticated, Cloudflare `MAIL_FROM` = 팀킥 <noreply@teamkick.co.kr>. 운영자 health 에서 `mailFromDomain: teamkick.co.kr`, `mailReady: true` 확인(사장님 화면).
+- [ ] 비밀번호 찾기 메일을 네이버 주소로 받아 보낸 사람·스팸함 확인(사장님).
+
 ## T100a 1.31.1 — 풋살 모드 전체 화면 점검 후 고침(2026-10-12, 사장님 요청)
 
 - 점검: 샘플 팀(390px·1280px, 밝게·어둡게)으로 홈·일정·매칭 5탭·기록·MY·경기 상세 4탭·자체전 만들기·공유 이미지, 로컬 시험 계정 2개로 풋살 경기 만들기 → 새로고침 → 상대 팀 신청 → 수락 → 축구 화면에서 알림으로 풋살 경기 열기.

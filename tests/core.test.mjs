@@ -4646,3 +4646,42 @@ test('1.34 골 시간은 넣은 골 수까지 1~150분, 경기 영상은 유튜�
   assert.throws(()=>command(f.s,{id:'p1',name:'선수1'},{type:'setGameVideo',teamId:f.a,gameId,url:'https://youtu.be/dQw4w9WgXcQ'}),/권한/);
   command(f.s,A,{type:'setGameVideo',teamId:f.a,gameId,url:''});assert.equal(z.video,undefined,'비우면 지운다');
 });
+
+test('1.35 골 기록: 골마다 득점자·도움·분, 선수별 골·도움 수를 넘지 못하고 분은 선수 기록에도 남는다', ()=>{
+  const f=fixture();const p1=addPlayer(f.s,f.a,{id:'p1',name:'선수1'}),p2=addPlayer(f.s,f.a,{id:'p2',name:'선수2'});
+  const start=NOW-2*DAY;const gameId=command(f.s,A,{type:'createGame',teamId:f.a,start:iso(start),end:iso(start+7200e3),venue:'구장',address:'서울',external:'외부 FC'},start-DAY).gameId;
+  command(f.s,A,{type:'completeGame',teamId:f.a,gameId});const z=sideOf(f.s,gameId,f.a);
+  command(f.s,A,{type:'attendance',teamId:f.a,gameId,values:Object.fromEntries(rosterFor(f.s,z,f.s.games.find(g=>g.id===gameId)).map(x=>[x.id,true]))});
+  const rec=(values,goalLog)=>command(f.s,A,{type:'matchRecord',teamId:f.a,gameId,values,goalLog,opponent:0});
+  const values={[p1.id]:{goals:2,assists:0},[p2.id]:{goals:1,assists:1}};
+  rec(values,[{by:p1.id,assist:p2.id,min:30},{by:p1.id,min:5},{by:p2.id}]);
+  assert.deepEqual(z.goalLog,[{by:p1.id,min:5},{by:p1.id,assist:p2.id,min:30},{by:p2.id}],'분 순서');
+  assert.deepEqual(z.records[p1.id].minutes,[5,30]);assert.equal(z.records[p2.id].minutes,undefined);
+  assert.throws(()=>rec(values,[{by:p1.id},{by:p1.id},{by:p1.id}]),/득점자/,'골 수보다 많이');
+  assert.throws(()=>rec(values,[{by:p1.id,assist:p1.id}]),/도움 선수/,'자기 골에 자기 도움');
+  assert.throws(()=>rec(values,[{by:p2.id,assist:p1.id}]),/도움 선수/,'도움 수 0인 선수');
+  assert.throws(()=>rec(values,[{by:p1.id,min:200}]),/1~150/);
+  rec(values);assert.equal(z.goalLog.length,3,'골 기록 칸 없이 저장해도 수가 맞으면 그대로');
+  rec({[p1.id]:{goals:1,assists:0},[p2.id]:{goals:0,assists:0}});assert.equal(z.goalLog,undefined,'수가 어긋나면 지운다');
+});
+
+test('1.35 경기 뒤 순서: 점수만 먼저 올리고 상대가 확인하면 개인 기록(골·도움·골 기록)을 넣는다',()=>{
+  const f=matchFixture();const p1=addPlayer(f.s,f.a,{id:'o1',name:'하나'}),p2=addPlayer(f.s,f.a,{id:'o2',name:'둘'});
+  const g=f.s.games.find(x=>x.id===f.gameId);const later=Date.parse(g.end)+3600e3;
+  command(f.s,A,{type:'completeGame',teamId:f.a,gameId:f.gameId},later);
+  const z=sideOf(f.s,f.gameId,f.a);
+  command(f.s,A,{type:'attendance',teamId:f.a,gameId:f.gameId,values:Object.fromEntries(rosterFor(f.s,z,g).map(x=>[x.id,true]))},later);
+  const recs=()=>command(f.s,A,{type:'records',teamId:f.a,gameId:f.gameId,values:{[p1.id]:{goals:2,assists:0},[p2.id]:{goals:0,assists:1}},ownGoals:0,unknownGoals:0,goalLog:[{by:p1.id,assist:p2.id,min:12},{by:p1.id,min:40}]},later);
+  assert.throws(recs,/결과 확정 후/,'점수 확정 전에는 개인 기록을 못 넣는다');
+  const ours=g.home===f.a;
+  command(f.s,A,{type:'result',teamId:f.a,gameId:f.gameId,own:2,opponent:1},later);
+  assert.equal(g.resultProposal.status,'pending');
+  const n=f.s.notifications.filter(x=>x.teamId===f.b&&x.gameId===f.gameId).at(-1);assert.match(n.title,/결과 확인 요청/,'상대팀에 확인 요청');
+  command(f.s,B,{type:'confirmResult',teamId:f.b,gameId:f.gameId,revision:g.resultProposal.revision,agree:true},later);
+  assert.equal(g.result.status,'confirmed');assert.equal(ours?g.result.a:g.result.b,2);
+  const back=f.s.notifications.filter(x=>x.teamId===f.a&&x.gameId===f.gameId).at(-1);assert.match(back.body,/개인 기록/,'확정되면 개인 기록을 넣으라고 알린다');
+  recs();
+  assert.equal(z.recordsFinal,true);assert.deepEqual(z.records[p1.id].minutes,[12,40]);
+  assert.deepEqual(z.goalLog,[{by:p1.id,assist:p2.id,min:12},{by:p1.id,min:40}]);
+  assert.equal(g.result.status,'confirmed','개인 기록을 넣어도 확정 점수는 그대로');
+});

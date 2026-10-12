@@ -544,6 +544,27 @@ export function goalMinutes(v:unknown,goals:number):{minutes?:number[]}{
  ensure(list.length<=goals,"골 시간은 넣은 골 수보다 많을 수 없어요.");
  return {minutes:[...list].sort((a,b)=>a-b)};
 }
+// 1.35 골 기록(선택): 골마다 득점자·도움·분. 선수별 골·도움 수를 넘지 않는지 확인하고, 분은 records[].minutes 로도 남긴다
+// (포스터·예전 화면이 쓴다).
+type GoalEntry={by:string;assist?:string;min?:number};
+export function applyGoalLog(side:Row,values:Record<string,{goals:number;assists:number;minutes?:number[]}>,raw:unknown){
+ // 골 기록 칸이 없는 화면(예전 화면·운영진 골·도움 입력)은 저장된 골 기록이 새 수와 맞으면 두고, 어긋나면 지운다.
+ if(!Array.isArray(raw)){const old=side.goalLog;delete side.goalLog;if(Array.isArray(old)){try{applyGoalLog(side,values,old)}catch{delete side.goalLog}}return}
+ ensure(raw.length<=99,"골 기록이 너무 많아요.");
+ const goalsLeft:Record<string,number>={},assistsLeft:Record<string,number>={};
+ for(const [k,v] of Object.entries(values)){goalsLeft[k]=Number(v.goals||0);assistsLeft[k]=Number(v.assists||0)}
+ const log:GoalEntry[]=[];
+ for(const e of raw as Row[]){
+  const by=String(e?.by??"");ensure((goalsLeft[by]??0)>0,"골 기록의 득점자를 확인해주세요.");goalsLeft[by]--;
+  const assist=e?.assist?String(e.assist):"";
+  if(assist){ensure(assist!==by&&(assistsLeft[assist]??0)>0,"도움 선수를 확인해주세요. 선수의 도움 수보다 많이 고를 수 없어요.");assistsLeft[assist]--}
+  const min=e?.min===""||e?.min==null?null:Number(e.min);
+  if(min!=null)ensure(Number.isInteger(min)&&min>=1&&min<=150,"골 시간은 1~150 사이 분으로 적어주세요.");
+  log.push({by,...(assist?{assist}:{}),...(min!=null?{min}:{})});
+ }
+ for(const k of Object.keys(values)){const m=log.filter(x=>x.by===k&&x.min!=null).map(x=>Number(x.min)).sort((a,b)=>a-b);if(m.length)values[k].minutes=m;else delete values[k].minutes}
+ if(log.some(x=>x.assist||x.min!=null))side.goalLog=log.sort((a,b)=>(a.min??999)-(b.min??999));else delete side.goalLog;
+}
 // 경기 영상: 유튜브 주소만 받는다(youtube.com/watch·youtu.be·shorts·live). 화면은 링크로만 보여 준다(퍼오기 없음).
 export function youtubeUrl(v:unknown){
  const x=String(v??"").trim();if(!x)return "";
@@ -927,7 +948,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    const goals=(Object.values(values) as any[]).reduce((sum,v)=>sum+v.goals,0),assists=(Object.values(values) as any[]).reduce((sum,v)=>sum+v.assists,0);
    const total=g!.home===t?g!.result.a:g!.result.b,own=integer(c.ownGoals??0),unknown=integer(c.unknownGoals??0);
    ensure(goals+own+unknown===total,"선수 득점 + 상대 자책골 + 득점자 미상의 합이 팀 득점과 같아야 해요.");ensure(assists<=total-own,"어시스트 합계가 팀 득점을 초과해요.");
-   side!.records=values;side!.ownGoals=own;side!.unknownGoals=unknown;side!.recordsFinal=true;side!.recordsAt=stamp;
+   applyGoalLog(side!,values,c.goalLog);side!.records=values;side!.ownGoals=own;side!.unknownGoals=unknown;side!.recordsFinal=true;side!.recordsAt=stamp;
   }
   // 기록 입력 순서를 뒤집는다. 예전에는 팀 점수를 먼저 넣어 확정해야 선수 기록을
   // 넣을 수 있었고, 둘의 합이 맞지 않으면 저장이 막혔다. 이제 우리 팀 점수는
@@ -949,7 +970,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    const list=Object.values(values);
    const goals=list.reduce((x,r)=>x+r.goals,0)+extra.reduce((x,y)=>x+y,0),assists=list.reduce((x,r)=>x+r.assists,0);
    ensure(assists<=goals,"도움 합계가 전체 골보다 많을 수 없어요.");
-   side!.records=values;side!.squadExtra=extra;side!.ownGoals=0;side!.unknownGoals=0;side!.recordsFinal=true;side!.recordsAt=stamp;
+   applyGoalLog(side!,values,c.goalLog);side!.records=values;side!.squadExtra=extra;side!.ownGoals=0;side!.unknownGoals=0;side!.recordsFinal=true;side!.recordsAt=stamp;
    const revision=(g!.resultSequence??0)+1;g!.resultSequence=revision;
    g!.result={status:"confirmed",squads:intraScores(g!,side!),by:t,revision,at:stamp};
    output={squads:g!.result.squads};
@@ -972,7 +993,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    ensure(total<=99,"우리 팀 득점 합계를 확인해주세요.");
    // 어시스트는 우리 선수가 넣은 골에만 붙는다. 자책골에는 도움이 없다.
    ensure(assists<=total-own,"도움 합계가 우리 팀 득점을 넘을 수 없어요.");
-   side!.records=values;side!.ownGoals=own;side!.unknownGoals=unknown;side!.recordsFinal=true;side!.recordsAt=stamp;
+   applyGoalLog(side!,values,c.goalLog);side!.records=values;side!.ownGoals=own;side!.unknownGoals=unknown;side!.recordsFinal=true;side!.recordsAt=stamp;
    const proposed={a:g!.home===t?total:against,b:g!.home===t?against:total,by:t,status:g!.away?"pending":"confirmed",revision:(g!.resultSequence??g!.result?.revision??0)+1,at:stamp};
    g!.resultSequence=proposed.revision;
    if(!g!.away){g!.result=proposed;clearStaleRecords(s,g!);}
@@ -987,7 +1008,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
    if(!g!.away){g!.result=proposed;clearStaleRecords(s,g!);}
    else {g!.resultProposal=proposed;if(!g!.result)g!.result={status:"pending"};notice(s,g!.home===t?g!.away:g!.home,"경기 결과 확인 요청",own+" : "+opponent+" 결과를 확인해주세요.",g!.id);}
   }
-  if(type==="confirmResult"){const p=g!.resultProposal;ensure(p&&p.by!==t&&c.revision===p.revision,"확인 가능한 상대팀의 최신 결과가 없어요.",409);if(c.agree===false){p.status="disputed";}else{g!.result={...p,status:"confirmed"};g!.resultProposal=null;clearStaleRecords(s,g!);}notice(s,p.by,c.agree===false?"경기 결과 이견":"경기 결과 확정","경기 결과 확인 상태가 변경되었어요.",g!.id);}
+  if(type==="confirmResult"){const p=g!.resultProposal;ensure(p&&p.by!==t&&c.revision===p.revision,"확인 가능한 상대팀의 최신 결과가 없어요.",409);if(c.agree===false){p.status="disputed";}else{g!.result={...p,status:"confirmed"};g!.resultProposal=null;clearStaleRecords(s,g!);}notice(s,p.by,c.agree===false?"경기 결과 이견":"경기 결과 확정",c.agree===false?"상대팀이 점수가 다르다고 했어요. 점수를 다시 맞춰 주세요.":"점수가 확정됐어요. 이제 개인 기록(골·도움)을 넣어 주세요.",g!.id);}
   if(type==="changeGame"){
    ensure(g!.status==="scheduled"&&now<Date.parse(g!.start),"이미 시작한 경기는 일정 변경을 할 수 없어요.");const d=dates(c.start,c.end);ensure(Date.parse(d.start)>now,"미래 일정을 선택해주세요.");const change={proposalId:id(),...d,venue:textValue(c.venue,100),address:textValue(c.address,200),lat:coord(c.lat,90),lng:coord(c.lng,180),cost:integer(c.cost??g!.cost,0,10000000),opponentCost:integer(c.opponentCost??g!.opponentCost??0,0,10000000),by:t,version:g!.revision};
    if(g!.away){g!.change=change;notice(s,g!.home===t?g!.away:g!.home,"일정 변경 제안",whenRange(change.start,change.end)+" "+change.venue+"(으)로 바꾸자는 제안이에요. 경기 상세에서 수락하거나 거절해 주세요.",g!.id);}

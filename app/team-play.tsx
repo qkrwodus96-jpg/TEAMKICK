@@ -3,9 +3,9 @@
 // 팀 회칙, 초대 QR. 서버 규칙은 lib/model.ts 에 있고 여기서는 보여주고 보내기만 한다.
 import {useMemo,useState} from "react";
 import qrcode from "qrcode-generator";
-import {Trophy,Shuffle,Minus,Plus,Check,Share2,Copy,Bell,Crown,Goal,Footprints,CalendarCheck,BookOpen} from "lucide-react";
+import {Trophy,ClipboardCheck,Shuffle,Minus,Plus,Check,Share2,Copy,Bell,Crown,Goal,Footprints,CalendarCheck,BookOpen} from "lucide-react";
 import {toast} from "sonner";
-import {SQUAD_NAMES,summaries,periodRange,rankRows,REGIONS,type Row} from "@/lib/model";
+import {SQUAD_NAMES,summaries,periodRange,rankRows,REGIONS,isIntra,type Row} from "@/lib/model";
 import {PlayerPhoto,koreanDate,time,backNo,opponent} from "./teamkick";
 import {Medal} from "./medal";
 import {SafetyButton} from "./safety";
@@ -80,6 +80,37 @@ export function MvpPrompt({v,open}:{v:Row;open:(gameId:string)=>void}){
  if(!todo.length)return null;
  const {g,z}=todo[0];
  return <section className="task-box mvp-prompt"><div className="row" style={{gap:12,alignItems:"flex-start"}}><span className="task-icon"><Trophy size={20}/></span><div style={{minWidth:0,flex:1}}><strong>오늘의 MVP를 뽑아주세요</strong><p className="small muted">{koreanDate(g.start)} · {opponent(v,g)||"경기"} · {z.mvp.voted}/{z.mvp.eligible}명 투표 · {koreanDate(z.mvp.closesAt)} {time(z.mvp.closesAt)} 마감</p></div></div><button className="btn btn-green" onClick={()=>open(g.id)}>MVP 투표하기{todo.length>1?" ("+todo.length+"경기)":""}</button></section>;
+}
+// 1.35 경기 뒤 기록 순서 안내(MVP 투표 카드와 같은 자리·모양). 주장·운영진에게만.
+// ① 점수를 상대팀과 맞춘다(우리가 보내거나, 상대가 보낸 점수를 확인) → ② 점수가 확정되면 선수 골·도움을 넣는다.
+// 최근 14일 안에 끝난 경기만. 서버 규칙은 lib/model.ts result·confirmResult·records.
+export function RecordPrompt({v,busy,run,open}:{v:Row;busy:boolean;run:(c:Record<string,unknown>)=>void;open:(m:Record<string,unknown>)=>void}){
+ const [now]=useState(()=>Date.now());
+ const captain=v.role==="captain",staff=captain||v.role==="manager";
+ if(!staff||!v.teamId)return null;
+ const steps=((v.sides??[]) as Row[]).filter(z=>z.teamId===v.teamId).map(z=>{
+  const g=((v.games??[]) as Row[]).find(x=>x.id===z.gameId);
+  if(!g||g.status!=="completed"||isIntra(g)||!(g.away||g.external)||now-Date.parse(g.start)>14*864e5)return null;
+  const p=g.resultProposal;
+  if(g.result?.status!=="confirmed"){
+   if(!captain)return null;
+   if(p?.status==="pending")return p.by!==v.teamId?{g,z,step:"confirm",p}:null;
+   return {g,z,step:"score",p};
+  }
+  if(z.recordsFinal)return null;
+  return {g,z,step:z.attendanceFinal?"records":"attendance"};
+ }).filter(Boolean).sort((a,b)=>String(b!.g.start).localeCompare(String(a!.g.start))) as {g:Row;z:Row;step:string;p?:Row}[];
+ if(!steps.length)return null;
+ const {g,step,p}=steps[0],home=g.home===v.teamId;
+ const score=(r:Row|undefined)=>r?(home?r.a:r.b)+" : "+(home?r.b:r.a):"";
+ const vs=koreanDate(g.start)+" · "+(opponent(v,g)||"상대팀");
+ const title={confirm:"상대팀이 보낸 점수가 맞나요?",score:g.away?"경기 점수를 먼저 상대팀과 맞춰주세요":"경기 점수를 넣어주세요",records:"점수가 확정됐어요. 개인 기록을 넣어주세요",attendance:"점수가 확정됐어요. 출석을 확정해 주세요"}[step];
+ const sub={confirm:vs+" · 우리 "+score(p),score:vs+(p?.status==="disputed"?" · 점수가 서로 달라요. 다시 맞춰주세요.":" · ① 점수 → ② 개인 기록 순서예요."),records:vs+" · 우리 "+score(g.result)+" · 골·도움·골 시간",attendance:vs+" · 출석을 확정하면 골·도움을 넣을 수 있어요."}[step];
+ const more=steps.length>1?" ("+steps.length+"경기)":"";
+ return <section className="task-box mvp-prompt record-prompt"><div className="row" style={{gap:12,alignItems:"flex-start"}}><span className="task-icon"><ClipboardCheck size={20}/></span><div style={{minWidth:0,flex:1}}><strong>{title}</strong><p className="small muted">{sub}</p></div></div>
+  {step==="confirm"?<div className="action-strip"><button className="btn btn-green" disabled={busy} onClick={()=>run({type:"confirmResult",teamId:v.teamId,gameId:g.id,revision:p!.revision,agree:true})}>네, 맞아요</button><button className="btn" disabled={busy} onClick={()=>run({type:"confirmResult",teamId:v.teamId,gameId:g.id,revision:p!.revision,agree:false})}>점수가 달라요</button></div>
+  :<button className="btn btn-green" onClick={()=>open(step==="score"?{kind:"result",gameId:g.id}:step==="records"?{kind:"records",gameId:g.id}:{kind:"attendance",gameId:g.id})}>{step==="score"?"점수 입력":step==="records"?"개인 기록 입력":"출석 확정하기"}{more}</button>}
+ </section>;
 }
 export function MvpPanel({g,side,v,manager,busy,save}:{g:Row;side:Row;v:Row;manager:boolean;busy:boolean;save:(c:Record<string,unknown>,after?:(o:Row)=>void)=>void}){
  const p=side?.mvp,me=meIn(v);

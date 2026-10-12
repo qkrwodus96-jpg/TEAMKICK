@@ -437,6 +437,7 @@ body{word-break:keep-all;overflow-wrap:break-word}
 .chat-ok{color:#148b54!important;font-weight:650}
 .chat-msg.sending{opacity:.6}
 .back-link{justify-self:start;margin-bottom:6px}
+.modal-back{align-self:flex-start;margin:0 0 2px;font-size:13px;font-weight:700}
 /* 1.17 매칭: 받은 신청·우리 팀 매칭 내역 상자 카드 */
 .mc-msg{margin:6px 0 0;padding:8px 10px;background:#f3f4f6;border-radius:10px;font-size:13.5px;color:#34443b;white-space:pre-wrap}
 .mc-act{display:flex;flex-wrap:wrap;gap:8px}
@@ -905,3 +906,5 @@ body{word-break:keep-all;overflow-wrap:break-word}
 .video-link{display:inline-flex;align-items:center;gap:6px;font-weight:650;color:#c4302b}
 .invite-pop .info-row{padding:10px 0}
 .game-extras{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
+.goal-log-row{display:grid;grid-template-columns:minmax(0,1fr) 64px minmax(0,1.2fr);align-items:center;gap:8px;font-size:14px}
+.goal-log-row input,.goal-log-row select{margin:0;padding:8px 8px;border:1px solid var(--input);border-radius:9px;background:var(--background);color:var(--foreground);font:inherit;font-size:13.5px;min-width:0}

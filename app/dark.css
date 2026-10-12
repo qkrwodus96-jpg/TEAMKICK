@@ -657,6 +657,7 @@ html[data-theme="dark"] .avail-card{border:1px solid var(--border);background:va
 html[data-theme="dark"] .invite-game{border:1px solid var(--border)}
 html[data-theme="dark"] .invite-game small{color:var(--muted-foreground)}
 html[data-theme="dark"] .video-link{color:#d9807d}
+html[data-theme="dark"] .goal-log-row input,html[data-theme="dark"] .goal-log-row select{border:1px solid var(--input);background:var(--background);color:var(--foreground)}
 html[data-theme="dark"]{--band:#08080a}
 html[data-theme="dark"] .switch::after{background:#ececee}
 html[data-theme="dark"] .seg{background:#232328}

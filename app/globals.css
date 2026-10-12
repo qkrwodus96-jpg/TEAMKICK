@@ -887,3 +887,12 @@ body{word-break:keep-all;overflow-wrap:break-word}
 .admin-sum>div:first-child{border-top:0}
 .admin-sum>.head{background:#f7f8f9;color:var(--muted-foreground);font-size:12px;font-weight:650}
 .admin-sum span{text-align:right}.admin-sum b{font-weight:650}
+/* 1.33 용병 가능 등록 */
+.guest-view{max-width:360px;margin-bottom:14px}
+.avail-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:12px}
+.avail-card{display:flex;flex-direction:column;gap:6px;padding:14px 16px;border:1px solid var(--border);border-radius:14px;background:#fff}
+.avail-card .btn{align-self:flex-start;margin-top:4px}
+.invite-game{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;font-weight:500}
+.invite-game span{display:flex;flex-direction:column;gap:2px}.invite-game small{color:var(--muted-foreground);font-size:12px}
+.invite-game.off{opacity:.55}
+.invite-game input{width:auto;margin-top:3px}

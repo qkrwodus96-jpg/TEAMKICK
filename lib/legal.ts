@@ -1,7 +1,7 @@
 // 앱에 보여주는 약관·개인정보처리방침 본문.
 // 변호사 검토를 받지 않은 초안이다. 공개 전에 검토와 문의처 기입이 필요하다(LEGAL.md).
 export const LEGAL_VERSION="2026-10-12";
-export const CONTACT="jyp7296@naver.com";
+export const CONTACT="help@teamkick.co.kr";
 
 export const TERMS=`팀킥 이용약관 (${LEGAL_VERSION} 초안)
 

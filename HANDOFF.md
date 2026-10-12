@@ -7,7 +7,7 @@
 PR #21 은 2026-09-18 병합 완료(T39-T62), PR #20 은 2026-09-17 병합 완료.
 **`main` 은 1.8.0 까지 들어가 있다. 1.8.1·1.9.0 은 이 브랜치에만 있다.**
 미커밋 변경: 없음
-버전: `APP_VERSION=1.32.0`, `BUILD=2026-10-12-2233`
+버전: `APP_VERSION=1.32.1`, `BUILD=2026-10-12-2345`
 **다음 세션이 가장 먼저 할 일: 아래 (47)을 읽고 TWA 포장·assetlinks·스토어 자료 → 기능(⑬ 팀 해산 사진 삭제·⑯ 메일 도메인 → 풋살 → 관심 구장 → 용병 가능 → 골 시간·포스터 …) 순서로 진행한다(2026-10-11 사장님 합의).** 배포는 main 에 합치면 자동(Cloudflare).
 현재 작업 ID: **T94 Cloudflare 이전 완료 · 1.27.2**
 
@@ -16,10 +16,13 @@ PR #21 은 2026-09-18 병합 완료(T39-T62), PR #20 은 2026-09-17 병합 완�
 - **팀이 수천 개가 되기 전에 "팀별로 나눠 읽기"를 한다.** 지금은 요청마다 공용 문서 전체를 한 번에 읽는다(1.24·1.25 로 줄였을 뿐). Cloudflare 로 옮길 때 팀별 SELECT 로 바꾼다 — 자세한 내용은 `ARCHITECTURE.md` "저장과 동시성".
 - 차단/신고는 1.26.0 에서 넣었다(TASKS T90). 두 기기 확인은 기기가 생기면.
 
+### 2026-10-12 (54) 1.32.1 문의처 help@teamkick.co.kr (TASKS T103)
+
+- 메일은 noreply@teamkick.co.kr 로 나가고 회신·문의는 help@teamkick.co.kr(Cloudflare Email Routing → 운영자 메일함).
+
 ### 2026-10-12 (53) 1.32.0 관심 구장 알림 · 팀 종목 (TASKS T102)
 
 - `users[].favVenues`, `notifyFavVenues`(createGame 모집·openListing·openGuests), `team.sport`, 운영자 `adminStats`.
-- 대기: 사장님이 Cloudflare Email Routing 으로 help@teamkick.co.kr → 네이버 전달을 만들면 `lib/legal.ts` CONTACT 를 바꾼다(라우팅 전에 바꾸면 회신이 반송됨).
 - 다음: 용병 가능 등록.
 
 ### 2026-10-12 (52) ⑯ 도메인 메일 설정 완료 (TASKS T101)

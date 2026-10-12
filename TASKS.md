@@ -6,6 +6,12 @@
 `BLOCKED` / `DONE`(실제 실행 결과로 확인). 요구사항 본문은
 `PROJECT_CONTEXT.md`, 구조는 `ARCHITECTURE.md`를 본다.
 
+## T103 1.32.1 — 문의처 help@teamkick.co.kr (2026-10-12)
+
+- [x] 사장님: Cloudflare Email Routing(MX·DKIM, SPF 를 `v=spf1 include:_spf.mx.cloudflare.net include:spf.brevo.com ~all` 하나로) + 대상 주소 확인 + 라우팅 규칙 help → 운영자 메일함.
+- [x] `lib/legal.ts` CONTACT → help@teamkick.co.kr(약관·처리방침 문의처, 메일 Reply-To), `lib/push.ts` VAPID 기본 연락처, 검토 묶음 연락처. LEGAL 2-29.
+- 검증: 테스트(회신 주소 = CONTACT) 통과. help@ 수신 시험은 사장님 확인 필요.
+
 ## T102 1.32.0 — 관심 구장 알림 · 팀 종목 · 서비스 관리 종목별 보기(2026-10-12)
 
 - [x] 관심 구장(내 계정, 최대 10곳, 종목 축구·풋살·둘 다): MY → 관심 구장(추가·종목 바꾸기·빼기), 경기 상세 장소 줄의 ★ 버튼, 매칭 구장별 보기의 ★, 매칭·용병 목록 "★ 관심 구장만".

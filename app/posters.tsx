@@ -21,7 +21,7 @@ type P={id:string;name:string;number:number|null;position:string;group:string;ph
 type Theme={bg:string;accent:string;shirt:string;stripe:string};
 type Team={name:string;logo?:string;color?:string};
 type Photos="cut"|"raw"|"off";
-type D={team:Team;opp:Team|null;start?:string;end?:string;venue?:string;round?:number;starters:P[];subs:P[];featured?:P;formation:string;slots:Record<string,P>|null;th:Theme;photos:Photos};
+type D={team:Team;opp:Team|null;start?:string;end?:string;venue?:string;round?:number;starters:P[];subs:P[];featured?:P;formation:string;slots:Record<string,P>|null;th:Theme;photos:Photos;xi?:string};
 
 // ───────── 색 ─────────
 export const BG_SWATCH=["#0f5c37","#b3121b","#4b2a9c","#1d3fbf","#141414","#e2561b","#1f7fc4","#0b2a4a"];
@@ -184,7 +184,7 @@ async function tplGrid(ctx:C,d:D){
  const th=d.th;backdrop(ctx,th,-.4);argyle(ctx);glow(ctx,W*.2,0,520,th.accent,.12);
  await crest(ctx,d.team,124,126,82,"#ffffff");
  ctx.fillStyle="#ffffff";const s=tall(ctx,"STARTING",230,170,112,1.18,"left",400);
- const sw=(()=>{f(ctx,s,EN);return ctx.measureText("STARTING").width})();ctx.save();ctx.translate(230+sw+18,170);ctx.transform(1,0,-.2,1,0,0);ctx.fillStyle=th.accent;tall(ctx,"XI",0,0,s*1.08,1.18);ctx.restore();
+ const sw=(()=>{f(ctx,s,EN);return ctx.measureText("STARTING").width})();ctx.save();ctx.translate(230+sw+18,170);ctx.transform(1,0,-.2,1,0,0);ctx.fillStyle=th.accent;tall(ctx,d.xi??"XI",0,0,s*1.08,1.18);ctx.restore();
  // 오른쪽 띠: 경기 정보 + 교체
  const PX=772,PW=W-PX-40,PY=234,PH=H-PY-90;
  ctx.fillStyle="rgba(0,0,0,.42)";ctx.fillRect(PX,PY,PW,PH);ctx.fillStyle=th.accent;ctx.fillRect(PX,PY,PW,6);
@@ -277,7 +277,7 @@ async function tplList(ctx:C,d:D){
  ctx.fillStyle="#fff";f(ctx,28,KO);ctx.textAlign="center";ctx.textBaseline="middle";
  ctx.fillText([w?w.md+" ("+w.dow+") "+w.hm:"",d.venue??"",d.opp?"vs "+short(d.opp.name):""].filter(Boolean).join("  /  ")||short(d.team.name),W/2,34);
  ctx.textBaseline="alphabetic";
- ctx.fillStyle="#fff";ctx.save();ctx.translate(48,232);ctx.transform(1,0,-.14,1,0,0);tall(ctx,"STARTING XI",0,0,128,1.15,"left",700);ctx.restore();
+ ctx.fillStyle="#fff";ctx.save();ctx.translate(48,232);ctx.transform(1,0,-.14,1,0,0);tall(ctx,"STARTING "+(d.xi??"XI"),0,0,128,1.15,"left",700);ctx.restore();
  ctx.fillStyle="rgba(255,255,255,.85)";ctx.textAlign="left";fit(ctx,short(d.team.name)+(d.opp?"  vs  "+short(d.opp.name):""),560,32,KO);ctx.fillText(short(d.team.name)+(d.opp?"  vs  "+short(d.opp.name):""),52,322);
  const list=d.starters.slice(0,11),y0=430,lh=Math.min(66,(1180-y0)/Math.max(list.length,1));
  list.forEach((p,i)=>{const y=y0+i*lh;ctx.fillStyle=th.accent;f(ctx,40,EN);ctx.textAlign="right";ctx.fillText(no(p)||"-",112,y);
@@ -328,6 +328,8 @@ async function tplNumbers(ctx:C,d:D){
  grain(ctx);await crest(ctx,d.team,W/2,H-62,30,"rgba(255,255,255,.8)");brand(ctx,"rgba(255,255,255,.75)");
 }
 
+// 1.31.1 풋살 선발 인원(4·5·6)은 "STARTING V" 처럼 로마 숫자로.
+const XI_ROMAN:Record<number,string>={4:"IV",5:"V",6:"VI",11:"XI"};
 export const POSTERS:[string,string,(c:C,d:D)=>Promise<void>][]=[["grid","STARTING XI",tplGrid],["lineup","LINEUP",tplLineup],["list","선발 명단",tplList],["matchday","MATCHDAY",tplMatchday],["numbers","SQUAD NUMBERS",tplNumbers]];
 
 // ───────── 글꼴 불러오기 ─────────
@@ -368,8 +370,8 @@ export function PosterStudio({v,team,gameId}:{v:Row;team:Row;gameId?:string}){
   let slots:Record<string,P>|null=null;
   if(lineup&&formation===lineup.formation){slots={};for(const [k,w] of Object.entries(lineup.slots as Record<string,Row>)){const m=people.find(p=>p.id===w.memberId);slots[k]=m??{id:k,name:String(w.name),number:w.number??null,position:k,group:slotGroup(k)}}}
   const yr=game?String(game.start).slice(0,4):"";const round=game?((v.games??[]) as Row[]).filter(g=>g.status!=="cancelled"&&g.kind!=="intra"&&String(g.start).slice(0,4)===yr&&String(g.start)<=String(game.start)).length:undefined;
-  return {team:{name:team?.name??"우리 팀",logo:team?.logo,color:team?.color},opp:oppTeam,start:game?.start,end:game?.end,venue:game?.venue,round,starters,subs,featured:people.find(p=>p.id===featured),formation,slots,th,photos};
- },[people,pick,featured,th,formation,lineup,team,oppTeam,game,v.games,photos]);
+  return {team:{name:team?.name??"우리 팀",logo:team?.logo,color:team?.color},opp:oppTeam,start:game?.start,end:game?.end,venue:game?.venue,round,starters,subs,featured:people.find(p=>p.id===featured),formation,slots,th,photos,xi:XI_ROMAN[xiCount]??"XI"};
+ },[people,pick,featured,th,formation,lineup,team,oppTeam,game,v.games,photos,xiCount]);
  useEffect(()=>{let live=true;const c=ref.current;if(!c)return;const ctx=c.getContext("2d")!;
   (async()=>{setBusy(true);try{
    const sample=[data.team.name,data.opp?.name??"",data.venue??"",...data.starters.map(p=>p.name),...data.subs.map(p=>p.name),"외명교체"].join("");
@@ -388,10 +390,10 @@ export function PosterStudio({v,team,gameId}:{v:Row;team:Row;gameId?:string}){
  async function saveKit(){try{const r=await fetch("/api/app",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"setKit",teamId:v.teamId,viewTeam:v.teamId,bg:th.bg,accent:th.accent,shirt:th.shirt,stripe:th.stripe,mutationId:crypto.randomUUID()})});const d=await r.json().catch(()=>({})) as {error?:string};if(!r.ok)throw Error(d.error||"저장하지 못했어요.");toast.success("팀 기본 색으로 저장했어요. 팀원도 이 색으로 만들어요.")}catch(e){toast.error(e instanceof Error?e.message:"저장하지 못했어요.")}}
  const sw=(list:string[],cur:string,on:(c:string)=>void,none=false)=><div className="swatches">{none&&<button type="button" className={"swatch none"+(cur===""?" on":"")} onClick={()=>on("")} aria-label="없음">없음</button>}{list.map(c=><button key={c} type="button" className={"swatch"+(cur===c?" on":"")} style={{background:c}} onClick={()=>on(c)} aria-label={c}/>)}<label className="swatch pick" aria-label="직접 고르기"><input type="color" value={cur||"#ffffff"} onChange={e=>on(e.target.value)}/>+</label></div>;
  return <div className="share-studio">
-  <div className="share-styles">{list.map(([k,label],i)=><button key={k} type="button" className={"chip-btn"+(tpl===i?" on":"")} onClick={()=>setTpl(i)}>{label}</button>)}</div>
+  <div className="share-styles">{list.map(([k,label],i)=><button key={k} type="button" className={"chip-btn"+(tpl===i?" on":"")} onClick={()=>setTpl(i)}>{label==="STARTING XI"?"STARTING "+(XI_ROMAN[xiCount]??"XI"):label}</button>)}</div>
   <div className="share-canvas"><canvas ref={ref} width={W} height={H}/>{busy&&<span className="share-busy"><LoaderCircle className="loader" size={22}/></span>}</div>
   <div className="row share-actions"><button type="button" className="btn btn-green" disabled={busy} onClick={share}><Share2 size={16}/>공유하기</button><button type="button" className="btn" disabled={busy} onClick={()=>save()}><Download size={16}/>이미지 저장</button></div>
-  <div className="poster-tabs"><button type="button" className={open==="players"?"on":""} onClick={()=>setOpen(x=>x==="players"?"":"players")}><Star size={16}/>선수 고르기 <small>선발 {nXI}/11</small></button><button type="button" className={open==="color"?"on":""} onClick={()=>setOpen(x=>x==="color"?"":"color")}><Palette size={16}/>색 바꾸기</button></div>
+  <div className="poster-tabs"><button type="button" className={open==="players"?"on":""} onClick={()=>setOpen(x=>x==="players"?"":"players")}><Star size={16}/>선수 고르기 <small>선발 {nXI}/{xiCount}</small></button><button type="button" className={open==="color"?"on":""} onClick={()=>setOpen(x=>x==="color"?"":"color")}><Palette size={16}/>색 바꾸기</button></div>
   {open==="color"&&<div className="poster-panel">
    <div><span>배경</span>{sw(BG_SWATCH,th.bg,c=>setTh(t=>({...t,bg:c})))}</div>
    <div><span>포인트</span>{sw(ACCENT_SWATCH,th.accent,c=>setTh(t=>({...t,accent:c})))}</div>

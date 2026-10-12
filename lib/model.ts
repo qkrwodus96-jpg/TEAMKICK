@@ -146,7 +146,8 @@ export const DAYS=["상관없음","평일 저녁","주말","토요일 오전","�
 // 목록을 만들기 전에 저장된 값이 있다. 고르기 화면이 비어 보이지 않게 맞춰 준다.
 const OLD_LEVELS:Record<string,string>={"입문":"최하","초급":"하","중급":"중","상급":"상","선수 출신 포함":"최상"};
 // 화면 표기: "11인제" → "11대11", "중급" → "실력 중" (사장님 요청 2026-09-28). 저장 값은 그대로.
-export const formatLabel=(f:unknown)=>{const x=String(f??"").trim(),n=x.match(/^(\d+)인제$/);return n?n[1]+"대"+n[1]:x};
+// 1.31.1 풋살 경기는 "풋살 5대5" 처럼 종목을 앞에 붙인다(축구는 그대로 "11대11").
+export const formatLabel=(f:unknown,sport?:unknown)=>{const x=String(f??"").trim(),n=x.match(/^(\d+)인제$/);const t=n?n[1]+"대"+n[1]:x;return sport==="futsal"?"풋살 "+t:t};
 export const levelChip=(v:unknown)=>"실력 "+levelOf(v);
 export const levelOf=(v:unknown)=>{const x=String(v??"").trim();return LEVELS.includes(x)?x:(OLD_LEVELS[x]??"중")};
 export const pick=(v:unknown,list:string[],what:string)=>{
@@ -654,7 +655,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   if(c.kind==="intra"){ensure(!c.listing&&!g.external,"자체전은 상대팀 없이 우리 팀끼리 하는 경기예요.");Object.assign(g,{kind:"intra",squads:integer(c.squads??2,2,4)});}
   const voteCloses=c.deadline?Date.parse(String(c.deadline)):0;if(c.deadline)ensure(Number.isFinite(voteCloses)&&voteCloses>now&&voteCloses<=Date.parse(g.start),"투표 마감은 지금 이후, 경기 시작 시각까지로 정해주세요.");ensure(!g.external||!c.listing,"수기 상대팀과 모집을 동시에 설정할 수 없어요.");ensure(!c.listing||Date.parse(g.start)>now,"지난 경기로 모집할 수 없어요.");
   if(c.listing)requireTeam(s,t,a.id,"captain");s.games.push(g);const side=newSide(g,t);side.needed=integer(c.needed??side.needed,1,50);side.note=textValue(c.note,500,false);if(voteCloses)side.deadline=iso(voteCloses);
-  s.sides.push(side);notice(s,t,"새 경기 일정",whenRange(g.start,g.end)+" "+g.venue,g.id);output={gameId:g.id};
+  s.sides.push(side);notice(s,t,"새 경기 일정",(g.sport==="futsal"?"[풋살] ":"")+whenRange(g.start,g.end)+" "+g.venue,g.id);output={gameId:g.id};
  }
  else if(type==="applyMatch"||type==="withdrawMatch"||type==="acceptMatch"||type==="rejectMatch"){
   requireTeam(s,t,a.id,"captain");const g=s.games.find(x=>x.id===c.gameId);ensure(g,"경기를 찾을 수 없어요.",404);
@@ -1339,7 +1340,8 @@ export function sportView<T extends Record<string,unknown>>(v:T,sport:Sport):T&{
  const games=((v.games??[]) as Row[]).filter(want),ids=new Set(games.map(g=>g.id));
  const other=new Set([...((v.games??[]) as Row[]),...((v.listings??[]) as Row[]),...((v.matchedListings??[]) as Row[])].filter(g=>!want(g)).map(g=>g.id));
  const f=sport==="futsal"?((v.futsal??{}) as Row):null;
- return {...v,sport,games,sides:((v.sides??[]) as Row[]).filter(z=>ids.has(z.gameId)),
+ // allGames: 알림·대화방에서 다른 종목 경기를 열 때 찾는 용도(그때 화면 종목을 그 경기 종목으로 바꾼다).
+ return {...v,sport,allGames:(v.games??[]) as Row[],games,sides:((v.sides??[]) as Row[]).filter(z=>ids.has(z.gameId)),
   listings:((v.listings??[]) as Row[]).filter(want),matchedListings:((v.matchedListings??[]) as Row[]).filter(want),
   guestListings:((v.guestListings??[]) as Row[]).filter(want),myGuests:((v.myGuests??[]) as Row[]).filter(want),
   requests:((v.requests??[]) as Row[]).filter(r=>!other.has(r.gameId)),guests:((v.guests??[]) as Row[]).filter(x=>!other.has(x.gameId)),

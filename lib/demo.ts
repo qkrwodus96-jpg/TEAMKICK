@@ -31,6 +31,21 @@ export function demoState():State{
  const recent=s.sides.find(z=>z.gameId==="game-3");
  const hour=Math.floor(Date.now()/3600e3)*3600e3;
  if(recent)recent.mvp={openAt:iso(hour-3600e3),closesAt:iso(hour+47*3600e3),votes:{"a-p2":"a-p1","a-p3":"a-p4"}};
+ // 1.31 풋살 샘플(맨 위 풋살로 바꾸면 보인다): 지난 풋살 경기(5대5, 결과·출석·기록·전후반 라인업), 다가오는 풋살 경기(상대 모집),
+ // 다른 팀의 풋살 모집글. 시각은 한국 시간 저녁 8시.
+ const day=new Date(Date.now()-5*864e5);day.setUTCHours(11,0,0,0);const fpast=day.getTime();
+ const fg:Row={id:"game-futsal-1",home:"team-a",away:null,external:"마포 풋살 클럽",sport:"futsal",start:iso(fpast),end:iso(fpast+2*3600e3),venue:"상암 풋살파크",address:"서울 마포구 월드컵북로 400",region:"서울",format:"5인제",secured:true,cost:60000,opponentCost:0,status:"completed",listing:"none",revision:1,result:{a:6,b:4,status:"confirmed",revision:1}};
+ const fz:Row=newSide(fg,"team-a");const fr=roster.filter((_,j)=>j<8||j===11);fz.roster=fr;fz.attendance=Object.fromEntries(fr.map(m=>[m.id,true]));fz.attendanceFinal=true;
+ fz.records={"a-p0":{goals:2,assists:1},"a-p1":{goals:2,assists:0},"a-p2":{goals:1,assists:2},"a-p4":{goals:1,assists:1}};fz.recordsFinal=true;
+ const who=(i:number)=>{const m=active[i];return {memberId:m.id,name:m.name,number:m.number}};
+ fz.lineups=[{formation:"1-2-1",slots:{GK:who(11),FX:who(7),LA:who(3),RA:who(4),PV:who(1)},at:iso(fpast),by:"demo-a"},{formation:"2-2",slots:{GK:who(11),LFX:who(5),RFX:who(6),LPV:who(0),RPV:who(2)},at:iso(fpast),by:"demo-a"}];
+ s.games.push(fg);s.sides.push(fz);
+ const fnext=next+3*864e5+10*3600e3;
+ const fg2:Row={id:"game-futsal-2",home:"team-a",away:null,external:"",sport:"futsal",start:iso(fnext),end:iso(fnext+2*3600e3),venue:"상암 풋살파크",address:"서울 마포구 월드컵북로 400",region:"서울",format:"5인제",secured:true,cost:60000,opponentCost:30000,status:"scheduled",listing:"open",revision:1,result:null};
+ const fz2:Row=newSide(fg2,"team-a");for(const m of active.slice(1,7))fz2.votes[m.id]=[{value:"yes",at:iso()}];
+ s.games.push(fg2);s.sides.push(fz2);
+ const fb:Row={id:"game-futsal-b",home:"team-b",away:null,external:"",sport:"futsal",start:iso(fnext+864e5),end:iso(fnext+864e5+2*3600e3),venue:"강서 풋살장",address:"서울 강서구 방화동 47",region:"서울",format:"6인제",secured:true,cost:70000,opponentCost:35000,status:"scheduled",listing:"open",revision:1,result:null};
+ s.games.push(fb);s.sides.push(newSide(fb,"team-b"));
  // 전국 랭킹 샘플: 몇 명만 참여를 켜 둔다(샘플 주장 본인은 꺼 둬서 참여 안내가 보이게).
  for(const u of s.users)if(/^demo-a-[1-6]$/.test(String(u.id)))u.rankPublic=true;
  return s;

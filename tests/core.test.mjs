@@ -4508,6 +4508,10 @@ test('1.31 풋살 경기는 종목·형식·포메이션을 따로 검사하고,
   assert.equal(summaries(vf,...all).players.find(x=>x.id===p1.id).attend,2);
   // 처음 고를 종목: 가장 최근(또는 다음) 경기의 종목
   assert.equal(defaultSport(v.games,NOW),'futsal');assert.equal(defaultSport([],NOW),'soccer');
+  // 1.31.1 화면 표기와 다른 종목 경기 찾기(알림에서 열 때)
+  assert.equal(modelLib.formatLabel('5인제','futsal'),'풋살 5대5');assert.equal(modelLib.formatLabel('11인제'),'11대11');
+  assert.ok(vs.allGames.some(x=>x.id===fut1),'축구 화면에서도 풋살 경기를 찾을 수 있다');
+  assert.match(f.s.notifications.find(n=>n.gameId===fut1&&n.title==='새 경기 일정').body,/^\[풋살\]/);
 });
 
 test('1.31 풋살 모집글·용병 모집은 풋살 목록에만, 신청 팀은 경기 종목을 그대로 받는다',()=>{

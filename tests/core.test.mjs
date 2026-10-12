@@ -4550,7 +4550,7 @@ test('1.32 관심 구장: 같은 구장·종목의 상대팀·용병 모집이 �
   assert.equal(box('fan').length,2,'축구 1 + 풋살 1, 다시 열어도 그대로');
   // 용병 모집도 알린다(팀별 한 번)
   command(f.s,A,{type:'openGuests',teamId:f.a,gameId:fut,needed:2});
-  assert.equal(box('other').length,2);assert.equal(box('other')[1].to,'matching:guest');assert.match(box('other')[1].body,/용병 모집$/);
+  assert.equal(box('other').length,2);assert.equal(box('other')[1].to,'invite:'+fut+':'+f.a,'누르면 그 경기 안내 창');assert.match(box('other')[1].body,/용병 모집$/);
   // 1.33 모집을 먼저 열고 나서 관심 구장을 넣은 사람도, 다시 열면 받는다(이미 받은 사람은 또 받지 않는다)
   const late={id:'late',name:'늦게 넣음'};command(f.s,A,{type:'closeGuests',teamId:f.a,gameId:fut});
   add(late,{sport:'futsal'});command(f.s,A,{type:'openGuests',teamId:f.a,gameId:fut,needed:2});
@@ -4610,9 +4610,9 @@ test('1.33 용병 가능 등록: 30일 안 3개까지, 운영진만 목록을 �
   const gameId=command(f.s,A,{type:'createGame',teamId:f.a,start:iso(start),end:iso(start+7200e3),venue:'상암 풋살파크',address:'서울 마포구',region:'서울',external:'외부'},NOW).gameId;
   assert.throws(()=>command(f.s,A,{type:'inviteAvail',teamId:f.a,gameId,availId:id}),/용병 모집을 열어/);
   command(f.s,A,{type:'openGuests',teamId:f.a,gameId,needed:2});
-  const alert=f.s.notifications.filter(n=>n.userId==='pl'&&n.title==='용병 모집 알림');assert.equal(alert.length,1,'맞는 모집이 열리면 알림');assert.equal(alert[0].to,'matching:guest');
+  const alert=f.s.notifications.filter(n=>n.userId==='pl'&&n.title==='용병 모집 알림');assert.equal(alert.length,1,'맞는 모집이 열리면 알림');assert.equal(alert[0].to,'invite:'+gameId+':'+f.a);
   command(f.s,A,{type:'inviteAvail',teamId:f.a,gameId,availId:id});
-  const inv=f.s.notifications.filter(n=>n.userId==='pl'&&n.title==='용병 초대');assert.equal(inv.length,1);assert.match(inv[0].body,/팀 0에서 .* 용병으로 초대/);
+  const inv=f.s.notifications.filter(n=>n.userId==='pl'&&n.title==='용병 초대');assert.equal(inv.length,1);assert.match(inv[0].body,/팀 0에서 .* 용병으로 초대/);assert.equal(inv[0].to,'invite:'+gameId+':'+f.a,'초대 알림은 그 경기 신청 창으로');
   assert.throws(()=>command(f.s,A,{type:'inviteAvail',teamId:f.a,gameId,availId:id}),/이미 초대/);
   assert.throws(()=>command(f.s,{id:'mem',name:'일반팀원'},{type:'inviteAvail',teamId:f.a,gameId,availId:id}),/권한/,'운영진만');
   // 초대받은 선수는 기존 용병 신청으로 들어온다
@@ -4623,4 +4623,26 @@ test('1.33 용병 가능 등록: 30일 안 3개까지, 운영진만 목록을 �
   assert.equal(visibleState(f.s,B.id,f.b).availPlayers.length,0,'나를 차단한 선수는 목록에 없다');
   command(f.s,pl,{type:'removeAvail',id});assert.equal(visibleState(f.s,'pl').myAvail.length,2);
   modelLib.prune(f.s,NOW+10*DAY);assert.equal((f.s.users.find(u=>u.id==='pl').avail??[]).length,0,'날짜 지나면 지움');
+});
+
+test('1.34 골 시간은 넣은 골 수까지 1~150분, 경기 영상은 유튜브 주소만 운영진이 넣는다', ()=>{
+  const {goalMinutes,youtubeUrl}=modelLib;
+  assert.deepEqual(goalMinutes("34, 12'",2),{minutes:[12,34]});assert.deepEqual(goalMinutes('',2),{});
+  assert.throws(()=>goalMinutes('10 20 30',2),/골 수보다/);assert.throws(()=>goalMinutes('0',1),/1~150/);assert.throws(()=>goalMinutes('abc',1),/1~150/);
+  assert.equal(youtubeUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=10'),'https://youtu.be/dQw4w9WgXcQ');
+  assert.equal(youtubeUrl('https://youtu.be/dQw4w9WgXcQ?si=x'),'https://youtu.be/dQw4w9WgXcQ');
+  assert.equal(youtubeUrl('https://m.youtube.com/shorts/abcDEF12345'),'https://youtu.be/abcDEF12345');
+  for(const bad of ['http://youtu.be/dQw4w9WgXcQ','https://evil.com/watch?v=dQw4w9WgXcQ','javascript:alert(1)','https://youtube.com/'])assert.throws(()=>youtubeUrl(bad),/유튜브/);
+  // 경기 기록에 골 시간이 같이 저장된다
+  const f=fixture();const p1=addPlayer(f.s,f.a,{id:'p1',name:'선수1'});
+  const start=NOW-2*DAY;const gameId=command(f.s,A,{type:'createGame',teamId:f.a,start:iso(start),end:iso(start+7200e3),venue:'구장',address:'서울',external:'외부 FC'},start-DAY).gameId;
+  command(f.s,A,{type:'completeGame',teamId:f.a,gameId});const z=sideOf(f.s,gameId,f.a);
+  command(f.s,A,{type:'attendance',teamId:f.a,gameId,values:Object.fromEntries(rosterFor(f.s,z,f.s.games.find(g=>g.id===gameId)).map(x=>[x.id,true]))});
+  command(f.s,A,{type:'matchRecord',teamId:f.a,gameId,values:{[p1.id]:{goals:2,assists:0,minutes:'55, 12'}},opponent:1});
+  assert.deepEqual(z.records[p1.id],{goals:2,assists:0,minutes:[12,55]});
+  assert.throws(()=>command(f.s,A,{type:'matchRecord',teamId:f.a,gameId,values:{[p1.id]:{goals:1,assists:0,minutes:'5,6'}},opponent:1}),/골 수보다/);
+  // 영상 링크: 운영진만, 팀별로
+  command(f.s,A,{type:'setGameVideo',teamId:f.a,gameId,url:'https://youtu.be/dQw4w9WgXcQ'});assert.equal(z.video,'https://youtu.be/dQw4w9WgXcQ');
+  assert.throws(()=>command(f.s,{id:'p1',name:'선수1'},{type:'setGameVideo',teamId:f.a,gameId,url:'https://youtu.be/dQw4w9WgXcQ'}),/권한/);
+  command(f.s,A,{type:'setGameVideo',teamId:f.a,gameId,url:''});assert.equal(z.video,undefined,'비우면 지운다');
 });

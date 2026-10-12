@@ -21,7 +21,7 @@ type P={id:string;name:string;number:number|null;position:string;group:string;ph
 type Theme={bg:string;accent:string;shirt:string;stripe:string};
 type Team={name:string;logo?:string;color?:string};
 type Photos="cut"|"raw"|"off";
-type D={team:Team;opp:Team|null;start?:string;end?:string;venue?:string;round?:number;starters:P[];subs:P[];featured?:P;formation:string;slots:Record<string,P>|null;th:Theme;photos:Photos;xi?:string};
+type D={team:Team;opp:Team|null;start?:string;end?:string;venue?:string;round?:number;starters:P[];subs:P[];featured?:P;formation:string;slots:Record<string,P>|null;th:Theme;photos:Photos;xi?:string;final?:{ours:number;theirs:number;goals:{name:string;min?:number}[]}|null};
 
 // ───────── 색 ─────────
 export const BG_SWATCH=["#0f5c37","#b3121b","#4b2a9c","#1d3fbf","#141414","#e2561b","#1f7fc4","#0b2a4a"];
@@ -311,6 +311,26 @@ async function tplMatchday(ctx:C,d:D){
  grain(ctx); brand(ctx,"rgba(255,255,255,.75)");
 }
 
+// ───────── 6. FULL TIME (1.34) — 끝난 경기의 최종 점수 · 득점자(골 시간) ─────────
+async function tplFulltime(ctx:C,d:D){
+ const th=d.th,fin=d.final;backdrop(ctx,th,-.2);argyle(ctx);glow(ctx,W/2,H*.38,640,th.accent,.14);
+ ctx.fillStyle="#fff";ctx.textAlign="center";tall(ctx,"FULL",W/2-12,250,170,1.3,"right",W*.46);ctx.save();ctx.fillStyle=th.accent;tall(ctx,"TIME",W/2+12,250,170,1.3,"left",W*.46);ctx.restore();
+ const w=when(d);if(w){ctx.fillStyle="rgba(255,255,255,.85)";f(ctx,34,EN);ctx.textAlign="center";ctx.fillText(w.md+"."+w.dow+"  "+w.hm,W/2,316)}
+ const cy=560,lx=W*.2,rx=W*.8;
+ await crest(ctx,d.team,lx,cy,120,"rgba(255,255,255,.9)");
+ if(d.opp)await crest(ctx,d.opp,rx,cy,120,"rgba(255,255,255,.9)");
+ ctx.fillStyle="#fff";ctx.textAlign="center";fit(ctx,short(d.team.name),W*.34,34,KO);ctx.fillText(short(d.team.name),lx,cy+170);
+ if(d.opp){fit(ctx,short(d.opp.name),W*.34,34,KO);ctx.fillText(short(d.opp.name),rx,cy+170)}
+ if(fin){ctx.fillStyle="#fff";f(ctx,190,EN);ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(fin.ours+" : "+fin.theirs,W/2,cy+10);ctx.textBaseline="alphabetic"}
+ // 득점자: 골 시간이 있으면 "12'" 를 붙인다. 많으면 두 줄로 나눠 최대 10명.
+ const goals=(fin?.goals??[]).slice(0,10);
+ if(goals.length){ctx.fillStyle=th.accent;f(ctx,30,EN);ctx.textAlign="center";ctx.fillText("GOALS",W/2,cy+260);
+  const col=goals.length>5?2:1,per=Math.ceil(goals.length/col);
+  goals.forEach((x,i)=>{const c=Math.floor(i/per),r=i%per;const gx=col===1?W/2:(c===0?W*.3:W*.7);const t=(x.min?x.min+"'  ":"")+x.name;ctx.fillStyle="#fff";fit(ctx,t,col===1?W*.7:W*.36,34,KO);ctx.textAlign="center";ctx.fillText(t,gx,cy+316+r*52)})}
+ if(d.venue){ctx.fillStyle="rgba(255,255,255,.7)";fit(ctx,d.venue,W*.8,30,KO);ctx.textAlign="center";ctx.fillText(d.venue,W/2,H-96)}
+ grain(ctx);brand(ctx,"rgba(255,255,255,.75)");
+}
+
 // ───────── 5. SQUAD NUMBERS ─────────
 async function tplNumbers(ctx:C,d:D){
  const th=d.th;backdrop(ctx,th,-.6);argyle(ctx,180);glow(ctx,W/2,H*.12,620,th.accent,.12);
@@ -330,7 +350,7 @@ async function tplNumbers(ctx:C,d:D){
 
 // 1.31.1 풋살 선발 인원(4·5·6)은 "STARTING V" 처럼 로마 숫자로.
 const XI_ROMAN:Record<number,string>={4:"IV",5:"V",6:"VI",11:"XI"};
-export const POSTERS:[string,string,(c:C,d:D)=>Promise<void>][]=[["grid","STARTING XI",tplGrid],["lineup","LINEUP",tplLineup],["list","선발 명단",tplList],["matchday","MATCHDAY",tplMatchday],["numbers","SQUAD NUMBERS",tplNumbers]];
+export const POSTERS:[string,string,(c:C,d:D)=>Promise<void>][]=[["fulltime","FULL TIME",tplFulltime],["grid","STARTING XI",tplGrid],["lineup","LINEUP",tplLineup],["list","선발 명단",tplList],["matchday","MATCHDAY",tplMatchday],["numbers","SQUAD NUMBERS",tplNumbers]];
 
 // ───────── 글꼴 불러오기 ─────────
 let fontsReady:Promise<void>|null=null;
@@ -356,8 +376,17 @@ export function PosterStudio({v,team,gameId}:{v:Row;team:Row;gameId?:string}){
  const [featured,setFeatured]=useState<string>(()=>people.find(p=>p.photo&&initial[p.id]==="xi")?.id??people.find(p=>p.captain)?.id??"");
  const [th,setTh]=useState<Theme>(()=>themeOf(team));
  // 경기 없이 연 명단 이미지에는 MATCHDAY 를 빼고 보여준다(상대·날짜가 없으면 빈칸이 생긴다).
- const list=useMemo(()=>POSTERS.filter(x=>game||x[0]!=="matchday"),[game]);
- const [tpl,setTpl]=useState(game?3:0),[busy,setBusy]=useState(true),[open,setOpen]=useState<""|"color"|"players">("");
+ // 1.34 FULL TIME 은 결과가 확정된 경기(자체전 제외)에서만, 그때는 처음부터 FULL TIME 을 보여 준다.
+ const final=useMemo(()=>{if(!game||game.kind==="intra"||game.status!=="completed"||game.result?.status!=="confirmed")return null;
+  const home=game.home===v.teamId,ours=Number(home?game.result.a:game.result.b),theirs=Number(home?game.result.b:game.result.a);
+  const roster=(side?.roster??[]) as Row[],nameOf=(id:string)=>String(roster.find(m=>m.id===id)?.name??people.find(p=>p.id===id)?.name??"선수");
+  const goals:{name:string;min?:number}[]=[];
+  for(const [id,r] of Object.entries((side?.records??{}) as Record<string,Row>)){const n=Number(r.goals||0);const mins=(r.minutes??[]) as number[];for(let i=0;i<n;i++)goals.push({name:nameOf(id),min:mins[i]})}
+  goals.sort((a,b)=>(a.min??999)-(b.min??999));
+  return {ours,theirs,goals};
+ },[game,side,v.teamId,people]);
+ const list=useMemo(()=>POSTERS.filter(x=>(game||x[0]!=="matchday")&&(final||x[0]!=="fulltime")),[game,final]);
+ const [tpl,setTpl]=useState(final?0:game?3:0),[busy,setBusy]=useState(true),[open,setOpen]=useState<""|"color"|"players">("");
  const lineup=side?.lineups?.[0]&&Object.keys(side.lineups[0].slots??{}).length>=Math.min(8,xiCount)&&names.includes(side.lineups[0].formation)?side.lineups[0]:null;
  const [formation,setFormation]=useState<string>(()=>lineup?.formation??autoFormation(people.filter(p=>initial[p.id]==="xi"),names));
  const [photos,setPhotos]=useState<Photos>("cut");
@@ -370,8 +399,8 @@ export function PosterStudio({v,team,gameId}:{v:Row;team:Row;gameId?:string}){
   let slots:Record<string,P>|null=null;
   if(lineup&&formation===lineup.formation){slots={};for(const [k,w] of Object.entries(lineup.slots as Record<string,Row>)){const m=people.find(p=>p.id===w.memberId);slots[k]=m??{id:k,name:String(w.name),number:w.number??null,position:k,group:slotGroup(k)}}}
   const yr=game?String(game.start).slice(0,4):"";const round=game?((v.games??[]) as Row[]).filter(g=>g.status!=="cancelled"&&g.kind!=="intra"&&String(g.start).slice(0,4)===yr&&String(g.start)<=String(game.start)).length:undefined;
-  return {team:{name:team?.name??"우리 팀",logo:team?.logo,color:team?.color},opp:oppTeam,start:game?.start,end:game?.end,venue:game?.venue,round,starters,subs,featured:people.find(p=>p.id===featured),formation,slots,th,photos,xi:XI_ROMAN[xiCount]??"XI"};
- },[people,pick,featured,th,formation,lineup,team,oppTeam,game,v.games,photos,xiCount]);
+  return {team:{name:team?.name??"우리 팀",logo:team?.logo,color:team?.color},opp:oppTeam,start:game?.start,end:game?.end,venue:game?.venue,round,starters,subs,featured:people.find(p=>p.id===featured),formation,slots,th,photos,xi:XI_ROMAN[xiCount]??"XI",final};
+ },[people,pick,featured,th,formation,lineup,team,oppTeam,game,v.games,photos,xiCount,final]);
  useEffect(()=>{let live=true;const c=ref.current;if(!c)return;const ctx=c.getContext("2d")!;
   (async()=>{setBusy(true);try{
    const sample=[data.team.name,data.opp?.name??"",data.venue??"",...data.starters.map(p=>p.name),...data.subs.map(p=>p.name),"외명교체"].join("");

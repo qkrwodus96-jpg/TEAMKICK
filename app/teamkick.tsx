@@ -15,7 +15,7 @@ import {Select,SelectTrigger,SelectValue,SelectContent,SelectItem} from "@/compo
 import {Toaster} from "@/components/ui/sonner";
 import {toast} from "sonner";
 import {demoState} from "@/lib/demo";
-import {applyCommand,visibleState,summaries,currentVote,isIntra,SQUAD_NAMES,collections,sportView,defaultSport,sportOf,formatLabel,SPORTS,SPORT_NAME,type Row,type State,type Sport} from "@/lib/model";
+import {applyCommand,visibleState,summaries,currentVote,isIntra,SQUAD_NAMES,collections,sportView,defaultSport,sportOf,teamSportOf,formatLabel,SPORTS,SPORT_NAME,type Row,type State,type Sport} from "@/lib/model";
 import {AuthPanel,SocialConsent,Management,Matching,AppDialogs,MyHub} from "./screens";
 import {MvpPrompt,Rankings} from "./team-play";
 import {RecordsTable} from "./player-sheet";
@@ -165,7 +165,7 @@ export default function TeamKick({resetToken="",verifyToken="",kakaoNote="",soci
  // 1.31 축구|풋살: 아래 모든 화면은 고른 종목의 경기·기록만 담은 v 를 본다(lib/model.ts sportView).
  const [sportPick,setSportPick]=useState<Record<string,string>>(storedSports);
  const sportKey=String(v0.teamId||"_"),picked=sportPick[sportKey];
- const sport:Sport=picked==="futsal"||picked==="soccer"?picked:defaultSport(v0.games);
+ const sport:Sport=picked==="futsal"||picked==="soccer"?picked:defaultSport(v0.games,undefined,teamSportOf((v0.teams??[]).find((t:Row)=>t.id===v0.teamId)));
  const setSport=(x:Sport)=>setSportPick(p=>{const n={...p,[sportKey]:x};try{localStorage.setItem(SPORT_KEY,JSON.stringify(n))}catch{}return n});
  const v=sportView(v0,sport);
  // 다른 종목 경기를 열면(알림·대화방·홈 MVP 등) 화면 종목도 그 경기 종목으로 바꾼다. 안 그러면 빈 창이 뜬다.

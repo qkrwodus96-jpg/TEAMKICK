@@ -6,7 +6,7 @@ import {useState,type ReactNode} from "react";
 import {Grid3x3,BookOpen,Camera,X,Trash2,Megaphone,PenLine} from "lucide-react";
 import {toast} from "sonner";
 import {Crest,imageUrl} from "./teamkick";
-import {levelChip,type Row} from "@/lib/model";
+import {levelChip,teamSportOf,TEAM_SPORT_NAME,type Row} from "@/lib/model";
 
 type Props={v:Row;team:Row;demo:boolean;busy:boolean;
  run:(c:Record<string,unknown>)=>Promise<unknown>;onJoin:(t:Row)=>void;onEdit:()=>void;uploader:(close:()=>void)=>ReactNode};
@@ -32,7 +32,7 @@ export function TeamProfile({v,team,demo,busy,run,onJoin,onEdit,uploader}:Props)
   fetch("/api/image?key="+encodeURIComponent(p.key),{method:"DELETE"}).catch(()=>null);
   setOpen(null);
  }
- const facts=[team.region,levelChip(team.level),team.days&&team.days!=="상관없음"?team.days+" 활동":"",team.founded?team.founded+"년 창단":"",team.fee!=null?"월 회비 "+Number(team.fee).toLocaleString()+"원":""].filter(Boolean);
+ const facts=[team.region,TEAM_SPORT_NAME[teamSportOf(team)],levelChip(team.level),team.days&&team.days!=="상관없음"?team.days+" 활동":"",team.founded?team.founded+"년 창단":"",team.fee!=null?"월 회비 "+Number(team.fee).toLocaleString()+"원":""].filter(Boolean);
  return <div className="tp">
   <div className="tp-head">
    <div className="tp-logo"><Crest name={team.name} color={team.color} logo={team.logo}/></div>

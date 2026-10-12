@@ -11,6 +11,7 @@
 - [x] 사장님: Cloudflare Email Routing(MX·DKIM, SPF 를 `v=spf1 include:_spf.mx.cloudflare.net include:spf.brevo.com ~all` 하나로) + 대상 주소 확인 + 라우팅 규칙 help → 운영자 메일함.
 - [x] `lib/legal.ts` CONTACT → help@teamkick.co.kr(약관·처리방침 문의처, 메일 Reply-To), `lib/push.ts` VAPID 기본 연락처, 검토 묶음 연락처. LEGAL 2-29.
 - 검증: 테스트(회신 주소 = CONTACT) 통과. help@ 수신 시험은 사장님 확인 필요.
+- 운영 확인(2026-10-12 23:55 KST): https://teamkick.co.kr/api/health 1.32.1, https://teamkick.co.kr/privacy · https://teamkick.co.kr/terms 에 help@teamkick.co.kr 만 있고 jyp7296 없음.
 
 ## T102 1.32.0 — 관심 구장 알림 · 팀 종목 · 서비스 관리 종목별 보기(2026-10-12)
 

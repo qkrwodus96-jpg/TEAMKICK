@@ -865,3 +865,25 @@ body{word-break:keep-all;overflow-wrap:break-word}
 .sport-tag.on-dark{margin:0 0 0 8px;background:rgba(255,255,255,.14);color:#cfeef3}
 @media (min-width:768px){.team-row{display:none}}
 .notification-go .text-link{margin-left:8px}
+/* 1.32 관심 구장 · 서비스 관리 종목 */
+.fav-star{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border);background:#fff;border-radius:999px;padding:6px 11px;font-size:13px;font-weight:650;color:#4d5d53}
+.fav-star.small{padding:4px 9px;font-size:12px}
+.fav-star.on{border-color:#f0c24b;background:#fff8e1;color:#a06d00}
+.fav-filter.on{border-color:#f0c24b;background:#fff8e1;color:#a06d00}
+.fav-list{display:flex;flex-direction:column;gap:8px}
+.fav-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:12px}
+.fav-name{display:flex;flex-direction:column;min-width:0}.fav-name b{font-size:14px}.fav-name small{font-size:12px;color:var(--muted-foreground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fav-sport{display:inline-flex;gap:2px;background:#f1f2f4;border-radius:9px;padding:2px}
+.fav-sport button{border:0;background:none;border-radius:7px;padding:4px 8px;font-size:12px;font-weight:650;color:var(--muted-foreground)}
+.fav-sport button.on{background:#fff;color:#12814d;box-shadow:0 1px 2px rgba(16,35,26,.12)}
+@media (max-width:520px){.fav-row{grid-template-columns:auto minmax(0,1fr) auto}.fav-sport{grid-column:2/4;justify-self:start}}
+.venue-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:4px 0 10px}
+.venue-head b{font-size:15px}
+.admin-sport{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.admin-sport .seg{max-width:320px}
+.fav-filter{align-self:flex-start;width:auto}
+.admin-sum{display:grid;border:1px solid var(--border);border-radius:12px;overflow:hidden;max-width:560px;font-variant-numeric:tabular-nums}
+.admin-sum>div{display:grid;grid-template-columns:minmax(96px,1.4fr) repeat(4,1fr);gap:8px;padding:8px 14px;font-size:13.5px;border-top:1px solid var(--border)}
+.admin-sum>div:first-child{border-top:0}
+.admin-sum>.head{background:#f7f8f9;color:var(--muted-foreground);font-size:12px;font-weight:650}
+.admin-sum span{text-align:right}.admin-sum b{font-weight:650}

@@ -2205,7 +2205,7 @@ test('가입 전 사람도 팀 찾기에서 로고를 본다(다른 내부 정�
   assert.equal(seen.applicant,undefined,'신청자는 숨긴다');
   // 회칙(rules)은 가입 전에 읽을 수 있게 일부러 공개한다(2026-09-26, 화면에 안내).
   // 팀 프로필(1.17): 사진·팀원 모집·월 회비·창단·팀원 수·경기 수도 가입 전 사람에게 공개한다(LEGAL 2-13).
-  assert.deepEqual(Object.keys(seen).sort(),['color','days','description','fee','format','founded','gameCount','id','level','logo','memberCount','name','photos','recruitNote','recruiting','region','rules','status'].sort());
+  assert.deepEqual(Object.keys(seen).sort(),['color','days','description','fee','format','founded','gameCount','id','level','logo','memberCount','name','photos','recruitNote','recruiting','region','rules','sport','status'].sort());
   // 우리 팀 주장에게는 전부
   assert.equal(visibleState(s,A.id,a).teams.find(t=>t.id===a).logo,key);
 });
@@ -4530,4 +4530,57 @@ test('1.31 풋살 모집글·용병 모집은 풋살 목록에만, 신청 팀은
   command(f.s,A,{type:'acceptMatch',teamId:f.a,gameId:fut,requestId:f.s.requests[0].id});
   assert.equal(sideOf(f.s,fut,f.b).needed,6,'상대 팀 참여 인원도 풋살 형식대로');
   assert.deepEqual(sportView(visibleState(f.s,B.id,f.b),'futsal').games.map(x=>x.id),[fut],'상대 팀 일정에도 풋살로');
+});
+
+test('1.32 관심 구장: 같은 구장·종목의 상대팀·용병 모집이 열리면 한 번 알리고, 팀원·차단·다른 종목은 빼며 10곳까지', ()=>{
+  const f=fixture();const fan={id:'fan',name:'구장팬'},other={id:'other',name:'풋살만'};
+  command(f.s,fan,{type:'readNotifications'});command(f.s,other,{type:'readNotifications'});
+  const add=(who,extra)=>command(f.s,who,{type:'addFavVenue',name:'상암 풋살파크',address:'서울 마포구 월드컵북로 400',lat:37.5700,lng:126.8900,...extra});
+  add(fan,{sport:'both'});add(other,{sport:'futsal',address:'서울 마포구 월드컵북로  400 '});
+  assert.throws(()=>add(fan,{}),/이미 관심 구장/,'같은 구장(좌표 150m 안)은 한 번만');
+  const mk=(extra,when=NOW+3*DAY)=>command(f.s,A,{type:'createGame',teamId:f.a,start:iso(when),end:iso(when+7200e3),venue:'상암 풋살파크',address:'서울 마포구 월드컵북로 400',lat:37.5701,lng:126.8901,...extra},NOW).gameId;
+  const box=u=>f.s.notifications.filter(n=>n.userId===u&&n.title==='관심 구장 새 모집');
+  const soc=mk({listing:true});
+  assert.equal(box('fan').length,1,'축구 모집 → 둘 다 고른 사람');assert.equal(box('other').length,0,'풋살만 고른 사람은 축구 모집 알림 없음');
+  assert.match(box('fan')[0].body,/상암 풋살파크 · .* · 팀 0 상대팀 모집/);assert.equal(box('fan')[0].to,'matching');
+  const fut=mk({sport:'futsal',format:'5인제',listing:true},NOW+4*DAY);
+  assert.equal(box('other').length,1);assert.match(box('other')[0].body,/^\[풋살\]/);
+  // 닫았다 다시 열어도 같은 경기는 한 번만
+  command(f.s,A,{type:'closeListing',teamId:f.a,gameId:soc});command(f.s,A,{type:'openListing',teamId:f.a,gameId:soc});
+  assert.equal(box('fan').length,2,'축구 1 + 풋살 1, 다시 열어도 그대로');
+  // 용병 모집도 알린다(팀별 한 번)
+  command(f.s,A,{type:'openGuests',teamId:f.a,gameId:fut,needed:2});
+  assert.equal(box('other').length,2);assert.equal(box('other')[1].to,'matching:guest');assert.match(box('other')[1].body,/용병 모집$/);
+  // 다른 구장·팀원·차단은 빠진다
+  const far=command(f.s,A,{type:'createGame',teamId:f.a,start:iso(NOW+6*DAY),end:iso(NOW+6*DAY+7200e3),venue:'다른 구장',address:'서울 강서구 방화동 1',lat:37.56,lng:126.81,listing:true},NOW).gameId;void far;
+  assert.equal(box('fan').length,3,'풋살 모집 1개 더(둘 다) — 다른 구장은 없음');
+  const blk={id:'blk',name:'차단한 사람'};add(blk,{});command(f.s,blk,{type:'blockTeam',teamId:f.a});
+  addPlayer(f.s,f.a,fan);
+  mk({listing:true},NOW+8*DAY);assert.equal(box('fan').length,3,'우리 팀 모집은 알리지 않는다');assert.equal(box('blk').length,0,'그 팀을 차단한 사람은 빼기');
+  // 최대 10곳·삭제·종목 바꾸기
+  const me=f.s.users.find(u=>u.id==='other');
+  for(let i=1;i<10;i++)command(f.s,other,{type:'addFavVenue',name:'구장'+i,address:'서울 어딘가 '+i});
+  assert.throws(()=>command(f.s,other,{type:'addFavVenue',name:'11번째',address:'서울 11'}),/10곳까지/);
+  command(f.s,other,{type:'setFavVenueSport',id:me.favVenues[0].id,sport:'soccer'});assert.equal(me.favVenues[0].sport,'soccer');
+  command(f.s,other,{type:'removeFavVenue',id:me.favVenues[0].id});assert.equal(me.favVenues.length,9);
+  assert.equal(visibleState(f.s,'other').favVenues.length,9,'내 화면에 내 관심 구장');assert.equal(visibleState(f.s,'fan').favVenues.length,1);
+  assert.equal(modelLib.notifyKind({title:'관심 구장 새 모집'}),'venue','알림 설정에서 따로 끌 수 있다');
+});
+
+test('1.32 팀 종목: 등록 신청·수정·공개 정보에 종목이 있고, 운영자는 종목별 경기 수를 본다', ()=>{
+  const s=blank();command(s,owner,{type:'setupOwner'},NOW-40*DAY);
+  const {teamId:fut}=command(s,A,{type:'createTeam',name:'풋살팀',region:'서울',sport:'futsal'});
+  assert.equal(s.teams[0].sport,'futsal');assert.equal(s.teams[0].format,'5인제','풋살 팀 기본 형식');
+  assert.match(s.notifications.find(n=>n.title==='새로운 팀 등록 요청').body,/^\[풋살\] 풋살팀/);
+  assert.throws(()=>command(s,B,{type:'createTeam',name:'x',region:'서울',sport:'basketball'}),/종목/);
+  const {teamId:old}=command(s,B,{type:'createTeam',name:'예전팀',region:'서울'});assert.equal(modelLib.teamSportOf(s.teams.find(t=>t.id===old)),'soccer');
+  command(s,owner,{type:'approveTeam',teamId:fut});command(s,owner,{type:'approveTeam',teamId:old});
+  command(s,A,{type:'editTeam',teamId:fut,name:'풋살팀',region:'서울',sport:'both',format:'4인제'});
+  assert.equal(s.teams.find(t=>t.id===fut).sport,'both');assert.equal(s.teams.find(t=>t.id===fut).format,'4인제');
+  assert.equal(visibleState(s,'stranger').teams.find(t=>t.id===fut).sport,'both','다른 사람에게도 종목은 보인다');
+  const mk=(t,extra,d)=>command(s,t===fut?A:B,{type:'createGame',teamId:t,start:iso(NOW+d*DAY),end:iso(NOW+d*DAY+7200e3),venue:'구장',address:'서울',external:'외부',...extra},NOW);
+  mk(fut,{sport:'futsal',format:'5인제'},3);mk(fut,{},4);mk(old,{sport:'futsal',format:'6인제'},3);
+  const st=visibleState(s,owner.id).adminStats;assert.deepEqual(st.games,{total:3,soccer:1,futsal:2});
+  assert.equal(visibleState(s,A.id).adminStats,null,'운영자만');
+  assert.equal(modelLib.defaultSport([],NOW,'futsal'),'futsal','경기가 없으면 팀 종목');
 });

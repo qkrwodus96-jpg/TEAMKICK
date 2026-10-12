@@ -11,6 +11,7 @@
 - [x] `dissolveTeam` 이 로고·팀 사진·선수 사진 연결을 끊고, 예약 실행이 `teamsToPurge`(해산·미삭제 팀, 한 번에 5팀) → `removeTeamImages`(R2 접두어 3곳) → `markTeamImagesPurged`. 예약 실행 응답에 `purged` 숫자.
 - [x] 처리방침 3항, LEGAL 2-27.
 - 검증: 테스트 235/235(새 1개: 해산 즉시 연결 끊김, 그 팀 파일만 지움, 다른 팀 그대로, 두 번째 실행은 안 지움), tsc, lint 74/21.
+- 운영 확인(2026-10-12 16:20 KST, Check production): 1.30.0 배포 뒤 첫 예약 실행이 예전에 해산한 팀 2곳의 사진을 지움(`purged:2`, 200).
 
 ## T98 Play 출시 준비: TWA 앱·스토어 자료(2026-10-11)
 

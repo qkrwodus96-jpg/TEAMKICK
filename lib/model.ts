@@ -88,6 +88,8 @@ export function prune(s:State,now=Date.now()){
  s.reports=sweep(s.reports,r=>r.status==="open"?Infinity:KEEP.report);
  // 1.28 기간이 끝난 이용 정지는 지운다(정지 기록은 정지 중에만 둔다. 운영 기록은 audit 90일).
  for(const u of s.users)if(u.suspended?.until&&Date.parse(u.suspended.until)<=now)delete u.suspended;
+ // 1.33 날짜가 지난 용병 가능 등록을 지운다.
+ for(const u of s.users)if(Array.isArray(u.avail)&&u.avail.some((x:Row)=>String(x.day)<kstDayOf(now)))u.avail=liveAvail(u,now);
  restoreExpiredTeams(s,now);
  return PRUNE_LIMIT-budget;
 }
@@ -513,11 +515,12 @@ export function sameVenue(f:Row,g:Row){
  const fn=normText(f.name),gn=normText(g.venue);return !!fn&&fn===gn;
 }
 export const favSportOk=(f:Row,g:Row)=>!f.sport||f.sport==="both"||f.sport===sportOf(g);
-// 상대팀 모집·용병 모집이 열리면 그 구장을 관심 구장으로 둔 사람에게 한 번 알린다(같은 경기·같은 종류는 한 번만).
+// 상대팀 모집·용병 모집이 열리면 그 구장을 관심 구장으로 둔 사람에게 한 번 알린다(같은 경기·같은 종류는 **사람마다** 한 번).
+// 1.33 예전에는 경기에 "보냄" 표시를 먼저 찍어서, 모집을 연 뒤에 관심 구장을 넣은 사람은 다시 열어도 못 받았다.
 // 그 팀 팀원·가입 대기자, 그 팀을 차단한 사람, 그 팀 운영진이 차단한 사람, 이용 정지 중인 사람은 뺀다.
 // 알림에는 모집글에 원래 공개되는 것(구장·시간·팀 이름)만 담는다.
 function notifyFavVenues(s:State,g:Row,kind:"match"|"guest",t:string,actor:string){
- const key=kind==="match"?"match":"guest:"+t;const sent=(g.favSent??{}) as Record<string,boolean>;if(sent[key])return;g.favSent={...sent,[key]:true};
+ const key=kind==="match"?"match":"guest:"+t;const sentTo=(g.favTo??{}) as Record<string,string[]>;const done=new Set(sentTo[key]??[]);
  const team=teamOf(s,t);if(team?.status!=="active")return;
  const body=(sportOf(g)==="futsal"?"[풋살] ":"")+String(g.venue||"구장")+" · "+whenRange(g.start,g.end)+" · "+team.name+(kind==="match"?" 상대팀 모집":" 용병 모집");
  let n=0;
@@ -526,7 +529,30 @@ function notifyFavVenues(s:State,g:Row,kind:"match"|"guest",t:string,actor:strin
   if(s.members.some(m=>m.userId===u.id&&m.teamId===t&&["active","pending"].includes(m.status)))continue;
   if(blockedOf(s,u.id).teams[t]||staffBlocks(s,t,u.id)||activeSuspension(u))continue;
   if(!favs.some(f=>favSportOk(f,g)&&sameVenue(f,g)))continue;
+  if(done.has(u.id))continue;done.add(u.id);
   userNotice(s,u.id,"관심 구장 새 모집",body,undefined,kind==="match"?"matching":"matching:guest");if(++n>=500)break;
+ }
+ if(n)g.favTo={...sentTo,[key]:[...done]};
+}
+// --- 1.33 용병 가능 등록 ---
+// 선수가 "이 날 이 시간대에 용병 뛸 수 있어요"를 최대 3개 올린다(오늘부터 30일 안). 내 계정 행(users[].avail)에 둔다.
+// 팀 주장·운영진만 목록을 보고, 자기 팀 경기의 용병 모집으로 **초대**한다(연락처는 주고받지 않는다). 초대받은 선수는
+// 기존 용병 신청(applyGuest)으로 신청하고, 승인·대화는 예전 흐름 그대로다. 날짜가 지나면 지운다.
+export const AVAIL_MAX=3,AVAIL_DAYS=30;
+export const AVAIL_SLOTS:[string,string][]=[["dawn","새벽"],["am","오전"],["pm","오후"],["eve","저녁"]];
+export const kstDayOf=(ms:number)=>new Date(ms+9*3600e3).toISOString().slice(0,10);
+const slotOfIso=(v:string)=>{const h=new Date(Date.parse(v)+9*3600e3).getUTCHours();return h<7?"dawn":h<12?"am":h<18?"pm":"eve"};
+export const liveAvail=(u:Row|undefined,now=Date.now())=>((u?.avail??[]) as Row[]).filter(x=>String(x.day)>=kstDayOf(now));
+// 이 경기가 그 사람이 올린 가능 시간과 맞는지(같은 날·같은 시간대·종목).
+export const availFits=(x:Row,g:Row)=>x.day===kstDayOf(Date.parse(g.start))&&(x.slots??[]).includes(slotOfIso(g.start))&&(x.sport==="both"||x.sport===sportOf(g));
+// 용병 모집이 열리면 그 날·시간대·종목·지역이 맞는 "용병 가능" 선수에게 한 번 알린다(초대와 별개).
+function notifyAvail(s:State,g:Row,t:string,actor:string,now:number){
+ const team=teamOf(s,t);if(team?.status!=="active")return;let n=0;
+ for(const u of s.users){
+  if(u.id===actor)continue;const hit=liveAvail(u,now).find(x=>availFits(x,g)&&(x.regions??[]).includes(g.region)&&!(x.alerted??[]).includes(g.id+":"+t));if(!hit)continue;
+  if(s.members.some(m=>m.teamId===t&&m.userId===u.id&&["active","pending"].includes(m.status))||blockedOf(s,u.id).teams[t]||staffBlocks(s,t,u.id)||activeSuspension(u,now))continue;
+  hit.alerted=[...(hit.alerted??[]),g.id+":"+t];u.avail=[...(u.avail??[])];
+  userNotice(s,u.id,"용병 모집 알림","올려 둔 시간에 맞는 용병 모집이 열렸어요 · "+(sportOf(g)==="futsal"?"[풋살] ":"")+whenRange(g.start,g.end)+" "+String(g.venue||"")+" · "+team.name,undefined,"matching:guest");if(++n>=300)break;
  }
 }
 export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
@@ -550,6 +576,35 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
   }else{const f=list.find(x=>x.id===c.id);ensure(f,"관심 구장을 찾을 수 없어요.",404);
    if(type==="removeFavVenue")list.splice(list.indexOf(f!),1);else f!.sport=pick(c.sport,TEAM_SPORTS,"종목")}
   u.favVenues=list;
+ }
+ else if(type==="postAvail"||type==="removeAvail"){
+  const u=s.users.find(x=>x.id===a.id)!;const list=liveAvail(u,now);
+  if(type==="postAvail"){
+   const today=kstDayOf(now),last=kstDayOf(now+AVAIL_DAYS*864e5),day=String(c.day??"");
+   ensure(/^\d{4}-\d{2}-\d{2}$/.test(day)&&day>=today&&day<=last,"날짜는 오늘부터 "+AVAIL_DAYS+"일 안에서 골라주세요.");
+   const slots=[...new Set(((Array.isArray(c.slots)?c.slots:[]) as unknown[]).map(String))].filter(x=>AVAIL_SLOTS.some(y=>y[0]===x));
+   ensure(slots.length>0,"뛸 수 있는 시간대를 하나 이상 골라주세요.");
+   const regions=[...new Set(((Array.isArray(c.regions)?c.regions:[]) as unknown[]).map(String))];
+   ensure(regions.length>0&&regions.length<=3&&regions.every(r=>REGIONS.includes(r)),"지역은 목록에서 1~3곳 골라주세요.");
+   ensure(!list.some(x=>x.day===day),"그 날짜는 이미 올렸어요. 지우고 다시 올려주세요.",409);
+   ensure(list.length<AVAIL_MAX,"용병 가능 등록은 "+AVAIL_MAX+"개까지예요.");
+   const row:Row={id:id(),day,slots:AVAIL_SLOTS.map(x=>x[0]).filter(x=>slots.includes(x)),regions,sport:pick(c.sport||"both",TEAM_SPORTS,"종목"),note:textValue(c.note,100,false),invited:[],at:stamp};
+   u.avail=[...list,row].sort((x,y)=>String(x.day).localeCompare(String(y.day)));output={id:row.id};
+  }else{ensure(list.some(x=>x.id===c.id),"등록을 찾을 수 없어요.",404);u.avail=list.filter(x=>x.id!==c.id)}
+ }
+ else if(type==="inviteAvail"){
+  requireTeam(s,t,a.id,"manager");const team=teamOf(s,t)!;
+  const g=s.games.find(x=>x.id===c.gameId);ensure(g&&containsTeam(g,t)&&g.status==="scheduled"&&Date.parse(g.start)>now,"초대할 수 있는 경기가 아니에요.",409);
+  const side=sideOf(s,g!.id,t);ensure(guestStatusOf(side!)==="open","먼저 이 경기의 용병 모집을 열어 주세요.",409);
+  const owner0=s.users.find(u=>liveAvail(u,now).some(x=>x.id===c.availId));ensure(owner0,"용병 가능 등록이 끝났거나 지워졌어요.",404);
+  const u=owner0!,entry=liveAvail(u,now).find(x=>x.id===c.availId)!;
+  ensure(u.id!==a.id,"내 등록에는 초대할 수 없어요.");
+  ensure(!s.members.some(m=>m.teamId===t&&m.userId===u.id&&["active","pending"].includes(m.status)),"우리 팀 팀원이에요.",409);
+  // 그 선수가 우리 팀을 차단했거나 정지 중이면 조용히 막는다(차단 사실은 알리지 않는다).
+  ensure(!blockedOf(s,u.id).teams[t]&&!activeSuspension(u,now),"지금은 초대할 수 없어요.",403);
+  ensure(!(entry.invited??[]).includes(g!.id),"이 경기로 이미 초대했어요.",409);
+  entry.invited=[...(entry.invited??[]),g!.id];u.avail=[...(u.avail??[])];
+  userNotice(s,u.id,"용병 초대",team.name+"에서 "+(sportOf(g)==="futsal"?"[풋살] ":"")+whenRange(g!.start,g!.end)+" "+String(g!.venue||"")+" 경기에 용병으로 초대했어요. 용병 탭에서 신청해 주세요.",undefined,"matching:guest");
  }
  else if(type==="createTeam"){
   ensure(a.verified!==false,"이메일 확인을 먼저 해주세요. 받은 편지함에서 확인 링크를 눌러주세요.",403);
@@ -954,7 +1009,7 @@ export function applyCommand(s:State,a:Actor,c:any,now=Date.now()):any{
     side!.guestPositions=sum?pos:null;side!.guestFee=fee;side!.guestFeeNote=feeNote;side!.guestDeposit=deposit;side!.guestMinPlay=minPlay;
     ensure(needed>=count(),"이미 승인한 용병보다 적은 인원으로 줄일 수 없어요.");side!.guestNeeded=needed;
     if(count()>=needed){side!.guestStatus="closed";closePending();}
-    else {side!.guestStatus="open";notice(s,t,"용병 모집 시작",whenRange(g!.start,g!.end)+" "+g!.venue+" "+needed+"명 모집",g!.id,"matching:guest");notifyFavVenues(s,g!,"guest",t,a.id);}
+    else {side!.guestStatus="open";notice(s,t,"용병 모집 시작",whenRange(g!.start,g!.end)+" "+g!.venue+" "+needed+"명 모집",g!.id,"matching:guest");notifyFavVenues(s,g!,"guest",t,a.id);notifyAvail(s,g!,t,a.id,now);}
    }
    if(type==="closeGuests"){ensure(guestStatusOf(side!)==="open","이미 마감된 모집이에요.",409);side!.guestStatus="closed";closePending();}
    if(type==="rejectGuest"){const r=find();ensure(r.status==="pending","대기 중인 신청이 아니에요.",409);r.status="rejected";userNotice(s,r.userId,"용병 신청 결과",teamOf(s,t)!.name+" 경기의 용병 신청이 거절되었어요.",undefined,"matching:guest");}
@@ -1243,6 +1298,11 @@ export function visibleState(s:State,userId:string,selected?:string){
  guests:tid?s.guests.filter(x=>x.teamId===tid&&!(x.status==="pending"&&bk.users[String(x.userId??"")])).map(x=>["captain","manager"].includes(team?.role)?{...x,spec:guestSpec(s,x.userId,team?.role==="captain",sportOf(guestGame(x.gameId)))}:x):[],
  myProfile:s.users.find(x=>x.id===userId)?.profile??null,chatRooms:chatRooms(s,userId),
  favVenues:(s.users.find(x=>x.id===userId)?.favVenues??[]) as Row[],
+ myAvail:liveAvail(s.users.find(x=>x.id===userId)).map(x=>({id:x.id,day:x.day,slots:x.slots,regions:x.regions,sport:x.sport,note:x.note,invited:(x.invited??[]).length})),
+ // 1.33 용병 가능 목록은 활동 중인 팀의 주장·운영진에게만. 계정 번호는 보내지 않고 등록 번호(id)로만 초대한다.
+ // 보여 주는 것: 이름, 주·부 포지션, 주발, 지역·날짜·시간대·종목·한마디, 팀킥 기록(경기·골·도움). 키·몸무게·인스타그램은 보내지 않는다.
+ availPlayers:active.some(m=>["captain","manager"].includes(m.role)&&teamOf(s,m.teamId)?.status==="active")?s.users.filter(u=>u.id!==userId&&!bk.users[u.id]&&!activeSuspension(u)&&!(tid&&blockedOf(s,u.id).teams[tid])).flatMap(u=>liveAvail(u).map(x=>{const pv=profileView(s,u.id,false),t=myTotals(s,u.id,x.sport==="futsal"?"futsal":x.sport==="soccer"?"soccer":undefined);
+  return {id:x.id,name:String(u.name??"선수"),main:pv?.main??"",sub:pv?.sub??"",foot:pv?.foot??"",day:x.day,slots:x.slots,regions:x.regions,sport:x.sport,note:x.note,played:t.played,goals:t.goals,assists:t.assists,mine:!!tid&&s.members.some(m=>m.teamId===tid&&m.userId===u.id&&m.status==="active")}})).filter(x=>!x.mine).sort((p,q)=>String(p.day).localeCompare(String(q.day))).slice(0,200):[],
  // 1.32 서비스 관리: 종목별 경기·모집 수(취소 경기 제외). 팀 수는 화면이 teams 로 센다.
  adminStats:owner?(()=>{const live=s.games.filter(g=>g.status!=="cancelled");const by=(list:Row[])=>({total:list.length,soccer:list.filter(g=>sportOf(g)==="soccer").length,futsal:list.filter(g=>sportOf(g)==="futsal").length});
   return {games:by(live),upcoming:by(live.filter(g=>g.status==="scheduled"&&Date.parse(g.end)>Date.now())),listings:by(live.filter(g=>g.listing==="open"&&g.status==="scheduled"))}})():null,
@@ -1395,6 +1455,7 @@ export function sportView<T extends Record<string,unknown>>(v:T,sport:Sport):T&{
  return {...v,sport,allGames:(v.games??[]) as Row[],games,sides:((v.sides??[]) as Row[]).filter(z=>ids.has(z.gameId)),
   listings:((v.listings??[]) as Row[]).filter(want),matchedListings:((v.matchedListings??[]) as Row[]).filter(want),
   guestListings:((v.guestListings??[]) as Row[]).filter(want),myGuests:((v.myGuests??[]) as Row[]).filter(want),
+  availPlayers:((v.availPlayers??[]) as Row[]).filter(x=>x.sport==="both"||x.sport===sport),
   requests:((v.requests??[]) as Row[]).filter(r=>!other.has(r.gameId)),guests:((v.guests??[]) as Row[]).filter(x=>!other.has(x.gameId)),
   ...(f?{myTotals:f.myTotals??null,national:f.national??null,regional:f.regional??null,regions:f.regions??{}}:{})};
 }

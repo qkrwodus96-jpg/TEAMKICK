@@ -4551,6 +4551,10 @@ test('1.32 관심 구장: 같은 구장·종목의 상대팀·용병 모집이 �
   // 용병 모집도 알린다(팀별 한 번)
   command(f.s,A,{type:'openGuests',teamId:f.a,gameId:fut,needed:2});
   assert.equal(box('other').length,2);assert.equal(box('other')[1].to,'matching:guest');assert.match(box('other')[1].body,/용병 모집$/);
+  // 1.33 모집을 먼저 열고 나서 관심 구장을 넣은 사람도, 다시 열면 받는다(이미 받은 사람은 또 받지 않는다)
+  const late={id:'late',name:'늦게 넣음'};command(f.s,A,{type:'closeGuests',teamId:f.a,gameId:fut});
+  add(late,{sport:'futsal'});command(f.s,A,{type:'openGuests',teamId:f.a,gameId:fut,needed:2});
+  assert.equal(box('late').length,1,'나중에 넣은 사람은 다시 열 때 받는다');assert.equal(box('other').length,2,'이미 받은 사람은 그대로');
   // 다른 구장·팀원·차단은 빠진다
   const far=command(f.s,A,{type:'createGame',teamId:f.a,start:iso(NOW+6*DAY),end:iso(NOW+6*DAY+7200e3),venue:'다른 구장',address:'서울 강서구 방화동 1',lat:37.56,lng:126.81,listing:true},NOW).gameId;void far;
   assert.equal(box('fan').length,3,'풋살 모집 1개 더(둘 다) — 다른 구장은 없음');
@@ -4583,4 +4587,40 @@ test('1.32 팀 종목: 등록 신청·수정·공개 정보에 종목이 있고,
   const st=visibleState(s,owner.id).adminStats;assert.deepEqual(st.games,{total:3,soccer:1,futsal:2});
   assert.equal(visibleState(s,A.id).adminStats,null,'운영자만');
   assert.equal(modelLib.defaultSport([],NOW,'futsal'),'futsal','경기가 없으면 팀 종목');
+});
+
+test('1.33 용병 가능 등록: 30일 안 3개까지, 운영진만 목록을 보고, 용병 모집을 연 경기로 한 번 초대, 맞는 모집이 열리면 알림', ()=>{
+  const {kstDayOf}=modelLib;
+  const f=fixture();const pl={id:'pl',name:'용병러'};command(f.s,pl,{type:'readNotifications'});
+  const day=kstDayOf(NOW+3*DAY);
+  // 경기는 그 날 한국 시간 저녁 8시(저녁 시간대)
+  const start=Date.parse(day+'T20:00:00+09:00');
+  const post=(extra)=>command(f.s,pl,{type:'postAvail',day,slots:['eve'],regions:['서울'],sport:'both',note:'MF 가능',...extra});
+  assert.throws(()=>post({day:kstDayOf(NOW-DAY)}),/오늘부터/);assert.throws(()=>post({day:kstDayOf(NOW+40*DAY)}),/오늘부터/);
+  assert.throws(()=>post({slots:[]}),/시간대/);assert.throws(()=>post({regions:['서울','인천','대전','부산']}),/1~3곳/);
+  const {id}=post({});assert.throws(()=>post({}),/이미 올렸어요/);
+  post({day:kstDayOf(NOW+4*DAY)});post({day:kstDayOf(NOW+5*DAY)});assert.throws(()=>post({day:kstDayOf(NOW+6*DAY)}),/3개까지/);
+  // 목록: 다른 팀 운영진만, 계정 번호·키·몸무게 없이
+  const cap=visibleState(f.s,B.id,f.b).availPlayers;assert.equal(cap.length,3);assert.equal(cap[0].name,'용병러');
+  const text=JSON.stringify(cap);assert.ok(!text.includes('"pl"'),'계정 번호 안 보냄');assert.ok(!('height' in cap[0])&&!('instagram' in cap[0]));
+  const m=addPlayer(f.s,f.a,{id:'mem',name:'일반팀원'});void m;
+  assert.equal(visibleState(f.s,'mem',f.a).availPlayers.length,0,'일반 팀원은 못 본다');
+  assert.equal(visibleState(f.s,'pl').myAvail.length,3,'내 등록은 내가 본다');
+  // 초대: 용병 모집이 열린 경기만, 한 번만
+  const gameId=command(f.s,A,{type:'createGame',teamId:f.a,start:iso(start),end:iso(start+7200e3),venue:'상암 풋살파크',address:'서울 마포구',region:'서울',external:'외부'},NOW).gameId;
+  assert.throws(()=>command(f.s,A,{type:'inviteAvail',teamId:f.a,gameId,availId:id}),/용병 모집을 열어/);
+  command(f.s,A,{type:'openGuests',teamId:f.a,gameId,needed:2});
+  const alert=f.s.notifications.filter(n=>n.userId==='pl'&&n.title==='용병 모집 알림');assert.equal(alert.length,1,'맞는 모집이 열리면 알림');assert.equal(alert[0].to,'matching:guest');
+  command(f.s,A,{type:'inviteAvail',teamId:f.a,gameId,availId:id});
+  const inv=f.s.notifications.filter(n=>n.userId==='pl'&&n.title==='용병 초대');assert.equal(inv.length,1);assert.match(inv[0].body,/팀 0에서 .* 용병으로 초대/);
+  assert.throws(()=>command(f.s,A,{type:'inviteAvail',teamId:f.a,gameId,availId:id}),/이미 초대/);
+  assert.throws(()=>command(f.s,{id:'mem',name:'일반팀원'},{type:'inviteAvail',teamId:f.a,gameId,availId:id}),/권한/,'운영진만');
+  // 초대받은 선수는 기존 용병 신청으로 들어온다
+  command(f.s,pl,{type:'applyGuest',teamId:f.a,gameId,name:'용병러',position:'MF',number:8});
+  assert.equal(f.s.guests.filter(x=>x.userId==='pl').length,1);
+  // 차단한 팀은 초대 못 함, 지우기, 날짜가 지나면 정리
+  command(f.s,pl,{type:'blockTeam',teamId:f.b});
+  assert.equal(visibleState(f.s,B.id,f.b).availPlayers.length,0,'나를 차단한 선수는 목록에 없다');
+  command(f.s,pl,{type:'removeAvail',id});assert.equal(visibleState(f.s,'pl').myAvail.length,2);
+  modelLib.prune(f.s,NOW+10*DAY);assert.equal((f.s.users.find(u=>u.id==='pl').avail??[]).length,0,'날짜 지나면 지움');
 });

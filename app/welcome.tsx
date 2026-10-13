@@ -4,11 +4,11 @@
 // 알림·설치는 기기마다 따로라서 "봤다" 표시도 이 기기에만 남긴다(서버 기록 아님).
 // MY → 설정의 "사용법 다시 보기"로 언제든 다시 연다.
 import {useEffect,useState} from "react";
-import {CalendarCheck,Shuffle,Trophy,ClipboardCheck,Bell,Download,Share,Search,Plus,Link2,LoaderCircle,Check} from "lucide-react";
+import {CalendarCheck,Shuffle,Trophy,ClipboardCheck,Bell,Download,Search,Plus,Link2,LoaderCircle,Check} from "lucide-react";
 import {toast} from "sonner";
 import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from "@/components/ui/dialog";
 import {pushStatus,turnOnPush,type PushStatus} from "./notify";
-import {installState,promptInstall} from "./install";
+import {installState,promptInstall,InstallHow,HOW_NAME} from "./install";
 
 const SEEN="teamkick_welcome_v1";
 const seen=()=>{try{return localStorage.getItem(SEEN)==="1"}catch{return true}};
@@ -74,9 +74,7 @@ export function WelcomeGuide({ready,hasTeam,onCreateTeam,onFindTeam}:{ready:bool
    {step===2&&<div className="welcome-body">
     {inst?.installed?<p className="welcome-ok"><Check size={16}/>이미 앱처럼 열고 있어요.</p>
      :inst?.prompt?<button className="btn btn-green welcome-cta" onClick={install}><Download size={16}/>홈 화면에 추가</button>
-     :<div className="welcome-how">{inst?.how==="ios"?<><strong>아이폰 사파리</strong><p>화면 아래 <Share size={14} style={{verticalAlign:"-2px"}}/> <b>공유</b> → <b>홈 화면에 추가</b> → 오른쪽 위 <b>추가</b></p></>
-      :inst?.how==="samsung"?<><strong>삼성 인터넷</strong><p>오른쪽 아래 <b>≡ 메뉴</b> → <b>현재 페이지 추가</b> → <b>홈 화면</b></p></>
-      :<><strong>크롬 등</strong><p>오른쪽 위 <b>⋮ 메뉴</b> → <b>홈 화면에 추가</b> 또는 <b>앱 설치</b></p></>}</div>}
+     :<div className="welcome-how"><strong>{HOW_NAME[inst?.how??"other"]}</strong><p><InstallHow how={inst?.how??"other"}/></p></div>}
     <p className="data-note">주소창 없이 열리고, 아이폰은 이렇게 해야 알림도 받을 수 있어요.</p>
    </div>}
 

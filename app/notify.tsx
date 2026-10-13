@@ -77,6 +77,7 @@ function NotifyHelp(){
  return <details className="notify-help">
   <summary>알림이 안 와요?</summary>
   <p className="data-note">{tips[name]??<>브라우저 설정의 <strong>사이트 권한 → 알림</strong> 에서 teamkick.co.kr 을 허용해주세요.</>}</p>
+  {/android/i.test(navigator.userAgent)&&<p className="data-note">안드로이드 폰 자체 설정도 봐 주세요: <strong>설정 → 애플리케이션 → {name==="삼성 인터넷"?"삼성 인터넷":"크롬"} → 알림</strong> 이 켜져 있어야 해요. 알림이 오면 폰 맨 위에 작은 <strong>TK</strong> 아이콘이 떠요.</p>}
   <p className="data-note">위 <strong>이 폰에서 바로 띄워보기</strong> 가 안 보이면 폰(브라우저) 설정 문제이고,
    보이는데 시험 알림만 안 오면 배달 문제예요. 결과 줄을 운영자에게 보내주세요.</p>
  </details>;

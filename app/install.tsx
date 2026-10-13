@@ -1,5 +1,5 @@
 "use client";
-import {useState,useEffect} from "react";
+import {useState,useEffect,type ReactNode} from "react";
 import {Download,X,Share} from "lucide-react";
 
 // 홈 화면에 추가하면 주소창 없이 앱처럼 열린다. 그런데 그 방법을 스스로 알려주는
@@ -29,6 +29,18 @@ const isSamsung=()=>/samsungbrowser/i.test(navigator.userAgent);
 
 // 첫 사용 안내(welcome.tsx)에서 쓴다. 설치 창을 받았으면 바로 부르고, 못 받았으면 손으로 하는 방법을 고른다.
 export function installState(){return {installed:installed(),how:(isIos()?"ios":isSamsung()?"samsung":"other") as "ios"|"samsung"|"other",prompt:held()}}
+// 1.36 홈 화면에 추가하는 손 순서는 여기 한 곳에만 둔다(홈 "팀킥 준비하기"·첫 사용 안내·설치 안내가 같이 쓴다).
+export type How="ios"|"samsung"|"other";
+export const HOW_NAME:Record<How,string>={ios:"아이폰 사파리",samsung:"삼성 인터넷",other:"크롬 등"};
+export function installSteps(how:How):ReactNode[]{
+ return how==="ios"
+  ?[<>화면 아래 <Share size={13} style={{verticalAlign:"-2px"}}/> <b>공유</b> 누르기</>,<><b>홈 화면에 추가</b> 고르기</>,<>오른쪽 위 <b>추가</b></>]
+  :how==="samsung"
+  ?[<>오른쪽 아래 <b>≡ 메뉴</b> 누르기</>,<><b>현재 페이지 추가</b> 고르기</>,<><b>홈 화면</b> 고르기</>]
+  :[<>오른쪽 위 <b>⋮ 메뉴</b> 누르기</>,<><b>홈 화면에 추가</b> 또는 <b>앱 설치</b> 고르기</>,<><b>설치</b>(또는 추가) 누르기</>];
+}
+// 한 줄로: "① → ② → ③"
+export function InstallHow({how}:{how:How}){const st=installSteps(how);return <>{st.map((x,i)=><span key={i}>{i?" → ":""}{x}</span>)}</>}
 export async function promptInstall(){
  const p=held();if(!p)return false;
  try{await p.prompt();const c=await p.userChoice.catch(()=>null);(window as unknown as {__teamkickInstall:Prompt|null}).__teamkickInstall=null;if(c?.outcome==="accepted"){remember(DONE);return true}return false}
@@ -81,11 +93,7 @@ export function InstallGuide(){
 
  if(!show)return null;
  // 설치 창을 받았으면 버튼 하나로 끝난다. 못 받았으면 손으로 하는 길을 적어 준다.
- const manual=how==="ios"
-  ? <>화면 아래 <Share size={14} style={{verticalAlign:"-2px"}}/> <strong>공유</strong> 버튼 → <strong>홈 화면에 추가</strong></>
-  : how==="samsung"
-  ? <>오른쪽 아래 <strong>≡ 메뉴</strong> → <strong>현재 페이지 추가</strong> → <strong>홈 화면</strong></>
-  : <>브라우저 <strong>⋮ 메뉴</strong> → <strong>홈 화면에 추가</strong> (또는 <strong>앱 설치</strong>)</>;
+ const manual=<InstallHow how={(how||"other") as How}/>;
 
  return <div className="notice install-guide" role="status" style={{marginBottom:14}}>
   <div className="row between" style={{gap:10,alignItems:"flex-start"}}>

@@ -6,9 +6,9 @@
 // 카카오톡에서 링크를 누르면 카톡 안 브라우저로 열린다. 거기서는 홈 화면 추가도 알림도 되지 않으므로
 // 먼저 "다른 브라우저로 열기"를 권한다. 카톡은 kakaotalk://web/openExternal 로 기본 브라우저를 연다.
 import {useEffect,useState,type ReactNode} from "react";
-import {Bell,Check,ChevronDown,ChevronUp,Download,ExternalLink,LoaderCircle,Share} from "lucide-react";
+import {Bell,Check,ChevronDown,ChevronUp,Download,ExternalLink,LoaderCircle} from "lucide-react";
 import {toast} from "sonner";
-import {installState,promptInstall} from "./install";
+import {installState,promptInstall,installSteps,type How} from "./install";
 import {pushStatus,turnOnPush,type PushStatus} from "./notify";
 
 const FOLD="teamkick_setup_folded";
@@ -80,11 +80,7 @@ export function AppSetup({signedIn}:{signedIn:boolean}){
   finally{setBusy("")}
  }
 
- const steps:ReactNode[]=s.how==="ios"
-  ?[<>화면 아래 <Share size={13} style={{verticalAlign:"-2px"}}/> <b>공유</b> 누르기</>,<><b>홈 화면에 추가</b> 고르기</>,<>오른쪽 위 <b>추가</b></>]
-  :s.how==="samsung"
-  ?[<>오른쪽 아래 <b>≡ 메뉴</b> 누르기</>,<><b>현재 페이지 추가</b> 고르기</>,<><b>홈 화면</b> 고르기</>]
-  :[<>오른쪽 위 <b>⋮ 메뉴</b> 누르기</>,<><b>홈 화면에 추가</b> 또는 <b>앱 설치</b> 고르기</>,<><b>설치</b>(또는 추가) 누르기</>];
+ const steps:ReactNode[]=installSteps(s.how as How);
  if(s.folded)return <button type="button" className="setup-fold" onClick={()=>fold(false)}><span>팀킥 준비하기 · {s.inApp?"다른 브라우저로 열기":s.install==="todo"?"홈 화면에 추가하는 방법":left+"개 남음"}</span><ChevronDown size={16}/></button>;
 
  return <section className={"setup-card"+(s.handoff?" handoff":"")} aria-label="팀킥 준비하기">

@@ -3,7 +3,7 @@
 // 자리를 누르고 이름 한두 글자만 치면("재연") 우리 팀 선수·확정 용병이 추려지고, 고르면 유니폼에 등번호와 이름이 들어간다.
 // 운영진이 고치고 저장하면 팀원은 같은 그림을 본다. 아래에는 선수별 출전 쿼터 수(최소 출전 보장 확인용)를 보여준다.
 import {useMemo,useState} from "react";
-import {Copy,Eraser,Search,X,Shuffle} from "lucide-react";
+import {Copy,Eraser,Search,X,Shuffle,Share2} from "lucide-react";
 import {toast} from "sonner";
 import {FORMATIONS,formationsFor,slotGroup,slotLabel,splitQuarters} from "@/lib/formations";
 import {positionGroup,sportOf,defaultPeriods,type Row} from "@/lib/model";
@@ -47,7 +47,7 @@ function Shirt({who,group,empty}:{who?:Who;group:string;empty:boolean}){
  </svg>;
 }
 
-export function Lineup({g,side,v,canEdit,busy,run,demo}:{g:Row;side:Row;v:Row;canEdit:boolean;busy:boolean;run:(c:Record<string,unknown>)=>Promise<unknown>;demo:boolean}){
+export function Lineup({g,side,v,canEdit,busy,run,demo,onPoster}:{g:Row;side:Row;v:Row;canEdit:boolean;busy:boolean;run:(c:Record<string,unknown>)=>Promise<unknown>;demo:boolean;onPoster?:(quarter:number)=>void}){
  const futsal=sportOf(g)==="futsal",names=formationsFor(g);
  const quarters:number=side?.quarters??defaultPeriods(g);
  // 풋살 전·후반은 "전반·후반", 그 밖에는 1Q·2Q…
@@ -134,6 +134,7 @@ export function Lineup({g,side,v,canEdit,busy,run,demo}:{g:Row;side:Row;v:Row;ca
   {canEdit&&<div className="lu-actions"><span className="small muted">{filled}/{slots.length}명 · {dirty?"저장 안 됨":saved[qi]?"저장됨":"아직 없음"}</span>
    <button type="button" className="btn" onClick={copyPrev} disabled={qi===0}><Copy size={15}/>{halves?"전반":"앞 "+unit} 복사</button>
    <button type="button" className="btn btn-green" disabled={busy||!dirty} onClick={save}>{qName(qi)} 저장</button></div>}
+  {onPoster&&saved[qi]&&!dirty&&<button type="button" className="btn lu-poster" onClick={()=>onPoster(qi)}><Share2 size={15}/>{qName(qi)} 라인업으로 포스터 만들기</button>}
   {canEdit&&<div className="lu-auto"><button type="button" className="btn" disabled={busy} onClick={autoSplit}><Shuffle size={15}/>{halves?"전·후반":unit} 자동 분배</button>
    {Object.keys(draft).length>1&&<button type="button" className="btn btn-dark" disabled={busy} onClick={saveAll}>고친 {Object.keys(draft).length}개 {unit} 전체 저장</button>}
    <small className="muted">참여한 사람이 같은 {halves?"횟수":unit+" 수"}만큼 뛰도록 지금 포메이션({cur.formation})으로 나누고, 포지션대로 자리에 넣어요. 저장 전에는 팀원에게 안 보여요.</small></div>}

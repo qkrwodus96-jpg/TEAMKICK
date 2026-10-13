@@ -15,7 +15,7 @@ function compile(file,name,replace=s=>s){
 compile('lib/formations.ts','formations.mjs');
 compile('lib/when.ts','when.mjs');
 compile('lib/weather-keep.ts','weather-keep.mjs',s=>s.replace('import {load,commit} from "./store";','const load=null,commit=null;').replace('import {gameWeather,weatherReady} from "./weather-server";','const gameWeather=null,weatherReady=()=>false;').replace('import {searchPlaces} from "./places";','const searchPlaces=null;').replace('"./weather"','"./weather.mjs"'));
-for(const n of ['d1','d2','d3','d4','d5'])compile('lib/i18n/'+n+'.ts','i18n-'+n+'.mjs');
+for(const n of ['d1','d2','d3','d4','d5','d6'])compile('lib/i18n/'+n+'.ts','i18n-'+n+'.mjs');
 compile('lib/migrate.ts','migrate.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/model.ts','model.mjs',s=>s.replace('"./news"','"./news.mjs"').replace('"./formations"','"./formations.mjs"').replace('"./when"','"./when.mjs"'));
 compile('lib/store.ts','store.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
@@ -58,7 +58,7 @@ compile('app/api/migrate/route.ts','migrate-api.mjs',s=>s.replace('"@/lib/model"
 compile('app/api/chat/route.ts','chat-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store-some"','"./store-some.mjs"').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/chat-server"','"./chat-server.mjs"'));
 compile('lib/close.ts','close.mjs',s=>s.replace('"./store"','"./store.mjs"').replace('"./model"','"./model.mjs"').replace('"./auth"','"./auth.mjs"').replace('"./unlink"','"./unlink.mjs"'));
 globalThis.__teamkickTestEnv={};
-const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp,mvpView,mvpWinners,periodRange,rankRows,nationalRanking,rankPhotoOpen,canSeeGame,gameTitle,restoreExpiredTeams}=await import(path.join(runtime,'model.mjs'));
+const {blank,applyCommand,visibleState,summaries,sideOf,rosterFor,attendanceDraft,approvedGuests,REGIONS,iso,prune,KEEP,PRUNE_LIMIT,ANON_NAME,FORMATS,LEVELS,DAYS,levelOf,seoulStamp,mvpView,mvpWinners,periodRange,rankRows,nationalRanking,rankPhotoOpen,canSeeGame,gameTitle,restoreExpiredTeams,teamRankings,myChem,TEAM_RANK_MIN,CHEM_MIN}=await import(path.join(runtime,'model.mjs'));
 const {whenText,whenRange}=await import(path.join(runtime,'when.mjs'));
 const repository=await import(path.join(runtime,'store.mjs'));
 const auth=await import(path.join(runtime,'auth.mjs'));
@@ -3779,11 +3779,11 @@ test('1.18 영입 소식: 가입 승인 때 HERE WE GO 공지와 팀원 알림(�
 });
 
 test('1.18 다국어 사전: 모든 줄이 한국어+4개 언어, 비어 있는 칸 없음, 주요 화면 글자 포함',async()=>{
-  const lines=[];for(const n of ['d1','d2','d3','d4','d5'])lines.push(...(await import(path.join(runtime,'i18n-'+n+'.mjs'))).default.split('\n').filter(Boolean));
+  const lines=[];for(const n of ['d1','d2','d3','d4','d5','d6'])lines.push(...(await import(path.join(runtime,'i18n-'+n+'.mjs'))).default.split('\n').filter(Boolean));
   const bad=lines.filter(l=>{const p=l.split('\t');return p.length!==5||p.some(x=>!x.trim())});
   assert.deepEqual(bad,[],'칸이 모자란 줄');
   const ko=new Set(lines.map(l=>l.split('\t')[0]));
-  for(const must of ['홈','일정','매칭','기록','팀 채팅','모집 중','모집 완료','받은 신청','매칭 수락','거절','라인업','알림 설정','화면 모드','공유하기','팀 성향 분석'])assert.ok(ko.has(must),must+' 번역 없음');
+  for(const must of ['홈','일정','매칭','기록','팀 채팅','모집 중','모집 완료','받은 신청','매칭 수락','거절','라인업','알림 설정','화면 모드','공유하기','팀 성향 분석','마이 케미','관심 구장','용병 가능 선수','개인 기록 입력','상대팀이 보낸 점수가 맞나요?'])assert.ok(ko.has(must),must+' 번역 없음');
   assert.ok(lines.length>=1100,'사전 크기 '+lines.length);
 });
 
@@ -4698,4 +4698,71 @@ test('1.35.1 알림을 누르면 그 창으로: 결과 확인 요청·확정은 
   const cr=f.s.notifications.filter(n=>n.title==='기록 정정 요청').at(-1);assert.equal(cr.to,'game:'+f.gameId+':record');assert.equal(cr.gameId,f.gameId);
   command(f.s,A,{type:'correctRequest',teamId:f.a,gameId:'없는경기',message:'x'},later);
   assert.equal(f.s.notifications.filter(n=>n.title==='기록 정정 요청').at(-1).to,'records','다른 팀 경기면 기록 화면');
+});
+
+// 1.36 팀킥 매칭 경기 하나를 끝내고 점수까지 두 팀이 확인한다(start 는 과거).
+function playedMatch(f,start,own,opp,{attend=null}={}){
+  const gameId=command(f.s,A,{type:'createGame',teamId:f.a,start:iso(start),end:iso(start+7200e3),venue:'축구장',address:'서울 마포구',external:'',listing:true},start-DAY).gameId;
+  command(f.s,B,{type:'applyMatch',teamId:f.b,gameId},start-DAY+60e3);
+  command(f.s,A,{type:'acceptMatch',teamId:f.a,gameId,requestId:f.s.requests.find(r=>r.gameId===gameId).id},start-DAY+120e3);
+  const later=start+7200e3+60e3,g=f.s.games.find(x=>x.id===gameId);
+  command(f.s,A,{type:'completeGame',teamId:f.a,gameId},later);
+  if(attend){const z=sideOf(f.s,gameId,f.a);command(f.s,A,{type:'attendance',teamId:f.a,gameId,values:Object.fromEntries(rosterFor(f.s,z,g).map(x=>[x.id,attend.includes(x.id)]))},later)}
+  command(f.s,A,{type:'result',teamId:f.a,gameId,own,opponent:opp},later);
+  command(f.s,B,{type:'confirmResult',teamId:f.b,gameId,revision:g.resultProposal.revision,agree:true},later);
+  return gameId;
+}
+
+test('1.36 팀 랭킹: 매칭 + 점수 확인 경기만, 승률은 3경기 이상, 지역별·전국',()=>{
+  const f=fixture();const h=3600e3;
+  playedMatch(f,NOW-30*h,2,1);playedMatch(f,NOW-26*h,0,3);
+  // 외부 팀 경기는 세지 않는다
+  const ext=command(f.s,A,{type:'createGame',teamId:f.a,start:iso(NOW-22*h),end:iso(NOW-20*h),venue:'축구장',address:'서울',external:'외부 FC'},NOW-2*DAY).gameId;
+  command(f.s,A,{type:'completeGame',teamId:f.a,gameId:ext},NOW-19*h);command(f.s,A,{type:'result',teamId:f.a,gameId:ext,own:9,opponent:0},NOW-19*h);
+  let r=teamRankings(f.s,NOW)[''].year;
+  assert.equal(r.winRate.length,0,'2경기면 승률 없음');
+  assert.deepEqual(r.goals.map(x=>[x.id,x.value]),[[f.b,4],[f.a,2]],'외부 경기 9골은 안 셈');
+  playedMatch(f,NOW-16*h,1,1);
+  r=teamRankings(f.s,NOW)[''].year;
+  assert.equal(TEAM_RANK_MIN,3);
+  const a=r.winRate.find(x=>x.id===f.a),b=r.winRate.find(x=>x.id===f.b);
+  assert.equal(a.value,33);assert.equal(b.value,33);assert.equal(a.played,3);assert.equal(a.draws,1);
+  assert.deepEqual(teamRankings(f.s,NOW)['서울'].year.wins.map(x=>x.id).sort(),[f.a,f.b].sort(),'지역(서울) 판');
+  // 확인 전(대기) 점수는 안 센다
+  const pend=command(f.s,A,{type:'createGame',teamId:f.a,start:iso(NOW-12*h),end:iso(NOW-10*h),venue:'축구장',address:'서울',external:'',listing:true},NOW-2*DAY).gameId;
+  command(f.s,B,{type:'applyMatch',teamId:f.b,gameId:pend},NOW-2*DAY+1);command(f.s,A,{type:'acceptMatch',teamId:f.a,gameId:pend,requestId:f.s.requests.find(x=>x.gameId===pend).id},NOW-2*DAY+2);
+  command(f.s,A,{type:'completeGame',teamId:f.a,gameId:pend},NOW-9*h);command(f.s,A,{type:'result',teamId:f.a,gameId:pend,own:5,opponent:0},NOW-9*h);
+  assert.equal(teamRankings(f.s,NOW)[''].year.goals.find(x=>x.id===f.a).value,3,'확인 전 5골은 안 셈');
+  const v=visibleState(f.s,A.id,f.a);assert.ok(v.teamRanks&&v.teamRanks[''],'화면 상태에 팀 랭킹');
+});
+
+test('1.36 마이 케미: 골 기록의 도움 파트너, 같이 뛴 승률(3경기 이상), 다른 팀이어도 같은 계정이면 합산',()=>{
+  const f=fixture();const h=3600e3;
+  const me={id:'chem-me',name:'나'},pal={id:'chem-pal',name:'단짝'},bad={id:'chem-bad',name:'불운'};
+  const m1=addPlayer(f.s,f.a,me),p1=addPlayer(f.s,f.a,pal),b1=addPlayer(f.s,f.a,bad);
+  // 같은 계정이 다른 팀(C)에서도 함께 뛴다
+  const joinC=(actor)=>{command(f.s,actor,{type:'joinTeam',teamId:f.c,name:actor.name,position:'MF',number:9},NOW-20*DAY);const m=f.s.members.find(x=>x.teamId===f.c&&x.userId===actor.id);command(f.s,C,{type:'approveMember',teamId:f.c,memberId:m.id},NOW-20*DAY);return m};
+  const m2=joinC(me),p2=joinC(pal);
+  const g1=playedMatch(f,NOW-40*h,2,0,{attend:[m1.id,p1.id]});
+  const g2=playedMatch(f,NOW-36*h,1,0,{attend:[m1.id,p1.id,b1.id]});
+  playedMatch(f,NOW-32*h,0,2,{attend:[m1.id,b1.id]});
+  playedMatch(f,NOW-28*h,0,1,{attend:[m1.id,b1.id]});
+  const rec=(gameId,values,goalLog)=>command(f.s,A,{type:'records',teamId:f.a,gameId,values,ownGoals:0,unknownGoals:0,goalLog},NOW);
+  rec(g1,{[m1.id]:{goals:2,assists:0},[p1.id]:{goals:0,assists:2}},[{by:m1.id,assist:p1.id,min:10},{by:m1.id,assist:p1.id,min:20}]);
+  rec(g2,{[m1.id]:{goals:0,assists:1},[p1.id]:{goals:1,assists:0}},[{by:p1.id,assist:m1.id,min:5}]);
+  // C 팀 자체전: 같은 편이면 같이 이긴 경기로, 골 기록도 합산
+  const ig=command(f.s,C,{type:'createGame',teamId:f.c,kind:'intra',squads:2,start:iso(NOW-20*h),end:iso(NOW-18*h),venue:'축구장',address:'서울'},NOW-2*DAY).gameId;
+  const zc=sideOf(f.s,ig,f.c),gc=f.s.games.find(x=>x.id===ig);
+  command(f.s,C,{type:'completeGame',teamId:f.c,gameId:ig},NOW-17*h);
+  command(f.s,C,{type:'attendance',teamId:f.c,gameId:ig,values:Object.fromEntries(rosterFor(f.s,zc,gc).map(x=>[x.id,[m2.id,p2.id].includes(x.id)]))},NOW-17*h);
+  command(f.s,C,{type:'squads',teamId:f.c,gameId:ig,assign:{[m2.id]:0,[p2.id]:0}},NOW-17*h);
+  command(f.s,C,{type:'matchRecord',teamId:f.c,gameId:ig,values:{[m2.id]:{goals:1,assists:0},[p2.id]:{goals:0,assists:1}},extra:[0,0],goalLog:[{by:m2.id,assist:p2.id,min:3}]},NOW-17*h);
+  const c=myChem(f.s,me.id,'soccer');
+  assert.equal(c.scored,3);assert.deepEqual(c.assistFrom.map(x=>[x.name,x.n,x.share]),[['단짝',3,100]],'두 팀 합산');
+  assert.deepEqual(c.assistTo.map(x=>[x.name,x.n]),[['단짝',1]]);
+  assert.equal(CHEM_MIN,3);
+  assert.deepEqual(c.best.map(x=>[x.name,x.played,x.wins]),[['단짝',3,3],['불운',3,1]],'A팀 2경기 + C팀 자체전 같은 편 1경기');
+  assert.deepEqual(c.worst.map(x=>[x.name,x.played,x.losses]),[['불운',3,2]]);
+  assert.ok(!JSON.stringify(c).includes('chem-pal'),'다른 사람 계정 번호는 안 보낸다');
+  assert.equal(visibleState(f.s,me.id,f.a).chem.best.length,2,'화면 상태에 케미');
 });

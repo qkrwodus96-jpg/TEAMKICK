@@ -908,3 +908,19 @@ body{word-break:keep-all;overflow-wrap:break-word}
 .game-extras{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
 .goal-log-row{display:grid;grid-template-columns:minmax(0,1fr) 64px minmax(0,1.2fr);align-items:center;gap:8px;font-size:14px}
 .goal-log-row input,.goal-log-row select{margin:0;padding:8px 8px;border:1px solid var(--input);border-radius:9px;background:var(--background);color:var(--foreground);font:inherit;font-size:13.5px;min-width:0}
+/* 1.36 팀 랭킹 */
+.rank-unit{margin:10px 0 4px;width:max-content}
+.team-rank .club-crest{width:36px;height:36px;min-width:36px;font-size:12px;letter-spacing:-.5px}
+.team-rank .rank-who small{white-space:normal}
+/* 1.36 마이 케미 */
+.chem-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media(max-width:640px){.chem-grid{grid-template-columns:1fr}}
+.chem-card{border:1px solid #e6ebe8;border-radius:var(--r-card,14px);padding:14px;display:grid;gap:10px;align-content:start}
+.chem-title{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:#4b5a52}
+.chem-top{display:flex;align-items:center;gap:12px}.chem-top .player-avatar{width:48px;height:48px;min-width:48px}
+.chem-top strong{display:block;font-size:16px}.chem-top small{color:#66736c;font-size:12.5px}
+.chem-rest{list-style:none;margin:0;padding:0;display:grid;gap:4px}.chem-rest li{display:grid;grid-template-columns:16px auto 1fr;gap:8px;align-items:baseline;font-size:13px}
+.chem-rest span{color:#8a958f;font-variant-numeric:tabular-nums}.chem-rest small{color:#66736c;text-align:right}
+/* 1.36 라인업 → 포스터 */
+.lu-poster{margin-top:10px;width:100%;justify-content:center}
+.poster-quarter{display:grid;gap:6px;margin-bottom:10px}.poster-quarter>span{font-size:13px;font-weight:700}

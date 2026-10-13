@@ -5,7 +5,7 @@
 // 약관·개인정보처리방침은 한국어 원문이 기준이라 번역하지 않는다(그 화면에서는 이 번역기가 돌지 않는다).
 import {useEffect,useState} from "react";
 import {Languages} from "lucide-react";
-import d1 from "@/lib/i18n/d1";import d2 from "@/lib/i18n/d2";import d3 from "@/lib/i18n/d3";import d4 from "@/lib/i18n/d4";import d5 from "@/lib/i18n/d5";
+import d1 from "@/lib/i18n/d1";import d2 from "@/lib/i18n/d2";import d3 from "@/lib/i18n/d3";import d4 from "@/lib/i18n/d4";import d5 from "@/lib/i18n/d5";import d6 from "@/lib/i18n/d6";
 
 export const LANGS=[{id:"ko",label:"한국어"},{id:"en",label:"English"},{id:"ja",label:"日本語"},{id:"zh",label:"中文"},{id:"vi",label:"Tiếng Việt"}] as const;
 export type Lang=typeof LANGS[number]["id"];
@@ -17,7 +17,7 @@ let DICT:Map<string,string[]>|null=null;
 const norm=(s:string)=>s.replace(/\s+/g," ").trim();
 function dict(){
  if(DICT)return DICT;DICT=new Map();
- for(const src of [d1,d2,d3,d4,d5])for(const line of src.split("\n")){const p=line.split("\t");if(p.length>=5&&p[0])DICT.set(norm(p[0]),p.slice(1,5))}
+ for(const src of [d1,d2,d3,d4,d5,d6])for(const line of src.split("\n")){const p=line.split("\t");if(p.length>=5&&p[0])DICT.set(norm(p[0]),p.slice(1,5))}
  return DICT;
 }
 const WEEK:Record<string,string[]>={"일":["Sun","日","日","CN"],"월":["Mon","月","一","T2"],"화":["Tue","火","二","T3"],"수":["Wed","水","三","T4"],"목":["Thu","木","四","T5"],"금":["Fri","金","五","T6"],"토":["Sat","土","六","T7"]};
@@ -69,6 +69,16 @@ const RULES:Rule[]=[
  [/^(.+)님이 (.+)에 메시지를 보냈어요\.$/,(m,i)=>[`${m[1]} sent a message in ${m[2]}.`,`${m[1]}さんが${m[2]}にメッセージを送りました。`,`${m[1]} 在 ${m[2]} 发送了消息。`,`${m[1]} đã nhắn trong ${m[2]}.`][i]],
  [/^(\d+)개 팀 합산$/,(m,i)=>[`across ${m[1]} teams`,`${m[1]}チーム合算`,`${m[1]}支球队合计`,`gộp ${m[1]} đội`][i]],
  [/^팀킥 (v[\d.]+)$/,(m)=>`TeamKick ${m[1]}`],
+ // 1.36 케미·팀 랭킹·기록 순서 안내
+ [/^도움 (\d+)번 · 내 (골|도움)의 (\d+)%$/,(m,i)=>{const g=m[2]==="골";return [`${m[1]} assist${m[1]==="1"?"":"s"} · ${m[3]}% of my ${g?"goals":"assists"}`,`アシスト${m[1]}回 · 自分の${g?"ゴール":"アシスト"}の${m[3]}%`,`助攻${m[1]}次 · 占我${g?"进球":"助攻"}的${m[3]}%`,`${m[1]} kiến tạo · ${m[3]}% ${g?"bàn":"kiến tạo"} của tôi`][i]}],
+ [/^(승률|패배율) (\d+)% · (\d+)경기 (\d+)승 (\d+)무 (\d+)패$/,(m,i)=>{const w=m[1]==="승률";return [`${w?"Win":"Loss"} rate ${m[2]}% · ${m[3]} matches ${m[4]}W ${m[5]}D ${m[6]}L`,`${w?"勝率":"敗率"} ${m[2]}% · ${m[3]}試合 ${m[4]}勝${m[5]}分${m[6]}敗`,`${w?"胜率":"败率"} ${m[2]}% · ${m[3]}场 ${m[4]}胜${m[5]}平${m[6]}负`,`Tỉ lệ ${w?"thắng":"thua"} ${m[2]}% · ${m[3]} trận ${m[4]}T ${m[5]}H ${m[6]}B`][i]}],
+ [/^(.+) · (\d+)경기 (\d+)승 (\d+)무 (\d+)패 · 득실 (\d+):(\d+)$/,(m,i)=>`${tr(m[1],i)??m[1]} · `+[`${m[2]} matches ${m[3]}W ${m[4]}D ${m[5]}L · GF:GA ${m[6]}:${m[7]}`,`${m[2]}試合 ${m[3]}勝${m[4]}分${m[5]}敗 · 得失 ${m[6]}:${m[7]}`,`${m[2]}场 ${m[3]}胜${m[4]}平${m[5]}负 · 进失 ${m[6]}:${m[7]}`,`${m[2]} trận ${m[3]}T ${m[4]}H ${m[5]}B · BT:BB ${m[6]}:${m[7]}`][i]],
+ [/^이 기간에 (\d+)경기 이상 치른 팀이 없어요\.$/,(m,i)=>[`No team has played ${m[1]}+ matches in this period.`,`この期間に${m[1]}試合以上したチームはありません。`,`此期间没有踢满${m[1]}场的球队。`,`Chưa đội nào đá từ ${m[1]} trận trong giai đoạn này.`][i]],
+ [/^팀킥에서 매칭하고 두 팀이 점수를 서로 확인한 경기만 세요\(외부 팀·자체전 제외\)\. 승률은 (\d+)경기 이상 치른 팀만\. 팀을 누르면 팀 프로필이 열려요\.$/,(m,i)=>[`Counts only matches made on TeamKick with the score confirmed by both teams (no outside teams or in-team games). Win rate needs ${m[1]}+ matches. Tap a team to open its profile.`,`チームキックでマッチングし、両チームがスコアを確認した試合だけを数えます（外部チーム・紅白戦を除く）。勝率は${m[1]}試合以上のチームのみ。チームを押すとプロフィールが開きます。`,`仅统计在TeamKick约战且双方确认比分的比赛（不含外部球队和队内赛）。胜率仅限踢满${m[1]}场的球队。点球队可打开资料。`,`Chỉ tính trận ghép trên TeamKick có tỉ số được hai đội xác nhận (không gồm đội ngoài, đá nội bộ). Tỉ lệ thắng cần từ ${m[1]} trận. Nhấn đội để mở hồ sơ.`][i]],
+ [/^(\d+)승$/,(m,i)=>[`${m[1]} W`,`${m[1]}勝`,`${m[1]}胜`,`${m[1]} thắng`][i]],
+ [/^(.+) 라인업으로 포스터 만들기$/,(m,i)=>[`Make poster from ${m[1]} lineup`,`${m[1]}のラインナップでポスター作成`,`用${m[1]}阵容生成海报`,`Tạo poster từ đội hình ${m[1]}`][i]],
+ [/^(\d+)쿼터$/,(m,i)=>[`Q${m[1]}`,`${m[1]}Q`,`第${m[1]}节`,`Hiệp ${m[1]}`][i]],
+ [/^확정 점수 (\d+)골과 (\d+)골 (많아요|모자라요)\.$/,(m,i)=>{const more=m[3]==="많아요";return [`${m[2]} goal(s) ${more?"over":"short of"} the confirmed ${m[1]}.`,`確定スコア${m[1]}点より${m[2]}点${more?"多い":"足りない"}です。`,`比确认比分${m[1]}球${more?"多":"少"}${m[2]}球。`,`${more?"Thừa":"Thiếu"} ${m[2]} bàn so với tỉ số ${m[1]}.`][i]}],
  [/^(\d+)쿼터 라인업을 저장했어요\.$/,(m,i)=>[`Q${m[1]} lineup saved.`,`${m[1]}Qのラインナップを保存しました。`,`第${m[1]}节阵容已保存。`,`Đã lưu đội hình hiệp ${m[1]}.`][i]],
  [/^(\d+)명에게 알림을 보냈어요\.$/,(m,i)=>[`Notified ${m[1]} people.`,`${m[1]}名に通知しました。`,`已通知${m[1]}人。`,`Đã báo ${m[1]} người.`][i]],
 ];

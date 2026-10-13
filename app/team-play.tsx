@@ -5,8 +5,8 @@ import {useMemo,useState} from "react";
 import qrcode from "qrcode-generator";
 import {Trophy,ClipboardCheck,Shuffle,Minus,Plus,Check,Share2,Copy,Bell,Crown,Goal,Footprints,CalendarCheck,BookOpen} from "lucide-react";
 import {toast} from "sonner";
-import {SQUAD_NAMES,summaries,periodRange,rankRows,REGIONS,isIntra,type Row} from "@/lib/model";
-import {PlayerPhoto,koreanDate,time,backNo,opponent} from "./teamkick";
+import {SQUAD_NAMES,summaries,periodRange,rankRows,REGIONS,isIntra,TEAM_RANK_MIN,type Row} from "@/lib/model";
+import {PlayerPhoto,Crest,koreanDate,time,backNo,opponent} from "./teamkick";
 import {Medal} from "./medal";
 import {SafetyButton} from "./safety";
 
@@ -152,7 +152,22 @@ const WEEKDAY="일월화수목금토";
 // 기간 칩 옆에 실제 날짜를 적는다(한국 시간). "이번 주 일요일 경기가 왜 빠지지?" 같은 헷갈림을 줄인다.
 function rangeText(period:string){const {from,to}=periodRange(period);const k=(iso:string,d=0)=>new Date(Date.parse(iso)+9*3600e3+d);const a=k(from),b=k(to,-1);const md=(x:Date)=>(x.getUTCMonth()+1)+"."+x.getUTCDate();
  if(period==="year")return a.getUTCFullYear()+"년";if(period==="month")return md(a)+" ~ "+md(b);return md(a)+"("+WEEKDAY[a.getUTCDay()]+") ~ "+md(b)+"("+WEEKDAY[b.getUTCDay()]+")"}
-export function Rankings({v,busy,run,onOpen}:{v:Row;busy:boolean;run:(c:Record<string,unknown>)=>void;onOpen:(p:Row)=>void}){
+// 1.36 팀 랭킹 항목. 승률은 TEAM_RANK_MIN 경기 이상 치른 팀만.
+const TEAM_TABS=[{key:"winRate",label:"승률",unit:"%"},{key:"wins",label:"승리",unit:"승"},{key:"goals",label:"득점",unit:"골"}] as const;
+function TeamRankBoard({v,rows,tkey,onTeam}:{v:Row;rows:Row[];tkey:string;onTeam?:(id:string)=>void}){
+ const [more,setMore]=useState(false);
+ const tab=TEAM_TABS.find(x=>x.key===tkey)!;
+ const teamOf=(id:string):Row=>((v.teams??[]) as Row[]).find(t=>t.id===id)??{id,name:"팀"};
+ const shown=more?rows:rows.slice(0,10);
+ if(!rows.length)return <p className="small muted rank-empty">{tkey==="winRate"?"이 기간에 "+TEAM_RANK_MIN+"경기 이상 치른 팀이 없어요.":"이 기간에 팀킥에서 매칭해 점수를 서로 확인한 경기가 없어요."}</p>;
+ return <><ol className="rank-list team-rank">{shown.map(r=>{const t=teamOf(r.id);const me=r.id===v.teamId;
+  return <li key={r.id} className={me?"me":""}><button onClick={()=>onTeam?.(r.id)}><span className="rank-no">{r.rank}</span><Crest name={t.name} color={t.color} logo={t.logo}/>
+   <span className="rank-who"><strong>{t.name}{me&&<em> 우리 팀</em>}</strong><small>{[r.region,r.played+"경기 "+r.wins+"승 "+r.draws+"무 "+r.losses+"패","득실 "+r.goals+":"+r.against].filter(Boolean).join(" · ")}</small></span><b>{r.value}{tab.unit}</b></button></li>})}</ol>
+  {rows.length>shown.length&&<button className="btn rank-more" onClick={()=>setMore(true)}>더 보기 ({rows.length-shown.length}팀)</button>}</>;
+}
+export function Rankings({v,busy,run,onOpen,onTeam}:{v:Row;busy:boolean;run:(c:Record<string,unknown>)=>void;onOpen:(p:Row)=>void;onTeam?:(id:string)=>void}){
+ const [unit,setUnit]=useState<"player"|"team">("player");
+ const [tkey,setTkey]=useState<string>("winRate");
  const [scope,setScope]=useState<"team"|"region"|"national">("team");
  const [period,setPeriod]=useState<string>("month");
  const [key,setKey]=useState<string>("goals");
@@ -178,6 +193,12 @@ export function Rankings({v,busy,run,onOpen}:{v:Row;busy:boolean;run:(c:Record<s
   <div className="panel-title"><h2>랭킹</h2><div className="seg" role="tablist" aria-label="랭킹 범위">{[{k:"team",t:"팀 내"},...(v.myRegion?[{k:"region",t:"지역"}]:[]),{k:"national",t:"전국"}].map(x=><button key={x.k} role="tab" aria-selected={scope===x.k} className={scope===x.k?"on":""} onClick={()=>{setScope(x.k as "team"|"region"|"national");setMore(false);setPeek(null)}}>{x.t}</button>)}</div></div>
   <div className="chip-row rank-periods">{PERIODS.map(x=><button key={x.key} className={"chip-mini"+(period===x.key?" on":"")} onClick={()=>{setPeriod(x.key);setMore(false)}}>{x.label}</button>)}<span className="rank-range">{rangeText(period)}</span></div>
   {scope==="region"&&<label className="rank-area">지역<select value={area} onChange={e=>{setArea(e.target.value);setMore(false)}}>{areas.map(r=><option key={r} value={r}>{r}{r===v.myRegion?" (우리 팀)":""}</option>)}</select></label>}
+  {scope!=="team"&&<div className="seg rank-unit" role="tablist" aria-label="선수·팀">{([["player","선수"],["team","팀"]] as const).map(([k,t])=><button key={k} role="tab" aria-selected={unit===k} className={unit===k?"on":""} onClick={()=>setUnit(k)}>{t}</button>)}</div>}
+  {scope!=="team"&&unit==="team"?<>
+   <div className="rank-keys" role="tablist" aria-label="팀 랭킹 항목">{TEAM_TABS.map(x=><button key={x.key} role="tab" aria-selected={tkey===x.key} className={tkey===x.key?"on":""} onClick={()=>setTkey(x.key)}>{x.label}</button>)}</div>
+   <TeamRankBoard key={scope+area+period+tkey} v={v} tkey={tkey} onTeam={onTeam} rows={(v.teamRanks?.[scope==="national"?"":area]?.[period]?.[tkey]??[]) as Row[]}/>
+   <p className="data-note">{"팀킥에서 매칭하고 두 팀이 점수를 서로 확인한 경기만 세요(외부 팀·자체전 제외). 승률은 "+TEAM_RANK_MIN+"경기 이상 치른 팀만. 팀을 누르면 팀 프로필이 열려요."}</p>
+  </>:<>
   <div className="rank-keys" role="tablist" aria-label="랭킹 항목">{RANK_TABS.map(x=><button key={x.key} role="tab" aria-selected={key===x.key} className={key===x.key?"on":""} onClick={()=>{setKey(x.key);setMore(false)}}><x.icon size={15}/>{x.label}왕</button>)}</div>
   {scope!=="team"&&<div className="rank-optin">{v.rankPublic?<><p className="small muted">지역·전국 랭킹에 참여 중이에요. <button className="text-link" disabled={busy} onClick={()=>run({type:"setRankPublic",on:false})}>빠지기</button></p><label className="rank-profile-opt"><input type="checkbox" checked={!!v.profilePublic} disabled={busy} onChange={e=>run({type:"setProfilePublic",on:e.target.checked})}/><span>랭킹에서 내 프로필도 보여주기<small>사진·포지션·주발·활동 지역·인스타그램 아이디가 다른 팀 이용자에게 보여요. 키·몸무게·나이·생일은 보이지 않아요.</small></span></label></>:<div className="task-box"><strong>지역·전국 랭킹은 참여를 켠 선수만 보여요</strong><p className="small muted">켜면 내 선수 이름·팀 이름·기록 숫자가 다른 팀 이용자에게도 보여요. 언제든 끌 수 있어요.</p><button className="btn btn-green" disabled={busy} onClick={()=>run({type:"setRankPublic",on:true})}>지역·전국 랭킹 참여하기</button></div>}</div>}
   {rows.length?<>
@@ -189,6 +210,7 @@ export function Rankings({v,busy,run,onOpen}:{v:Row;busy:boolean;run:(c:Record<s
    {more&&rest.length>6&&<button className="text-link rank-more" onClick={()=>setMore(false)}>접기</button>}
   </>:<p className="small muted rank-empty">{scope==="region"?"아직 "+area+" 지역에서 전국·지역 랭킹에 참여한 선수의 기록이 없어요.":scope!=="team"&&!v.rankPublic?"아직 참여한 선수가 없거나 이 기간 기록이 없어요.":"이 기간에 "+tab.label+" 기록이 없어요."}</p>}
   <p className="data-note">{scope==="team"?"우리 팀 기록 기준(자체전 포함). 골·도움은 결과가 확정된 경기, 출석은 출석 확정, MVP는 마감된 투표만 세요.":scope==="region"?"참여를 켠 선수가 "+area+" 지역 팀에서 남긴 기록만 합쳐요. 상위 50명까지 보여요.":"참여를 켠 선수의 모든 팀 기록을 합쳐요. 활동 중인 팀의 기록만 세고, 상위 50명까지 보여요."} 이번 주는 월요일부터 일요일까지예요.</p>
+  </>}
  </div>;
 }
 

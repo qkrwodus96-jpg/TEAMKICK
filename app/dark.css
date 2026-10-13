@@ -663,6 +663,7 @@ html[data-theme="dark"] .chem-title{color:#c0c0c0}
 html[data-theme="dark"] .chem-top small{color:#b1b1b1}
 html[data-theme="dark"] .chem-rest span{color:#9e9e9e}
 html[data-theme="dark"] .chem-rest small{color:#b1b1b1}
+html[data-theme="dark"] .chat-locked{background:#262626;color:#c0c0c0}
 html[data-theme="dark"]{--band:#08080a}
 html[data-theme="dark"] .switch::after{background:#ececee}
 html[data-theme="dark"] .seg{background:#232328}

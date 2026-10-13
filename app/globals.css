@@ -924,3 +924,14 @@ body{word-break:keep-all;overflow-wrap:break-word}
 /* 1.36 라인업 → 포스터 */
 .lu-poster{margin-top:10px;width:100%;justify-content:center}
 .poster-quarter{display:grid;gap:6px;margin-bottom:10px}.poster-quarter>span{font-size:13px;font-weight:700}
+/* 1.37 알림 창 글자 크게(가시성) */
+.notif-modal .notification-item{padding:16px 2px}
+.notif-modal .notification-item strong.small{font-size:16.5px;line-height:1.45}
+.notif-modal .notification-item p{font-size:15.5px;line-height:1.6;margin:4px 0 2px}
+.notif-modal .notification-item small{font-size:13px}
+.notif-modal .notification-item .text-link{font-size:14.5px;font-weight:700}
+.notif-modal .other-team-alert{font-size:15px;padding:12px 14px}
+/* 1.37 매칭 대화방: 팀원 안내 */
+.chat-locked{display:flex;gap:8px;align-items:flex-start;padding:12px 14px;border-radius:12px;background:#f2f5f3;color:#4b5a52;font-size:14px;line-height:1.5;margin-top:8px}
+.chat-locked svg{flex:none;margin-top:2px}
+.goal-untimed{white-space:nowrap}

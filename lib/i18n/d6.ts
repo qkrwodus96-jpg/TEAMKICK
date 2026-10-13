@@ -1,4 +1,4 @@
-// 화면 글자 사전 6/6 — 1.19~1.36 새 문구(용병 가능·관심 구장·차단·신고·풋살·경기 뒤 기록·팀 랭킹·케미·라인업 포스터·설치/알림 안내)
+// 화면 글자 사전 6/6 — 1.19~1.37 새 문구(용병 가능·관심 구장·차단·신고·풋살·경기 뒤 기록·팀 랭킹·케미·라인업 포스터·설치/알림 안내·매칭 대화)
 const DICT=`축구·풋살	Soccer · Futsal	サッカー・フットサル	足球·五人制	Bóng đá · Futsal
 축구	Soccer	サッカー	足球	Bóng đá
 풋살	Futsal	フットサル	五人制	Futsal
@@ -399,5 +399,8 @@ GK 무료	GK free	GK無料	门将免费	GK miễn phí
 미세먼지:	Fine dust:	PM10:	细颗粒物：	Bụi mịn:
 언어 · Language	Language · 언어	言語 · Language	语言 · Language	Ngôn ngữ · Language
 약관·개인정보처리방침과 팀원이 쓴 글은 원문 그대로 보여요.	Terms, privacy policy and posts written by users stay in the original Korean.	利用規約・個人情報処理方針とメンバーの投稿は原文のまま表示されます。	条款、隐私政策和用户发布的内容保持韩文原文。	Điều khoản, chính sách quyền riêng tư và bài viết của người dùng giữ nguyên tiếng Hàn.
-이 기간에 팀킥에서 매칭해 점수를 서로 확인한 경기가 없어요.	No matches made on TeamKick with a score confirmed by both teams in this period.	この期間、チームキックでマッチングし両チームがスコアを確認した試合はありません。	此期间没有在TeamKick约战且双方确认比分的比赛。	Giai đoạn này chưa có trận ghép trên TeamKick được hai đội xác nhận tỉ số.`;
+이 기간에 팀킥에서 매칭해 점수를 서로 확인한 경기가 없어요.	No matches made on TeamKick with a score confirmed by both teams in this period.	この期間、チームキックでマッチングし両チームがスコアを確認した試合はありません。	此期间没有在TeamKick约战且双方确认比分的比赛。	Giai đoạn này chưa có trận ghép trên TeamKick được hai đội xác nhận tỉ số.
+경기 매칭 대화는	Match chats can only be written by	試合マッチングの会話は	约战对话只有	Chat ghép trận chỉ
+주장·운영진만	captains and staff	主将・運営陣のみ	队长和管理员	đội trưởng và ban điều hành
+입력할 수 있어요. 필요한 내용은 우리 팀 주장·운영진에게 알려 주세요.	. Tell your captain or staff what you need.	入力できます。必要なことは自チームの主将・運営陣に伝えてください。	可以输入。如有需要请告诉本队队长或管理员。	mới nhập được. Cần gì hãy báo đội trưởng hoặc ban điều hành.`;
 export default DICT;

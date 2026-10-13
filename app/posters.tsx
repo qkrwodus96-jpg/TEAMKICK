@@ -136,7 +136,11 @@ function roundTag(ctx:C,d:D,x:number,y:number,align:CanvasTextAlign="left",size=
 const DOW_EN=["SUN","MON","TUE","WED","THU","FRI","SAT"];
 function when(d:D){if(!d.start)return null;const k=new Date(Date.parse(d.start)+9*3600e3);
  return {md:(k.getUTCMonth()+1)+"."+String(k.getUTCDate()).padStart(2,"0"),dow:DOW_EN[k.getUTCDay()],hm:String(k.getUTCHours()).padStart(2,"0")+":"+String(k.getUTCMinutes()).padStart(2,"0"),y:k.getUTCFullYear()}}
-function brand(ctx:C,color:string,x=W-48,y=H-40){ctx.fillStyle=color;f(ctx,22,EN);ctx.textAlign="right";ctx.textBaseline="alphabetic";ctx.fillText("TEAMKICK",x,y)}
+// 1.37 오른쪽 아래 팀킥 로고(투명 배경 흰 글자 + 초록 줄). 그림을 못 불러오면 예전처럼 글자로.
+async function brand(ctx:C,color:string,x=W-48,y=H-40){
+ const logo=await img("/teamkick-wordmark-white.png");
+ if(logo){const h=64,w=h*logo.width/logo.height;const m=String(color).match(/rgba?\([^)]*,\s*([\d.]+)\)/);ctx.save();ctx.globalAlpha=m?Math.min(1,Number(m[1])+.15):1;ctx.drawImage(logo,x-w,y-h+8,w,h);ctx.restore();return}
+ ctx.fillStyle=color;f(ctx,22,EN);ctx.textAlign="right";ctx.textBaseline="alphabetic";ctx.fillText("TEAMKICK",x,y)}
 // 등번호가 없거나 0(안 정함)이면 비운다(1.22 — 포스터에 "0" 이 찍히던 것).
 const no=(p:P)=>p.number==null||Number(p.number)===0?"":String(p.number);
 // 선수 사진 칸: 사진이 있으면 꽉 채우고, 없으면 팀 색 바탕에 유니폼 실루엣 + 등번호
@@ -215,7 +219,7 @@ async function tplGrid(ctx:C,d:D){
    if(p.captain)cBadge(ctx,x+cw-28,yy+28,18,th);}
   else if(i===total-1){ctx.fillStyle="rgba(0,0,0,.35)";ctx.fillRect(x,yy,cw,ch);await crest(ctx,d.team,x+cw/2,yy+ch/2-22,Math.min(cw,ch)*.3,th.accent);ctx.fillStyle="#fff";ctx.textAlign="center";fit(ctx,short(d.team.name),cw-24,26,KO);ctx.fillText(short(d.team.name),x+cw/2,yy+ch-30)}
   else{ctx.fillStyle="rgba(0,0,0,.25)";ctx.fillRect(x,yy,cw,ch)}}
- grain(ctx);ctx.fillStyle="rgba(255,255,255,.75)";f(ctx,24,BODY,"700");ctx.textAlign="left";ctx.textBaseline="alphabetic";if(d.venue)ctx.fillText(d.venue,40,H-42);brand(ctx,"rgba(255,255,255,.75)");
+ grain(ctx);ctx.fillStyle="rgba(255,255,255,.75)";f(ctx,24,BODY,"700");ctx.textAlign="left";ctx.textBaseline="alphabetic";if(d.venue)ctx.fillText(d.venue,40,H-42);await brand(ctx,"rgba(255,255,255,.75)");
 }
 
 // ───────── 2. LINEUP · 포메이션 ─────────
@@ -262,7 +266,7 @@ async function tplLineup(ctx:C,d:D){
  // 교체
  if(d.subs.length){ctx.fillStyle="#fff";tall(ctx,"SUBS",AX,H-86,44,1.2);ctx.fillStyle=th.accent;f(ctx,34,EN);ctx.fillText("»",AX+96,H-92);
   ctx.fillStyle="rgba(255,255,255,.9)";f(ctx,24,KO);ctx.textAlign="left";wrapRow(ctx,subsLine(d),AX+136,H-118,AW-150,34,22,2)}
- grain(ctx);brand(ctx,"rgba(255,255,255,.7)",W-34,H-30);
+ grain(ctx);await brand(ctx,"rgba(255,255,255,.7)",W-34,H-30);
 }
 
 // ───────── 3. STARTING XI · 명단 + 대표 선수 ─────────
@@ -285,7 +289,7 @@ async function tplList(ctx:C,d:D){
   if(p.captain){const nw=ctx.measureText(short(p.name)).width;ctx.fillStyle=th.accent;f(ctx,s*0.9,EN);ctx.fillText("C",136+nw+14,y)}});
  if(d.subs.length){const y=1236;ctx.fillStyle=th.accent;ctx.save();ctx.translate(48,y);ctx.transform(1,0,-.14,1,0,0);f(ctx,42,EN);ctx.textAlign="left";ctx.fillText("SUB",0,0);ctx.restore();
   ctx.fillStyle="#fff";f(ctx,26,KO);ctx.textAlign="left";wrapRow(ctx,subsLine(d),48,y+46,W-300,36,24,2)}
- grain(ctx);brand(ctx,"rgba(255,255,255,.8)");
+ grain(ctx);await brand(ctx,"rgba(255,255,255,.8)");
 }
 
 // ───────── 4. MATCHDAY ─────────
@@ -308,7 +312,7 @@ async function tplMatchday(ctx:C,d:D){
  if(w){const t=w.md+"."+w.dow+"  "+w.hm;ctx.fillStyle="#fff";ctx.textAlign="center";fit(ctx,t,RW,62,EN);ctx.fillText(t,bx,980)}
  if(d.venue){ctx.fillStyle="#fff";fit(ctx,d.venue,RW,40,KO);ctx.textAlign="center";ctx.fillText(d.venue,bx,1040)}
  if(d.opp){ctx.fillStyle=th.accent;fit(ctx,"vs "+short(d.opp.name),RW,36,KO);ctx.fillText("vs "+short(d.opp.name),bx,1096)}
- grain(ctx); brand(ctx,"rgba(255,255,255,.75)");
+ grain(ctx); await brand(ctx,"rgba(255,255,255,.75)");
 }
 
 // 캔버스에 그리는 작은 축구공(흰 공 + 가운데 검은 오각형 + 테두리 조각). 글꼴 이모지는 기기마다 달라 직접 그린다.
@@ -331,21 +335,23 @@ async function tplFulltime(ctx:C,d:D){
  ctx.fillStyle="#fff";ctx.textAlign="center";fit(ctx,short(d.team.name),W*.34,34,KO);ctx.fillText(short(d.team.name),lx,cy+170);
  if(d.opp){fit(ctx,short(d.opp.name),W*.34,34,KO);ctx.fillText(short(d.opp.name),rx,cy+170)}
  if(fin){ctx.fillStyle="#fff";f(ctx,190,EN);ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(fin.ours+" : "+fin.theirs,W/2,cy+10);ctx.textBaseline="alphabetic"}
- // 득점자: 골 시간을 넣었으면 이름 + 아래 골 시간만. 안 넣었으면 이름 옆에 골 수만큼 축구공(5개 넘으면 공 5개 + ×n).
- // 많으면 두 줄로 최대 10명.
+ // 득점자: 골 시간을 넣었으면 이름 + 아래 골 시간. 시간을 모르는 골은 축구공으로(3개까지 그리고 4골부터 공 + ×n).
+ // 시간이 하나도 없으면 공을 이름 옆에, 일부만 있으면 시간 옆에 붙인다. 많으면 두 줄로 최대 10명.
  const list=(fin?.scorers??[]).slice(0,10);
+ const balls=(n:number,x0:number,y:number,r:number)=>{const k=Math.min(n,3),gap=r*.45;for(let j=0;j<k;j++)ball(ctx,x0+r+j*(r*2+gap),y,r);if(n>3){ctx.save();ctx.fillStyle="#fff";f(ctx,Math.round(r*2),EN);ctx.textAlign="left";ctx.fillText("×"+n,x0+k*(r*2+gap),y+r*.7);ctx.restore()}};
+ const ballsW=(n:number,r:number)=>Math.min(n,3)*(r*2)+(Math.min(n,3)-1)*r*.45+(n>3?r*3.4:0);
  if(list.length){ctx.fillStyle=th.accent;f(ctx,30,EN);ctx.textAlign="center";ctx.fillText("GOALS",W/2,cy+260);
   const col=list.length>4?2:1,per=Math.ceil(list.length/col),rowH=col===1?64:60;
   list.forEach((x,i)=>{const c=Math.floor(i/per),r=i%per;const gx=col===1?W/2:(c===0?W*.27:W*.73),y=cy+320+r*rowH;
+   const unknown=Math.max(0,x.n-x.mins.length);
    ctx.fillStyle="#fff";fit(ctx,x.name,col===1?W*.4:W*.2,34,KO);
-   if(x.mins.length){ctx.textAlign="center";ctx.fillText(x.name,gx,y);ctx.fillStyle="rgba(255,255,255,.65)";f(ctx,22,EN);ctx.fillText(x.mins.map(m=>m+"'").join("  "),gx,y+26);return}
-   const balls=Math.min(x.n,5),br=13,gap=6,ballsW=balls*(br*2)+(balls-1)*gap+(x.n>5?44:0);
-   const nw=ctx.measureText(x.name).width,x0=gx-(nw+16+ballsW)/2;ctx.textAlign="left";ctx.fillText(x.name,x0,y);
-   for(let k=0;k<balls;k++)ball(ctx,x0+nw+16+br+k*(br*2+gap),y-12,br);
-   if(x.n>5){ctx.fillStyle="#fff";f(ctx,26,EN);ctx.fillText("×"+x.n,x0+nw+16+balls*(br*2+gap),y)}
-   ctx.textAlign="center"})}
+   if(x.mins.length){ctx.textAlign="center";ctx.fillText(x.name,gx,y);
+    ctx.fillStyle="rgba(255,255,255,.65)";f(ctx,22,EN);const t=x.mins.map(m=>m+"'").join("  ");const tw=ctx.measureText(t).width,bw=unknown?ballsW(unknown,9)+10:0,x0=gx-(tw+bw)/2;
+    ctx.textAlign="left";ctx.fillText(t,x0,y+26);if(unknown)balls(unknown,x0+tw+10,y+19,9);ctx.textAlign="center";return}
+   const br=13,nw=ctx.measureText(x.name).width,x0=gx-(nw+16+ballsW(x.n,br))/2;ctx.textAlign="left";ctx.fillText(x.name,x0,y);
+   balls(x.n,x0+nw+16,y-12,br);ctx.textAlign="center"})}
  if(d.venue){ctx.fillStyle="rgba(255,255,255,.7)";fit(ctx,d.venue,W*.8,30,KO);ctx.textAlign="center";ctx.fillText(d.venue,W/2,H-96)}
- grain(ctx);brand(ctx,"rgba(255,255,255,.75)");
+ grain(ctx);await brand(ctx,"rgba(255,255,255,.75)");
 }
 
 // ───────── 5. SQUAD NUMBERS ─────────
@@ -362,7 +368,7 @@ async function tplNumbers(ctx:C,d:D){
  all.forEach((p,i)=>{const c=i%cols,r=Math.floor(i/cols);const cx=40+cw*c+cw/2,cy=top+chh*r+chh*.42;
   jersey(ctx,cx,cy,s,th,no(p)||"-",p.group==="GK");
   ctx.fillStyle="#fff";ctx.textAlign="center";fit(ctx,short(p.name),cw-10,Math.max(20,chh*.15),KO);ctx.fillText(short(p.name),cx,cy+56*s+chh*.16)});
- grain(ctx);await crest(ctx,d.team,W/2,H-62,30,"rgba(255,255,255,.8)");brand(ctx,"rgba(255,255,255,.75)");
+ grain(ctx);await crest(ctx,d.team,W/2,H-62,30,"rgba(255,255,255,.8)");await brand(ctx,"rgba(255,255,255,.75)");
 }
 
 // 1.31.1 풋살 선발 인원(4·5·6)은 "STARTING V" 처럼 로마 숫자로.

@@ -162,7 +162,7 @@ function TeamRankBoard({v,rows,tkey,onTeam}:{v:Row;rows:Row[];tkey:string;onTeam
  if(!rows.length)return <p className="small muted rank-empty">{tkey==="winRate"?"이 기간에 "+TEAM_RANK_MIN+"경기 이상 치른 팀이 없어요.":"이 기간에 팀킥에서 매칭해 점수를 서로 확인한 경기가 없어요."}</p>;
  return <><ol className="rank-list team-rank">{shown.map(r=>{const t=teamOf(r.id);const me=r.id===v.teamId;
   return <li key={r.id} className={me?"me":""}><button onClick={()=>onTeam?.(r.id)}><span className="rank-no">{r.rank}</span><Crest name={t.name} color={t.color} logo={t.logo}/>
-   <span className="rank-who"><strong>{t.name}{me&&<em> 우리 팀</em>}</strong><small>{[r.region,r.played+"경기 "+r.wins+"승 "+r.draws+"무 "+r.losses+"패","득실 "+r.goals+":"+r.against].filter(Boolean).join(" · ")}</small></span><b>{r.value}{tab.unit}</b></button></li>})}</ol>
+   <span className="rank-who"><strong>{t.name}{me&&<em> 우리 팀</em>}</strong><small>{[r.region,...(tkey==="goals"?[r.played+"경기","득점 "+r.goals+"골","실점 "+r.against+"골"]:[r.played+"경기 "+r.wins+"승 "+r.draws+"무 "+r.losses+"패"])].filter(Boolean).join(" · ")}</small></span><b>{r.value}{tab.unit}</b></button></li>})}</ol>
   {rows.length>shown.length&&<button className="btn rank-more" onClick={()=>setMore(true)}>더 보기 ({rows.length-shown.length}팀)</button>}</>;
 }
 export function Rankings({v,busy,run,onOpen,onTeam}:{v:Row;busy:boolean;run:(c:Record<string,unknown>)=>void;onOpen:(p:Row)=>void;onTeam?:(id:string)=>void}){

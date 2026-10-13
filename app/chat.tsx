@@ -4,7 +4,7 @@
 // 1.17: 방 목록은 3개까지 보이고 [더보기], 왼쪽으로 밀면 [삭제](내 목록에서만 숨김), 경기 대화 맨 위에 매칭 신청 카드
 // (신청 메시지 · 상대 프로필 · 모집 팀 주장에게 수락/거절), 보낸 글은 바로 보이고 서버 응답으로 바꾼다.
 import {useEffect,useRef,useState,type PointerEvent as RPointerEvent} from "react";
-import {Send,MessageCircle,Flag,Trash2,LoaderCircle,ChevronDown,Shield,Handshake,Ban} from "lucide-react";
+import {Send,MessageCircle,Flag,Trash2,LoaderCircle,ChevronDown,Shield,Handshake,Ban,Lock} from "lucide-react";
 import {toast} from "sonner";
 
 type Msg={id:string;name:string;body:string;deleted:boolean;at:string;mine:boolean;sending?:boolean;blocked?:boolean};
@@ -77,6 +77,8 @@ type Run=(c:Record<string,unknown>)=>Promise<unknown>;
 export function ChatRoom({room,viewTeam,demo,run,onProfile}:{room:string;viewTeam:string;demo:boolean;run?:Run;onProfile?:(teamId:string)=>void}){
  const memo=roomMemo.get(room);
  const [info,setInfo]=useState<RoomInfo|null>(memo?.info??null),[msgs,setMsgs]=useState<Msg[]>(memo?.msgs??[]),[err,setErr]=useState(""),[text,setText]=useState(""),[menu,setMenu]=useState(""),[deciding,setDeciding]=useState(""),[blocking,setBlocking]=useState("");
+ // 1.37 경기 매칭 대화방은 두 팀 주장·운영진만 들어가고 쓸 수 있다(서버 chatRoom 이 막는다). 팀원에게는 입력칸 대신 안내를 보여 준다.
+ const locked=room.startsWith("match:")&&/들어갈 수 없어요/.test(err);
  const last=useRef(""),box=useRef<HTMLDivElement>(null),pullRef=useRef<()=>Promise<void>>(async()=>{});
  useEffect(()=>{
   if(demo)return;let live=true,busy=false;last.current=roomMemo.get(room)?.last??"";
@@ -170,10 +172,11 @@ export function ChatRoom({room,viewTeam,demo,run,onProfile}:{room:string;viewTea
     </div>
    </div>})}
   </div>
-  {err&&<p className="data-note" role="alert">{err}</p>}
+  {err&&!(locked)&&<p className="data-note" role="alert">{err}</p>}
+  {locked?<div className="chat-locked" role="note"><Lock size={16}/><span>경기 매칭 대화는 <b>주장·운영진만</b> 입력할 수 있어요. 필요한 내용은 우리 팀 주장·운영진에게 알려 주세요.</span></div>:
   <form className="chat-input" onSubmit={e=>{e.preventDefault();send()}}>
    <textarea value={text} onChange={e=>setText(e.target.value.slice(0,1000))} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();send()}}} rows={1} placeholder="메시지 입력" aria-label="메시지 입력"/>
    <button type="submit" className="btn btn-green" disabled={!text.trim()} aria-label="보내기"><Send size={17}/></button>
-  </form>
+  </form>}
  </div>;
 }

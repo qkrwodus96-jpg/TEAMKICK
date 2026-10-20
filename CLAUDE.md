@@ -193,9 +193,10 @@ Astra의 답변을 다음 작업의 필수 조건으로 만들지 않는다.
 할 일 보드에 답할 때는 사장님 메모(`note`)에 이어 쓰지 않고 **`reply` 필드**에 쓴다 — 보드가 메모 아래
 빨간 글씨로 따로 보여준다(2026-09-29 사용자 요청).
 
-보고 끝에는 할 일 표와 함께 아래 세 링크를 **항상** 붙인다(2026-09-26 사용자 요청).
+보고 끝에는 할 일 표와 함께 아래 네 링크를 **항상** 붙인다(2026-09-26 사용자 요청).
 새 페이지로 바뀌면 이 목록의 주소도 함께 고친다.
 
 - 할 일 보드: https://claude.ai/artifact/UePP7vbNDYAEaErWe5uNqF
 - 팀킥 디자인 미리보기: https://claude.ai/artifact/H9WQRKWbt3nyAyDfp5BXwz
 - 벤치마크(축구고·FotMob 분석): https://claude.ai/artifact/1w9bZbWi2XSpTVtY5B9CYr
+- 출시 안내(구글·애플 순서, 점검, 법률 위험): https://claude.ai/artifact/7fqXJ3y72wi5aS6U8LVQaj

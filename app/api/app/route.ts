@@ -1,10 +1,10 @@
-import {currentUser,currentUserCached,accountExists,closeAccount,clearedCookie} from "@/lib/auth";
+import {currentUser,currentUserCached,accountExists,closeAccount,clearedCookie,accountStats} from "@/lib/auth";
 import {assertWritable} from "@/lib/migrate";
 import {storageReady} from "@/lib/images";
 import {placeSearchReady,mapJsKey} from "@/lib/places";
 import {mailReady} from "@/lib/mail";
 import {load,commit,scopeToken,stamp} from "@/lib/store";
-import {applyCommand,visibleState,AppError,iso,prune,setupIncomplete,SETUP_MESSAGE,pushTargets,applyHold,activeSuspension,type State} from "@/lib/model";
+import {applyCommand,visibleState,AppError,iso,prune,setupIncomplete,SETUP_MESSAGE,pushTargets,applyHold,activeSuspension,isOwner,type State} from "@/lib/model";
 import {checkOwnerCode} from "@/lib/owner-config";
 import {findMessage} from "@/lib/chat-server";
 import {ensureSchema} from "@/lib/schema";
@@ -25,7 +25,9 @@ export async function GET(req:Request){try{const t0=performance.now();await ensu
  // 기록된 운영자의 계정이 사라졌으면 다시 등록할 수 있어야 한다. 그렇지 않으면 아무도 운영자가 될 수 없다.
  const ownerId=state.settings.find(x=>x.id==="owner")?.userId;
  const ownerMissing=!!ownerId&&ownerId!==user.userId&&!(await accountExists(ownerId));
- const scopes=myScopes(state,user.userId);let tView=0;return json({rev:version,scopes,scopeToken:await scopeToken(scopes),storageReady:storageReady(),ownerMissing,placeSearchReady:placeSearchReady(),mapKey:mapJsKey(),mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver"),needsVerification:mailReady()&&!user.verified,invitedTeam:invite?.teamId??null,user:{id:user.userId,name:state.users.find(x=>x.id===user.userId)?.name??user.fullName??"팀원",provider:user.provider??"local"},...(()=>{const t2=performance.now();const seenState=user.hold&&!state.users.find(x=>x.id===user.userId)?.holdApplied?(()=>{const c=structuredClone(state);applyHold(c,user.userId,user.hold);return c})():state;const out=visibleState(seenState,user.userId,teamId);tView=since(t2);return out})()},200,undefined,`schema;dur=${tSchema}, load;dur=${tLoad}, view;dur=${tView}, total;dur=${since(t0)}`);}catch(e){console.error("TeamKick load",e);return json({error:e instanceof AppError?e.message:setupIncomplete(e)?SETUP_MESSAGE:"데이터를 불러오지 못했어요. 다시 시도해주세요."},e instanceof AppError?e.status:503)}}
+ // 1.38 서비스 관리 가입자 통계(숫자만). 운영자에게만 싣고, 못 읽어도 화면은 그대로 연다.
+ const userStats=isOwner(state,user.userId)?await accountStats().then(x=>({...x,inTeam:new Set(state.members.filter(m=>m.status==="active").map(m=>m.userId)).size})).catch(e=>{console.error("TeamKick user stats",e instanceof Error?e.message:"error");return null}):null;
+ const scopes=myScopes(state,user.userId);let tView=0;return json({rev:version,scopes,scopeToken:await scopeToken(scopes),storageReady:storageReady(),ownerMissing,userStats,placeSearchReady:placeSearchReady(),mapKey:mapJsKey(),mailReady:mailReady(),emailSignupEnabled:emailSignupEnabled(),kakaoReady:kakaoReady(),googleReady:socialReady("google"),naverReady:socialReady("naver"),needsVerification:mailReady()&&!user.verified,invitedTeam:invite?.teamId??null,user:{id:user.userId,name:state.users.find(x=>x.id===user.userId)?.name??user.fullName??"팀원",provider:user.provider??"local"},...(()=>{const t2=performance.now();const seenState=user.hold&&!state.users.find(x=>x.id===user.userId)?.holdApplied?(()=>{const c=structuredClone(state);applyHold(c,user.userId,user.hold);return c})():state;const out=visibleState(seenState,user.userId,teamId);tView=since(t2);return out})()},200,undefined,`schema;dur=${tSchema}, load;dur=${tLoad}, view;dur=${tView}, total;dur=${since(t0)}`);}catch(e){console.error("TeamKick load",e);return json({error:e instanceof AppError?e.message:setupIncomplete(e)?SETUP_MESSAGE:"데이터를 불러오지 못했어요. 다시 시도해주세요."},e instanceof AppError?e.status:503)}}
 export async function POST(req:Request){
  try{
   await ensureSchema();await assertWritable();

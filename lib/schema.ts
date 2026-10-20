@@ -77,11 +77,13 @@ export const STATEMENTS=[
  `ALTER TABLE accounts ADD COLUMN hold_reason text`,
  `CREATE TABLE IF NOT EXISTS suspension_holds (id text PRIMARY KEY NOT NULL, until text NOT NULL, reason text NOT NULL, expires text NOT NULL, at text NOT NULL)`,
  `CREATE INDEX IF NOT EXISTS idx_suspension_holds_expires ON suspension_holds (expires)`,
+ // 1.38 서비스 관리 가입자 통계. 실제로 쓰는 사람 수를 세려고 마지막 접속 날짜(한국 날짜, 시각 없음)만 둔다.
+ `ALTER TABLE accounts ADD COLUMN seen_on text`,
 ];
 
 // 배포된 코드가 어느 시점 것인지 화면으로 확인하기 위한 표시.
 // 스키마나 진단에 영향을 주는 변경을 할 때 함께 올린다.
-export const BUILD="2026-10-20-1200";
+export const BUILD="2026-10-20-1800";
 
 export const TABLES=["entities","state_revision","write_guards","accounts","sessions","password_resets","rate_limits","email_verifications","push_subs","closed_accounts","social_signups","chat_messages","chat_reads","chat_reports","scope_revisions","schema_meta","user_notifications","suspension_holds"];
 

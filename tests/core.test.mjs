@@ -47,7 +47,7 @@ compile('app/api/health/route.ts','health.mjs',s=>s.replace('import {cronReady} 
 compile('lib/backup.ts','backup.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"').replace('"./schema"','"./schema.mjs"').replace('"./store"','"./store.mjs"'));
 compile('app/api/backup/route.ts','backup-api.mjs',s=>s.replace('import {currentUser} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/backup"','"./backup.mjs"'));
 compile('app/api/auth/route.ts','auth-api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('import {signUp,signIn,signOut,sessionCookie,clearedCookie,requestPasswordReset,resetPassword,limit,clientKey,verifyEmail,resendVerification,currentUser,completeSocialSignup,cancelSocialSignup,clearedSignupCookie} from "@/lib/auth";','const completeSocialSignup=async()=>({user:{userId:"u",fullName:"새 사람"},token:"t"});const cancelSocialSignup=async()=>{};const clearedSignupCookie=()=>"";const signUp=async()=>{(globalThis.__teamkickSignups??=[]).push(1);return {user:{userId:"u",fullName:"새 사람"},token:"t",verificationSent:false}};const signIn=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const signOut=async()=>{};const sessionCookie=()=>"";const clearedCookie=()=>"";const requestPasswordReset=async()=>{};const resetPassword=async()=>({user:{userId:"u",fullName:"기존 사람"},token:"t"});const limit=async()=>{};const clientKey=()=>"k";const verifyEmail=async()=>{};const resendVerification=async()=>true;const currentUser=async()=>globalThis.__teamkickTestIdentity;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>!!globalThis.__teamkickSocial;').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>false;').replace('"@/lib/model"','"./model.mjs"'));
-compile('app/api/app/route.ts','api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('"@/lib/chat-server"','"./chat-server.mjs"').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices,devicesAmong,pushReady} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);const hook=globalThis.__teamkickTestWake;if(hook)return hook(ids);return {sent:ids.length,failed:0,results:[]}};const devicesAmong=async(ids)=>ids.filter(x=>(globalThis.__teamkickTestDevices??[]).includes(x)).length;const pushReady=()=>true;').replace('import {currentUser,currentUserCached,accountExists,closeAccount,clearedCookie} from "@/lib/auth";','const currentUser=async()=>globalThis.__teamkickTestIdentity;const currentUserCached=currentUser;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady,mapJsKey} from "@/lib/places";','const placeSearchReady=()=>true;const mapJsKey=()=>"";').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
+compile('app/api/app/route.ts','api.mjs',s=>s.replace('"@/lib/signup-policy"','"./signup-policy.mjs"').replace('"@/lib/chat-server"','"./chat-server.mjs"').replace('import {socialReady} from "@/lib/social";','const socialReady=()=>true;').replace('import {wakeDevices,devicesAmong,pushReady} from "@/lib/push";','const wakeDevices=async(ids)=>{(globalThis.__teamkickTestWoken??=[]).push(...ids);const hook=globalThis.__teamkickTestWake;if(hook)return hook(ids);return {sent:ids.length,failed:0,results:[]}};const devicesAmong=async(ids)=>ids.filter(x=>(globalThis.__teamkickTestDevices??[]).includes(x)).length;const pushReady=()=>true;').replace('import {currentUser,currentUserCached,accountExists,closeAccount,clearedCookie,accountStats} from "@/lib/auth";','const accountStats=async()=>globalThis.__teamkickTestUserStats??{total:0};const currentUser=async()=>globalThis.__teamkickTestIdentity;const currentUserCached=currentUser;const accountExists=async(x)=>(globalThis.__teamkickTestAccounts??[]).includes(x);const closeAccount=async()=>{};const clearedCookie=()=>"";').replace('import {storageReady} from "@/lib/images";','const storageReady=()=>true;').replace('import {placeSearchReady,mapJsKey} from "@/lib/places";','const placeSearchReady=()=>true;const mapJsKey=()=>"";').replace('import {mailReady} from "@/lib/mail";','const mailReady=()=>true;').replace('import {ensureSchema} from "@/lib/schema";','const ensureSchema=async()=>{};').replace('import {kakaoReady} from "@/lib/kakao";','const kakaoReady=()=>true;').replace('"@/lib/store"','"./store.mjs"').replace('"@/lib/model"','"./model.mjs"').replace('"@/lib/owner-config"','"./owner-config.mjs"'));
 compile('lib/unlink.ts','unlink.mjs',s=>s.replace('"./social"','"./social.mjs"'));
 compile('lib/store-some.ts','store-some.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
 compile('lib/chat-server.ts','chat-server.mjs',s=>s.replace('import {env} from "cloudflare:workers";','const env=globalThis.__teamkickTestEnv;').replace('"./model"','"./model.mjs"'));
@@ -4765,4 +4765,44 @@ test('1.36 마이 케미: 골 기록의 도움 파트너, 같이 뛴 승률(3경
   assert.deepEqual(c.worst.map(x=>[x.name,x.played,x.losses]),[['불운',3,2]]);
   assert.ok(!JSON.stringify(c).includes('chem-pal'),'다른 사람 계정 번호는 안 보낸다');
   assert.equal(visibleState(f.s,me.id,f.a).chem.best.length,2,'화면 상태에 케미');
+});
+
+// --- 1.38 서비스 관리 가입자 통계 ---
+test('1.38 가입자 통계: 숫자만, 한국 날짜 기준 기간, 마지막 접속은 날짜만·하루 한 번',async()=>{
+  const db=localDatabase();
+  const T=Date.parse('2026-10-20T03:00:00Z'),D=864e5; // 한국 시각 10/20 낮 12시
+  const sign=(email,at)=>auth.signUp({agree:true,adult:true,email,name:'가입자',password:'teamkick-1234'},'',at);
+  const old=await sign('old@t.test',T-40*D),mid=await sign('mid@t.test',T-3*D),today=await sign('today@t.test',T);
+  const g=await auth.signInWithSocial('google','g-1','구글 회원',T-10*D);
+  await auth.signInWithKakao('k-1','카카오 회원',T-D);
+  await auth.currentUser(cookieRequest(old.token),T-40*D);
+  await auth.currentUser(cookieRequest(g.token),T-10*D);
+  await auth.currentUser(cookieRequest(mid.token),T-2*D);
+  await auth.currentUser(cookieRequest(today.token),T);
+  const seen=db.prepare('SELECT seen_on FROM accounts WHERE id=?').get(today.user.userId).seen_on;
+  assert.equal(seen,'2026-10-20','시각 없이 한국 날짜만');
+  db.prepare("INSERT INTO push_subs(id,account_id,endpoint,p256dh,auth,at) VALUES('p1',?,'https://push.test/1','k','a',?),('p2',?,'https://push.test/2','k','a',?)").run(today.user.userId,iso(T),today.user.userId,iso(T));
+  const s=await auth.accountStats(T);
+  assert.deepEqual(s,{total:5,new1:1,new7:3,new30:4,active1:1,active7:2,active30:3,kakao:1,naver:0,google:1,local:3,push:1});
+  assert.ok(Object.values(s).every(x=>typeof x==='number'),'이름·이메일 없이 숫자만');
+  // 한국 날짜 경계: UTC 로는 10/20 16시지만 한국은 10/21 새벽 1시다.
+  await auth.currentUser(cookieRequest(mid.token),Date.parse('2026-10-20T16:00:00Z'));
+  assert.equal(db.prepare('SELECT seen_on FROM accounts WHERE id=?').get(mid.user.userId).seen_on,'2026-10-21','UTC 자정이 아니라 한국 날짜로 넘어간다');
+  db.close();
+});
+
+test('1.38 가입자 통계는 운영자 화면에만 실린다',async()=>{
+  localDatabase();const {s}=fixture();addPlayer(s,s.teams[0].id);
+  await repository.commit(blank(),s,0);
+  globalThis.__teamkickTestUserStats={total:7,push:2};
+  globalThis.__teamkickTestIdentity={userId:owner.id,fullName:owner.name,verified:true,provider:'local'};
+  const mine=await (await api.GET(new Request('https://teamkick.test/api/app'))).json();
+  assert.equal(mine.userStats.total,7);
+  assert.equal(mine.userStats.inTeam,new Set(s.members.filter(m=>m.status==='active').map(m=>m.userId)).size,'팀에 들어간 사람은 활동 중인 팀원 수');
+  for(const who of [A,member]){
+    globalThis.__teamkickTestIdentity={userId:who.id,fullName:who.name,verified:true,provider:'local'};
+    const out=await (await api.GET(new Request('https://teamkick.test/api/app'))).json();
+    assert.equal(out.userStats,null,who.name+'에게는 가입자 통계를 보내지 않는다');
+  }
+  delete globalThis.__teamkickTestUserStats;globalThis.__teamkickTestIdentity=null;
 });

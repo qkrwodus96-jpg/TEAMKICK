@@ -185,9 +185,40 @@ export async function currentUser(req:Request,now=Date.now()){
  ).bind(await hashToken(token)).first<SessionRow>();
  if(!row)return null;
  if(Date.parse(row.expires)<=now){await db().prepare("DELETE FROM sessions WHERE id=?").bind(await hashToken(token)).run();return null}
+ await touchSeen(row.id,now);
  return {userId:row.id,fullName:row.name,verified:!!row.verified_at,provider:row.provider??"local",
   // 1.29 다시 가입한 계정에 남은 정지가 있을 때만 싣는다.
   ...(row.hold_until!=null?{hold:{until:String(row.hold_until),reason:String(row.hold_reason??"")}}:{})};
+}
+
+// --- 1.38 서비스 관리 가입자 통계 ---
+// 실제로 쓰는 사람 수를 세려고 계정마다 마지막 접속 날짜(한국 날짜, 시각 없음)만 남긴다. 접속 기록을 쌓지 않는다.
+// 하루에 한 번만 쓴다(이 서버가 기억하고, 같은 날이면 데이터베이스도 바꾸지 않는다). 탈퇴하면 계정 줄과 함께 지워진다.
+// 기록에 실패해도 로그인은 막지 않는다.
+const seoulDay=(ms:number)=>new Date(ms+9*3600e3).toISOString().slice(0,10);
+const seenMemo=new Map<string,string>();
+async function touchSeen(accountId:string,now:number){
+ const day=seoulDay(now);if(seenMemo.get(accountId)===day)return;
+ try{
+  await db().prepare("UPDATE accounts SET seen_on=? WHERE id=? AND (seen_on IS NULL OR seen_on<>?)").bind(day,accountId,day).run();
+  if(seenMemo.size>5000)seenMemo.clear();
+  seenMemo.set(accountId,day);
+ }catch(e){console.error("TeamKick seen",e instanceof Error?e.message:"error")}
+}
+// 숫자만 돌려준다. 누가 가입했는지는 담지 않는다. 운영자 확인은 부르는 쪽(app/api/app)이 한다.
+// 기간은 한국 날짜 기준으로 오늘을 포함한다(7일 = 오늘과 그 전 6일).
+export async function accountStats(now=Date.now()){
+ const dayAgo=(n:number)=>seoulDay(now-(n-1)*864e5),startOf=(n:number)=>iso(Date.parse(dayAgo(n)+"T00:00:00+09:00"));
+ const r=await db().prepare(`SELECT COUNT(*) AS total,
+  SUM(CASE WHEN at>=? THEN 1 ELSE 0 END) AS new1,SUM(CASE WHEN at>=? THEN 1 ELSE 0 END) AS new7,SUM(CASE WHEN at>=? THEN 1 ELSE 0 END) AS new30,
+  SUM(CASE WHEN seen_on>=? THEN 1 ELSE 0 END) AS active1,SUM(CASE WHEN seen_on>=? THEN 1 ELSE 0 END) AS active7,SUM(CASE WHEN seen_on>=? THEN 1 ELSE 0 END) AS active30,
+  SUM(CASE WHEN provider='kakao' THEN 1 ELSE 0 END) AS kakao,SUM(CASE WHEN provider='naver' THEN 1 ELSE 0 END) AS naver,
+  SUM(CASE WHEN provider='google' THEN 1 ELSE 0 END) AS google,SUM(CASE WHEN provider='local' OR provider IS NULL THEN 1 ELSE 0 END) AS local
+  FROM accounts`).bind(startOf(1),startOf(7),startOf(30),dayAgo(1),dayAgo(7),dayAgo(30)).first<Record<string,number|null>>();
+ const p=await db().prepare("SELECT COUNT(DISTINCT account_id) AS n FROM push_subs").first<{n:number}>();
+ const n=(k:string)=>Number(r?.[k]??0);
+ return {total:n("total"),new1:n("new1"),new7:n("new7"),new30:n("new30"),active1:n("active1"),active7:n("active7"),active30:n("active30"),
+  kakao:n("kakao"),naver:n("naver"),google:n("google"),local:n("local"),push:Number(p?.n??0)};
 }
 
 // 이 팀킥 계정이 그 사업자의 그 사람으로 가입한 것인지. 탈퇴 전에 본인 확인으로 쓴다.

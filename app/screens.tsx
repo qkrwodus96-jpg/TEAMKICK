@@ -329,6 +329,29 @@ async function closeWithProvider(provider:string){
 const TEAM_LABEL:Record<string,string>={pending:"승인 대기",active:"승인 완료",rejected:"반려",suspended:"이용 정지",closed:"해산"};
 const TEAM_TABS=[{key:"all",label:"등록 팀"},{key:"pending",label:"승인 대기"},{key:"active",label:"활성 팀"},{key:"suspended",label:"이용 정지"}] as const;
 const TEAM_ORDER:Record<string,number>={pending:0,suspended:1,active:2,rejected:3,closed:4};
+// 1.38 가입자 통계(운영자만, 숫자만). 서버(app/api/app)가 운영자에게만 userStats 를 싣는다.
+// 기간은 한국 날짜로 오늘을 포함한다. 접속한 사람은 마지막 접속 날짜로 센다(2026-10-20부터 기록).
+function AdminUsers({u}:{u?:Row|null}){
+ if(!u)return null;
+ const row=(name:string,a:number,b:number,c:number,d?:number)=><div role="row"><b role="rowheader">{name}</b><span>{a}</span><span>{b}</span><span>{c}</span><span>{d??"—"}</span></div>;
+ return <div className="admin-users">
+  <h3 className="admin-users-title">가입자</h3>
+  <div className="admin-sum" role="table" aria-label="가입자 수">
+   <div role="row" className="head"><span role="columnheader"/><span role="columnheader">오늘</span><span role="columnheader">7일</span><span role="columnheader">30일</span><span role="columnheader">전체</span></div>
+   {row("새 가입",u.new1,u.new7,u.new30,u.total)}
+   {row("접속한 사람",u.active1,u.active7,u.active30)}
+  </div>
+  <dl className="admin-users-more">
+   <div><dt>팀에 들어간 사람</dt><dd>{u.inTeam}</dd></div>
+   <div><dt>알림 켠 사람</dt><dd>{u.push}</dd></div>
+   <div><dt>카카오</dt><dd>{u.kakao}</dd></div>
+   <div><dt>네이버</dt><dd>{u.naver}</dd></div>
+   <div><dt>구글</dt><dd>{u.google}</dd></div>
+   <div><dt>이메일</dt><dd>{u.local}</dd></div>
+  </dl>
+  <p className="data-note">숫자만 보여요. 누가 가입했는지는 보이지 않아요. 접속한 사람은 2026년 10월 20일부터 센 숫자예요.</p>
+ </div>;
+}
 function AdminTeams({v,busy,run,setModal}:{v:Row;busy:boolean;run:(c:Record<string,unknown>)=>void;setModal:(m:Record<string,unknown>)=>void}){
  // 1.32 종목으로 나눠 보기(축구 = 축구 팀 + 둘 다, 풋살 = 풋살 팀 + 둘 다). 위 요약 줄은 늘 전체 합계.
  const all:Row[]=v.teams??[];const [sport,setSport]=useState<"all"|"soccer"|"futsal">("all");
@@ -340,6 +363,7 @@ function AdminTeams({v,busy,run,setModal}:{v:Row;busy:boolean;run:(c:Record<stri
  const shown=teams.filter(t=>(tab==="all"||t.status===tab)&&teamMatches(t,query))
   .sort((a,b)=>(TEAM_ORDER[a.status]??9)-(TEAM_ORDER[b.status]??9)||String(a.name).localeCompare(String(b.name),"ko"));
  return <>
+  <AdminUsers u={v.userStats}/>
   <div className="admin-sport">
    <div className="seg" role="tablist" aria-label="종목">{([["all","전체"],["soccer","축구"],["futsal","풋살"]] as const).map(([k,n])=><button key={k} type="button" role="tab" aria-selected={sport===k} className={sport===k?"on":""} onClick={()=>{setSport(k);setLimit(10)}}>{n}</button>)}</div>
    <div className="admin-sum" role="table" aria-label="종목별 합계">

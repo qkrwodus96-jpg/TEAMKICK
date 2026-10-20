@@ -1,4 +1,4 @@
-// 화면 글자 사전 6/6 — 1.19~1.37 새 문구(용병 가능·관심 구장·차단·신고·풋살·경기 뒤 기록·팀 랭킹·케미·라인업 포스터·설치/알림 안내·매칭 대화)
+// 화면 글자 사전 6/6 — 1.19~1.38 새 문구(용병 가능·관심 구장·차단·신고·풋살·경기 뒤 기록·팀 랭킹·케미·라인업 포스터·설치/알림 안내·매칭 대화)
 const DICT=`축구·풋살	Soccer · Futsal	サッカー・フットサル	足球·五人制	Bóng đá · Futsal
 축구	Soccer	サッカー	足球	Bóng đá
 풋살	Futsal	フットサル	五人制	Futsal
@@ -402,5 +402,13 @@ GK 무료	GK free	GK無料	门将免费	GK miễn phí
 이 기간에 팀킥에서 매칭해 점수를 서로 확인한 경기가 없어요.	No matches made on TeamKick with a score confirmed by both teams in this period.	この期間、チームキックでマッチングし両チームがスコアを確認した試合はありません。	此期间没有在TeamKick约战且双方确认比分的比赛。	Giai đoạn này chưa có trận ghép trên TeamKick được hai đội xác nhận tỉ số.
 경기 매칭 대화는	Match chats can only be written by	試合マッチングの会話は	约战对话只有	Chat ghép trận chỉ
 주장·운영진만	captains and staff	主将・運営陣のみ	队长和管理员	đội trưởng và ban điều hành
-입력할 수 있어요. 필요한 내용은 우리 팀 주장·운영진에게 알려 주세요.	. Tell your captain or staff what you need.	入力できます。必要なことは自チームの主将・運営陣に伝えてください。	可以输入。如有需要请告诉本队队长或管理员。	mới nhập được. Cần gì hãy báo đội trưởng hoặc ban điều hành.`;
+입력할 수 있어요. 필요한 내용은 우리 팀 주장·운영진에게 알려 주세요.	. Tell your captain or staff what you need.	入力できます。必要なことは自チームの主将・運営陣に伝えてください。	可以输入。如有需要请告诉本队队长或管理员。	mới nhập được. Cần gì hãy báo đội trưởng hoặc ban điều hành.
+가입자	Sign-ups	登録者	注册用户	Người đăng ký
+7일	7 days	7日	7天	7 ngày
+30일	30 days	30日	30天	30 ngày
+새 가입	New sign-ups	新規登録	新注册	Đăng ký mới
+접속한 사람	Active users	アクセスした人	访问用户	Người truy cập
+팀에 들어간 사람	In a team	チーム所属者	已入队	Đã vào đội
+알림 켠 사람	Notifications on	通知オン	开启通知	Bật thông báo
+숫자만 보여요. 누가 가입했는지는 보이지 않아요. 접속한 사람은 2026년 10월 20일부터 센 숫자예요.	Counts only — you can't see who signed up. Active users are counted from Oct 20, 2026.	数だけ表示します。誰が登録したかは見えません。アクセスした人は2026年10月20日から数えています。	仅显示数字，看不到具体是谁注册。访问用户从2026年10月20日开始统计。	Chỉ hiện con số, không thấy ai đăng ký. Người truy cập được tính từ 20/10/2026.`;
 export default DICT;

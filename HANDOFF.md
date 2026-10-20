@@ -16,6 +16,14 @@ PR #21 은 2026-09-18 병합 완료(T39-T62), PR #20 은 2026-09-17 병합 완�
 - **팀이 수천 개가 되기 전에 "팀별로 나눠 읽기"를 한다.** 지금은 요청마다 공용 문서 전체를 한 번에 읽는다(1.24·1.25 로 줄였을 뿐). Cloudflare 로 옮길 때 팀별 SELECT 로 바꾼다 — 자세한 내용은 `ARCHITECTURE.md` "저장과 동시성".
 - 차단/신고는 1.26.0 에서 넣었다(TASKS T90). 두 기기 확인은 기기가 생기면.
 
+### 2026-10-20 (61) 사장님 보안 정리 완료
+
+- 가비아 안전잠금 다시 켬, Brevo 거래 메일 기록 보관 1개월(Retention rules), Brevo 2단계 인증 백업 코드 재발급(값은 어디에도 옮기지 않음),
+  Brevo 옛 API 키 `teamkick`(GPT Sites, 마지막 사용 10/5) 삭제 — 지금 키는 `teamkick-cloudflare` 하나. SMTP 키 `teamkick` 은 사용 기록 없음(코드는 API 키만 씀).
+- 사장님이 운영자 로그인 상태로 /api/health 의 mailReady·mailAccount 정상 확인.
+- 남은 사장님 일: 10/25쯤 GPT Sites 데이터·사이트 삭제 요청, 비공개 테스트 15명·14일, 심사용 계정 방식, Play 앱 서명 키 SHA-256(assetlinks).
+- 법률: 출시 먼저, 변호사 검토는 수익화 전(2026-10-20 상의). 처리방침의 Brevo "1개월 보관" 이 이제 사실과 맞다.
+
 ### 2026-10-13 (60) 1.37.0 다듬기 (TASKS T109)
 
 - 골 공 표시 규칙(3개까지 공, 4개부터 ⚽×n)은 경기 기록 탭(game-extras.tsx)과 FULL TIME(posters.tsx tplFulltime)이 같다.
